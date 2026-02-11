@@ -1,0 +1,222 @@
+[
+  {
+    "start": 0.132,
+    "end": 8.097,
+    "speaker": "SPEAKER_01",
+    "text": "I tell you basically what this is about is when I was watching Harvey McCay, that one of Harvey Eckers' things, he",
+    "diarization_confidence": 1.0,
+    "confidence": 0.40216984963811075,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 8.907,
+    "end": 76.728,
+    "speaker": "SPEAKER_01",
+    "text": "he'd just finished the Boston Marathon and you know the guy's 76 and I went holy crap you know that's amazing. He looked so fit and he so quick, minded and so on. I thought all of a sudden it occurred to me I bet the way you eat you know is different. I bet you don't just eat a bunch garbage. And that started this thought so the the basic three questions will be and I'm recording it for use as well if I transcribe these for the book but then I write about it and what's really been neat about it is that what started out is three same questions to everybody. Everybody had kind of a different angle on and I realized that they were creating the chapters for this book and of course Marcy Shimeoff read me the right acts and I'm not doing something where where I did all the work and you're just transcribing it but if you actually write in the book I'll do it so I made her that promise it was a hard promise but it was a good one to make because it made",
+    "diarization_confidence": 1.0,
+    "confidence": 0.40216984963811075,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 78.314,
+    "end": 95.78,
+    "speaker": "SPEAKER_01",
+    "text": "know. So what I would do is I basically introduce you and then you can add that you think is important to that introduction and let me get my history up here because I have I have you on here.",
+    "diarization_confidence": 1.0,
+    "confidence": 0.46029360483599235,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 98.969,
+    "end": 100.741,
+    "speaker": "SPEAKER_01",
+    "text": "So how's Robbie doing?",
+    "diarization_confidence": 1.0,
+    "confidence": 0.46029360483599235,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 102.158,
+    "end": 103.964,
+    "speaker": "SPEAKER_00",
+    "text": "in there. Yeah, did",
+    "diarization_confidence": 1.0,
+    "confidence": 0.46029360483599235,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 104.842,
+    "end": 107.474,
+    "speaker": "SPEAKER_01",
+    "text": "guys have a nice holiday?",
+    "diarization_confidence": 1.0,
+    "confidence": 0.46029360483599235,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 108.166,
+    "end": 114.038,
+    "speaker": "SPEAKER_00",
+    "text": "Well, I actually got out of Cruddy Holiday. Her father who was very old got sick and then ended",
+    "diarization_confidence": 1.0,
+    "confidence": 0.42526304653392294,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 115.726,
+    "end": 116.975,
+    "speaker": "SPEAKER_01",
+    "text": "I'm sorry to hear",
+    "diarization_confidence": 1.0,
+    "confidence": 0.42526304653392294,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 117.92,
+    "end": 119.371,
+    "speaker": "SPEAKER_01",
+    "text": "you know, stuff happens.",
+    "diarization_confidence": 1.0,
+    "confidence": 0.42526304653392294,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 122.56,
+    "end": 136.297,
+    "speaker": "SPEAKER_01",
+    "text": "Okay, so I'm going to, is your best website we're going to at the end I'm going to ask you know about your website and stuff is rickfreshman.com the best one to go to or",
+    "diarization_confidence": 1.0,
+    "confidence": 0.42526304653392294,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 137.832,
+    "end": 141.376,
+    "speaker": "SPEAKER_00",
+    "text": "yeah probably just for most stuff that's probably the best way to go. Yeah,",
+    "diarization_confidence": 1.0,
+    "confidence": 0.4104959805712661,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 141.376,
+    "end": 145.072,
+    "speaker": "SPEAKER_01",
+    "text": "Yeah, you had a really good bio on one of your websites. Up",
+    "diarization_confidence": 1.0,
+    "confidence": 0.4104959805712661,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 146.978,
+    "end": 150.033,
+    "speaker": "SPEAKER_00",
+    "text": "on most of them, I have some rickfreshman blog.com",
+    "diarization_confidence": 1.0,
+    "confidence": 0.4104959805712661,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 152.547,
+    "end": 153.762,
+    "speaker": "SPEAKER_01",
+    "text": "check that out.",
+    "diarization_confidence": 1.0,
+    "confidence": 0.4104959805712661,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 155.635,
+    "end": 157.745,
+    "speaker": "SPEAKER_01",
+    "text": "Okay, so the bio on",
+    "diarization_confidence": 1.0,
+    "confidence": 0.4104959805712661,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 158.977,
+    "end": 162.571,
+    "speaker": "SPEAKER_00",
+    "text": "but it's also bio on this rickfreshman.com. There we",
+    "diarization_confidence": 1.0,
+    "confidence": 0.4104959805712661,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 162.892,
+    "end": 191.562,
+    "speaker": "SPEAKER_01",
+    "text": "we go about rick. Yeah, so you know, one of the things that that I'll bring up is you know, you always talk about how you have the biggest rola decks. And I thought that was a really cool angle too because part of part of success is who you know. And you know, I think that's important. I don't know what your what your angle is going to be on this but the you know the questions will be",
+    "diarization_confidence": 1.0,
+    "confidence": 0.4379927985553732,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 192.457,
+    "end": 202.379,
+    "speaker": "SPEAKER_01",
+    "text": "you think that that hypothesis is true that you know, food affects your ability to succeed on some level and then if you that",
+    "diarization_confidence": 1.0,
+    "confidence": 0.4383098560390414,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 204.927,
+    "end": 240.415,
+    "speaker": "SPEAKER_01",
+    "text": "know, if it if it plays into into your level of success. In other words, you know, I know they're successful people who eat crappy food but so far kind of the consensus has been you know, it's run the gamut of extremes but but so far people seem to say you know they can't keep up their energy. If you speak a lot, you do a lot of speaking so you know and you have a hectic schedule. So I imagine that if you're you know, full of two pizzas you probably don't have the energy on stage that you normally would. So",
+    "diarization_confidence": 1.0,
+    "confidence": 0.46303841936111334,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  },
+  {
+    "start": 241.428,
+    "end": 245.478,
+    "speaker": "SPEAKER_01",
+    "text": "kind of that's kind of the angle but",
+    "diarization_confidence": 1.0,
+    "confidence": 0.28842319887376033,
+    "overlap": false,
+    "gender": null,
+    "gender_confidence": null
+  }
+]

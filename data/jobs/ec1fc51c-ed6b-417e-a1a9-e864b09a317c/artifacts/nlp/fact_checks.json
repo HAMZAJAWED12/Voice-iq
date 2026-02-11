@@ -1,0 +1,9 @@
+[
+  {
+    "type": "number",
+    "value": "76",
+    "status": "TO_VERIFY",
+    "source": "regex",
+    "note": "Numeric value mentioned; could be age, quantity, etc."
+  }
+]
