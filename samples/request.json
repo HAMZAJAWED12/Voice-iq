@@ -1,0 +1,113 @@
+{
+  "session_id": "sample-call-2026-04-22",
+  "utterances": [
+    {
+      "id": "u1",
+      "speaker": "agent",
+      "start": 0.0,
+      "end": 2.4,
+      "text": "Hi, thanks for calling, how can I help you today?",
+      "word_count": 10,
+      "sentiment": {
+        "label": "positive",
+        "score": 0.82
+      },
+      "emotion": {
+        "values": {
+          "happy": 0.6,
+          "calm": 0.4
+        }
+      }
+    },
+    {
+      "id": "u2",
+      "speaker": "customer",
+      "start": 2.6,
+      "end": 6.5,
+      "text": "My order is late again, this is the second time this month.",
+      "word_count": 12,
+      "sentiment": {
+        "label": "negative",
+        "score": 0.28
+      },
+      "emotion": {
+        "values": {
+          "frustrated": 0.7,
+          "angry": 0.3
+        }
+      }
+    },
+    {
+      "id": "u3",
+      "speaker": "agent",
+      "start": 6.7,
+      "end": 9.0,
+      "text": "I am sorry to hear that, let me look that up for you.",
+      "word_count": 12,
+      "sentiment": {
+        "label": "positive",
+        "score": 0.74
+      },
+      "emotion": {
+        "values": {
+          "calm": 0.7,
+          "happy": 0.3
+        }
+      }
+    },
+    {
+      "id": "u4",
+      "speaker": "customer",
+      "start": 9.2,
+      "end": 12.5,
+      "text": "No I do not want to wait, I want a refund right now.",
+      "word_count": 13,
+      "sentiment": {
+        "label": "negative",
+        "score": 0.18
+      },
+      "emotion": {
+        "values": {
+          "angry": 0.85,
+          "frustrated": 0.15
+        }
+      }
+    },
+    {
+      "id": "u5",
+      "speaker": "agent",
+      "start": 12.7,
+      "end": 16.0,
+      "text": "Absolutely, I can process that refund for you immediately.",
+      "word_count": 11,
+      "sentiment": {
+        "label": "positive",
+        "score": 0.79
+      },
+      "emotion": {
+        "values": {
+          "calm": 0.8,
+          "happy": 0.2
+        }
+      }
+    },
+    {
+      "id": "u6",
+      "speaker": "customer",
+      "start": 16.2,
+      "end": 18.0,
+      "text": "Okay, thank you for resolving this quickly.",
+      "word_count": 7,
+      "sentiment": {
+        "label": "positive",
+        "score": 0.7
+      },
+      "emotion": {
+        "values": {
+          "calm": 0.6,
+          "happy": 0.4
+        }
+      }
+    }
+  ]
+}

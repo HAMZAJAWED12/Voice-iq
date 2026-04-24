@@ -1,0 +1,30 @@
+httpx
+pytest-asyncio
+sentence-transformers
+openai-whisper
+spacy
+
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+pydantic==2.12.4
+pydantic-settings>=2.6.0
+httpx==0.28.1
+
+# Persistence (SQLite by default; SQLAlchemy works with Postgres/MySQL too)
+SQLAlchemy>=2.0.30
+
+transformers==4.47.0
+torch==2.8.0
+torchaudio==2.8.0
+
+librosa==0.10.2.post1
+soundfile==0.12.1
+
+pyannote.audio==3.3.2
+
+pytest==8.3.3
+pytest-asyncio==0.24.0
+
+# optional later (keep commented until you need it)
+# whisperx @ git+https://github.com/m-bain/whisperX.git

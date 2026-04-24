@@ -1,0 +1,57 @@
+# Version control
+.git
+.gitignore
+.github
+.gitattributes
+
+# Python build artefacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+.eggs
+.tox
+.pytest_cache
+.mypy_cache
+.coverage
+.coverage.*
+htmlcov
+build
+dist
+
+# Local virtualenvs
+.venv
+venv
+env
+
+# IDE / OS
+.vscode
+.idea
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local secrets / configs (never bake into the image)
+.env
+*.local
+*.env.local
+
+# Local persistence (mounted at runtime instead)
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Jobs / large media (only pipeline image needs these)
+sample.wav
+*.mp3
+*.wav
+*.zip
+
+# Tests + dev-only assets
+tests/
+**/tests/
+run_*.py
+*.pdf
+README.md

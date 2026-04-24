@@ -1,0 +1,486 @@
+{
+  "session_id": "sample-call-2026-04-22",
+  "status": "ok",
+  "validation": {
+    "valid": true,
+    "errors": [],
+    "warnings": [
+      {
+        "code": "speakers_missing",
+        "message": "Speakers list was not supplied and will be inferred from utterances.",
+        "field": "speakers",
+        "severity": "warning"
+      },
+      {
+        "code": "duration_missing",
+        "message": "Session duration was not supplied and will be inferred from utterances.",
+        "field": "duration_sec",
+        "severity": "warning"
+      }
+    ]
+  },
+  "analytics": {
+    "session_metrics": {
+      "total_duration_sec": 17.0,
+      "total_speakers": 2,
+      "total_utterances": 6,
+      "total_words": 65,
+      "avg_utterance_length_words": 10.833,
+      "avg_utterance_duration_sec": 2.833,
+      "total_questions": 1,
+      "total_pauses": 5,
+      "avg_pause_sec": 0.2,
+      "max_pause_sec": 0.2
+    },
+    "speaker_metrics": {
+      "agent": {
+        "speaker": "agent",
+        "speaking_time_sec": 8.0,
+        "utterance_count": 3,
+        "word_count": 33,
+        "speaking_ratio": 0.4706,
+        "word_ratio": 0.5077,
+        "avg_utterance_length_words": 11.0,
+        "avg_utterance_duration_sec": 2.667,
+        "question_count": 1,
+        "interruption_count": 0,
+        "overlap_count": 0,
+        "first_spoke_at_sec": 0.0,
+        "last_spoke_at_sec": 16.0
+      },
+      "customer": {
+        "speaker": "customer",
+        "speaking_time_sec": 9.0,
+        "utterance_count": 3,
+        "word_count": 32,
+        "speaking_ratio": 0.5294,
+        "word_ratio": 0.4923,
+        "avg_utterance_length_words": 10.667,
+        "avg_utterance_duration_sec": 3.0,
+        "question_count": 0,
+        "interruption_count": 0,
+        "overlap_count": 0,
+        "first_spoke_at_sec": 2.6,
+        "last_spoke_at_sec": 18.0
+      }
+    },
+    "pauses": [
+      {
+        "start_after_utterance_id": "u1",
+        "end_before_utterance_id": "u2",
+        "duration_sec": 0.2,
+        "speaker_before": "agent",
+        "speaker_after": "customer"
+      },
+      {
+        "start_after_utterance_id": "u2",
+        "end_before_utterance_id": "u3",
+        "duration_sec": 0.2,
+        "speaker_before": "customer",
+        "speaker_after": "agent"
+      },
+      {
+        "start_after_utterance_id": "u3",
+        "end_before_utterance_id": "u4",
+        "duration_sec": 0.2,
+        "speaker_before": "agent",
+        "speaker_after": "customer"
+      },
+      {
+        "start_after_utterance_id": "u4",
+        "end_before_utterance_id": "u5",
+        "duration_sec": 0.2,
+        "speaker_before": "customer",
+        "speaker_after": "agent"
+      },
+      {
+        "start_after_utterance_id": "u5",
+        "end_before_utterance_id": "u6",
+        "duration_sec": 0.2,
+        "speaker_before": "agent",
+        "speaker_after": "customer"
+      }
+    ]
+  },
+  "insights": {
+    "session_sentiment": {
+      "label": "positive",
+      "avg_score": 0.585,
+      "distribution": {
+        "positive": 4,
+        "negative": 2
+      },
+      "sample_count": 6
+    },
+    "session_emotion": {
+      "dominant": "calm",
+      "distribution": {
+        "happy": 0.25,
+        "calm": 0.4167,
+        "frustrated": 0.1417,
+        "angry": 0.1917
+      },
+      "sample_count": 6
+    },
+    "session_sentiment_trend": {
+      "direction": "declining",
+      "slope": -0.12,
+      "points": [
+        {
+          "utterance_id": "u1",
+          "speaker": "agent",
+          "start": 0.0,
+          "end": 2.4,
+          "label": "positive",
+          "score": 0.82
+        },
+        {
+          "utterance_id": "u2",
+          "speaker": "customer",
+          "start": 2.6,
+          "end": 6.5,
+          "label": "negative",
+          "score": 0.28
+        },
+        {
+          "utterance_id": "u3",
+          "speaker": "agent",
+          "start": 6.7,
+          "end": 9.0,
+          "label": "positive",
+          "score": 0.74
+        },
+        {
+          "utterance_id": "u4",
+          "speaker": "customer",
+          "start": 9.2,
+          "end": 12.5,
+          "label": "negative",
+          "score": 0.18
+        },
+        {
+          "utterance_id": "u5",
+          "speaker": "agent",
+          "start": 12.7,
+          "end": 16.0,
+          "label": "positive",
+          "score": 0.79
+        },
+        {
+          "utterance_id": "u6",
+          "speaker": "customer",
+          "start": 16.2,
+          "end": 18.0,
+          "label": "positive",
+          "score": 0.7
+        }
+      ]
+    },
+    "speaker_insights": {
+      "agent": {
+        "speaker": "agent",
+        "sentiment": {
+          "label": "positive",
+          "avg_score": 0.7833,
+          "distribution": {
+            "positive": 3
+          },
+          "sample_count": 3
+        },
+        "emotion": {
+          "dominant": "calm",
+          "distribution": {
+            "happy": 0.3667,
+            "calm": 0.6333
+          },
+          "sample_count": 3
+        },
+        "dominance_ratio": 0.4706,
+        "engagement_ratio": 0.5077,
+        "flags": []
+      },
+      "customer": {
+        "speaker": "customer",
+        "sentiment": {
+          "label": "negative",
+          "avg_score": 0.3867,
+          "distribution": {
+            "negative": 2,
+            "positive": 1
+          },
+          "sample_count": 3
+        },
+        "emotion": {
+          "dominant": "angry",
+          "distribution": {
+            "frustrated": 0.2833,
+            "angry": 0.3833,
+            "calm": 0.2,
+            "happy": 0.1333
+          },
+          "sample_count": 3
+        },
+        "dominance_ratio": 0.5294,
+        "engagement_ratio": 0.4923,
+        "flags": [
+          {
+            "type": "speaker_emotional_strain",
+            "speaker": "customer",
+            "severity": "low",
+            "reason": "customer shows repeated angry emotional signals.",
+            "evidence": {
+              "dominant_emotion": "angry",
+              "emotion_sample_count": 3
+            }
+          }
+        ]
+      }
+    },
+    "scores": {
+      "dominance_score": 0.5294,
+      "engagement_score": 0.672,
+      "conflict_score": 0.0,
+      "cooperation_score": 0.7327,
+      "emotion_volatility_score": 0.5738,
+      "breakdown": {
+        "dominance_score": [
+          {
+            "component": "max_speaking_ratio",
+            "weight": 1.0,
+            "value": 0.529,
+            "reason": "Higher concentration of speaking time increases dominance score."
+          }
+        ],
+        "engagement_score": [
+          {
+            "component": "pause_behavior",
+            "weight": 0.7,
+            "value": 0.96,
+            "reason": "Shorter pauses and steadier turn flow improve engagement."
+          },
+          {
+            "component": "question_behavior",
+            "weight": 0.3,
+            "value": 0.167,
+            "reason": "More clarifying questions can indicate active engagement."
+          },
+          {
+            "component": "sentiment_trend_adjustment",
+            "weight": 0.05,
+            "value": -0.05,
+            "reason": "Sentiment trend slightly adjusts engagement score."
+          }
+        ],
+        "conflict_score": [
+          {
+            "component": "interruptions_and_overlaps",
+            "weight": 1.0,
+            "value": 0.0,
+            "reason": "More interruptions and overlaps increase conflict score."
+          }
+        ],
+        "cooperation_score": [
+          {
+            "component": "balance_and_low_conflict",
+            "weight": 1.0,
+            "value": 0.733,
+            "reason": "Balanced participation with low conflict improves cooperation."
+          }
+        ],
+        "emotion_volatility_score": [
+          {
+            "component": "aggregated_signal_variation",
+            "weight": 1.0,
+            "value": 0.574,
+            "reason": "Higher sentiment swings and more emotion switching increase volatility."
+          }
+        ]
+      }
+    },
+    "flags": [
+      {
+        "type": "declining_session_tone",
+        "speaker": null,
+        "severity": "low",
+        "reason": "Session sentiment trends downward across the interaction.",
+        "evidence": {
+          "direction": "declining",
+          "slope": -0.12
+        }
+      },
+      {
+        "type": "conversation_escalation",
+        "speaker": null,
+        "severity": "medium",
+        "reason": "Escalation level is moderate, driven by declining_session_trend, negative_sentiment_density, speaker_emotional_strain. Primary speaker of concern: customer.",
+        "evidence": {
+          "escalation_level": "moderate",
+          "escalation_score": 0.6658,
+          "primary_speaker": "customer"
+        }
+      },
+      {
+        "type": "conversation_inconsistency",
+        "speaker": null,
+        "severity": "low",
+        "reason": "Inconsistency level is low, driven by abrupt_emotional_reversal. Primary speaker of concern: customer.",
+        "evidence": {
+          "inconsistency_level": "low",
+          "inconsistency_score": 0.18,
+          "primary_speaker": "customer",
+          "signal_count": 1
+        }
+      }
+    ],
+    "timeline": [
+      {
+        "marker_id": "session_tone_decline",
+        "type": "session_tone_decline",
+        "time_sec": 2.6,
+        "speaker": "customer",
+        "severity": "medium",
+        "reason": "Session sentiment begins a noticeable downward shift.",
+        "start_sec": 2.6,
+        "end_sec": 6.5,
+        "evidence": {
+          "trend_direction": "declining",
+          "trend_slope": -0.12
+        }
+      },
+      {
+        "marker_id": "inconsistency_1",
+        "type": "inconsistency_candidate",
+        "time_sec": 9.2,
+        "speaker": "customer",
+        "severity": "medium",
+        "reason": "customer flips emotion from 'angry' to 'calm' within 30s.",
+        "start_sec": 9.2,
+        "end_sec": 18.0,
+        "evidence": {
+          "speaker": "customer",
+          "from_emotion": "angry",
+          "to_emotion": "calm",
+          "gap_sec": 3.7,
+          "previous_utterance_id": "u4",
+          "current_utterance_id": "u6",
+          "window_level": "medium"
+        }
+      },
+      {
+        "marker_id": "emotional_shift_1",
+        "type": "emotional_shift",
+        "time_sec": 16.2,
+        "speaker": "customer",
+        "severity": "medium",
+        "reason": "customer shows a notable sentiment shift between turns.",
+        "start_sec": 9.2,
+        "end_sec": 18.0,
+        "evidence": {
+          "previous_score": 0.18,
+          "current_score": 0.7,
+          "delta": 0.52,
+          "direction": "up",
+          "previous_label": "negative",
+          "current_label": "positive"
+        }
+      }
+    ],
+    "escalation": {
+      "level": "moderate",
+      "score": 0.6658,
+      "signals": [
+        {
+          "signal_type": "declining_session_trend",
+          "severity": "high",
+          "score": 0.24,
+          "reason": "Session sentiment trends downward across the interaction.",
+          "evidence": {
+            "trend_direction": "declining",
+            "trend_slope": -0.12
+          }
+        },
+        {
+          "signal_type": "negative_sentiment_density",
+          "severity": "high",
+          "score": 0.25,
+          "reason": "Negative sentiment appears repeatedly across the session.",
+          "evidence": {
+            "negative_count": 2,
+            "sample_count": 6,
+            "negative_ratio": 0.3333
+          }
+        },
+        {
+          "signal_type": "speaker_emotional_strain",
+          "severity": "medium",
+          "score": 0.1758,
+          "reason": "customer shows repeated emotionally strained signals.",
+          "evidence": {
+            "speaker": "customer",
+            "dominant_emotion": "angry",
+            "sample_count": 3
+          }
+        }
+      ],
+      "windows": [],
+      "primary_speaker": "customer",
+      "summary": "Escalation level is moderate, driven by declining_session_trend, negative_sentiment_density, speaker_emotional_strain. Primary speaker of concern: customer."
+    },
+    "inconsistency": {
+      "level": "low",
+      "score": 0.18,
+      "signals": [
+        {
+          "signal_type": "abrupt_emotional_reversal",
+          "severity": "medium",
+          "score": 0.18,
+          "speaker": "customer",
+          "reason": "Speaker emotion flips between opposing polarities within a short window, suggesting affective instability or masking.",
+          "evidence": {
+            "reversal_count": 1,
+            "window_sec": 30.0
+          }
+        }
+      ],
+      "windows": [
+        {
+          "start_sec": 9.2,
+          "end_sec": 18.0,
+          "level": "medium",
+          "speaker": "customer",
+          "reason": "customer flips emotion from 'angry' to 'calm' within 30s.",
+          "evidence": {
+            "speaker": "customer",
+            "from_emotion": "angry",
+            "to_emotion": "calm",
+            "gap_sec": 3.7,
+            "previous_utterance_id": "u4",
+            "current_utterance_id": "u6"
+          }
+        }
+      ],
+      "primary_speaker": "customer",
+      "summary": "Inconsistency level is low, driven by abrupt_emotional_reversal. Primary speaker of concern: customer."
+    }
+  },
+  "summaries": {
+    "overall_summary": "This session contains 6 utterances across 2 speaker(s), with a total measured speaking time of 17.00 seconds and 65 words. Overall sentiment appears positive with a declining trend (average score 0.58). Emotion signals are led by calm across the session. The interaction appears fairly balanced, with customer contributing the largest share of speaking time. Overall engagement appears moderately engaged, and pause behavior suggests a relatively smooth response flow. Turn-taking appears relatively orderly, with limited conflict signals. Escalation assessment is moderate, with score 0.67. Escalation level is moderate, driven by declining_session_trend, negative_sentiment_density, speaker_emotional_strain. Primary speaker of concern: customer. Inconsistency assessment is low, with score 0.18. Inconsistency level is low, driven by abrupt_emotional_reversal. Primary speaker of concern: customer. There are 1 medium-severity signal(s) worth monitoring.",
+    "speaker_summaries": {
+      "agent": "agent contributed 3 utterances, 33 words, and 8.00 seconds of speech. Their speaking share was 47.06%, suggesting moderately active participation. They asked occasional questions during the conversation. Their sentiment profile appears mostly positive. Their dominant emotional signal is calm. No major speaker-level concerns were flagged.",
+      "customer": "customer contributed 3 utterances, 32 words, and 9.00 seconds of speech. Their speaking share was 52.94%, suggesting moderately active participation. They did not ask questions during the captured interaction. Their sentiment profile appears mostly negative. Their dominant emotional signal is angry. Notable speaker-level signals include: speaker_emotional_strain."
+    },
+    "notable_concerns": [
+      "Escalation level is moderate, driven by declining_session_trend, negative_sentiment_density, speaker_emotional_strain. Primary speaker of concern: customer.",
+      "Session sentiment trends downward across the interaction.",
+      "Inconsistency level is low, driven by abrupt_emotional_reversal. Primary speaker of concern: customer."
+    ],
+    "key_moments_summary": "At 16.20s, customer showed a emotional shift signal (medium) because customer shows a notable sentiment shift between turns.. At 9.20s, customer showed a inconsistency candidate signal (medium) because customer flips emotion from 'angry' to 'calm' within 30s.. At 2.60s, customer showed a session tone decline signal (medium) because session sentiment begins a noticeable downward shift.."
+  },
+  "warnings": [],
+  "meta": {
+    "service_version": "1.0.0",
+    "threshold_profile": "default",
+    "generated_at": "2026-04-22T19:12:38.574000+00:00",
+    "processing_ms": 3
+  }
+}

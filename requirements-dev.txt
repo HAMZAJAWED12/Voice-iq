@@ -1,0 +1,7 @@
+jiwer
+rouge-score
+nltk
+absl-py
+scikit-learn
+pyannote.core
+pyannote.metrics
