@@ -1,0 +1,194 @@
+[
+  {
+    "start": 0.132,
+    "end": 8.097,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 8.907,
+    "end": 30.406,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 31.03,
+    "end": 54.267,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 54.908,
+    "end": 71.328,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 72.02,
+    "end": 76.728,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 78.314,
+    "end": 84.676,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 85.317,
+    "end": 95.78,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 98.969,
+    "end": 100.741,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 102.158,
+    "end": 103.964,
+    "speaker": "SPEAKER_00",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 104.842,
+    "end": 107.474,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 108.166,
+    "end": 114.038,
+    "speaker": "SPEAKER_00",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 115.726,
+    "end": 116.975,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 117.92,
+    "end": 119.371,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 122.56,
+    "end": 136.297,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 137.832,
+    "end": 141.376,
+    "speaker": "SPEAKER_00",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 141.376,
+    "end": 145.072,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 146.978,
+    "end": 150.033,
+    "speaker": "SPEAKER_00",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 152.547,
+    "end": 153.762,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 155.635,
+    "end": 157.745,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 158.977,
+    "end": 162.571,
+    "speaker": "SPEAKER_00",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 162.892,
+    "end": 191.562,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 192.457,
+    "end": 202.379,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 204.927,
+    "end": 240.415,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  },
+  {
+    "start": 241.428,
+    "end": 245.478,
+    "speaker": "SPEAKER_01",
+    "confidence": 1.0,
+    "diarization_confidence": 1.0,
+    "source": "pyannote"
+  }
+]

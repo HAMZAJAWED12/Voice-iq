@@ -1,0 +1,6 @@
+{
+  "service": "audio_normalize",
+  "status": "ok",
+  "input": "data\\jobs\\ec1fc51c-ed6b-417e-a1a9-e864b09a317c\\input\\original.mp3",
+  "output": "data\\jobs\\ec1fc51c-ed6b-417e-a1a9-e864b09a317c\\artifacts\\audio\\normalized.wav"
+}
