@@ -1,0 +1,17 @@
+# Lightweight dependencies for the Insight Service layer only.
+# Excludes heavy ML deps (torch, whisper, pyannote, transformers, librosa)
+# so CI can install in seconds rather than minutes.
+#
+# Use this for:
+#   - GitHub Actions CI runs of app/insights/tests/
+#   - Local development of the Insight Service without ASR/diarization
+
+fastapi==0.115.6
+uvicorn==0.32.1
+pydantic==2.12.4
+pydantic-settings>=2.6.0
+SQLAlchemy>=2.0.30
+python-multipart
+httpx==0.28.1
+pytest==8.3.3
+pytest-asyncio==0.24.0
