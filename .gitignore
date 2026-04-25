@@ -49,3 +49,11 @@ desktop.ini
 build/
 dist/
 node_modules/
+
+# Archives — never commit zips. Past leaks (see README / CLAUDE.md).
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
