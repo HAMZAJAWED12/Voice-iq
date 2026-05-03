@@ -120,9 +120,10 @@ def init_db(settings: Optional[InsightSettings] = None) -> None:
     if not resolved.database_auto_create:
         return
 
-    # Importing here so the ORM model registers itself on Base.metadata
-    # without forcing an import cycle at module load time.
+    # Importing here so each ORM module registers its tables on
+    # Base.metadata without forcing an import cycle at module load time.
     from app.insights.repository import orm_models  # noqa: F401
+    from app.insights.repository import factcheck_orm_models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
 

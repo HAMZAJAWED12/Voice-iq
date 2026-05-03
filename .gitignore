@@ -57,3 +57,6 @@ node_modules/
 *.tgz
 *.7z
 *.rar
+
+# Local Claude Code state
+.claude/
