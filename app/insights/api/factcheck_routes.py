@@ -33,13 +33,13 @@ from app.insights.repository import (
 )
 from app.utils.logger import logger
 
-
 router = APIRouter(prefix="/fact-check", tags=["FactCheck"])
 
 
 # --------------------------------------------------------------------------- #
 # Engine dependency (process-wide singleton)                                  #
 # --------------------------------------------------------------------------- #
+
 
 @lru_cache(maxsize=1)
 def _build_engine() -> FactCheckEngine:
@@ -57,6 +57,7 @@ def get_factcheck_engine() -> FactCheckEngine:
 # --------------------------------------------------------------------------- #
 # Routes                                                                      #
 # --------------------------------------------------------------------------- #
+
 
 @router.post(
     "",

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Dict, List
 
 from app.insights.models.signal_models import (
     AggregatedSignals,
@@ -16,7 +15,7 @@ def clamp01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
 
 
-def aggregate_sentiment(samples: List[dict]) -> SentimentAggregate:
+def aggregate_sentiment(samples: list[dict]) -> SentimentAggregate:
     if not samples:
         return SentimentAggregate()
 
@@ -35,11 +34,11 @@ def aggregate_sentiment(samples: List[dict]) -> SentimentAggregate:
     )
 
 
-def aggregate_emotion(samples: List[dict]) -> EmotionAggregate:
+def aggregate_emotion(samples: list[dict]) -> EmotionAggregate:
     if not samples:
         return EmotionAggregate()
 
-    totals: Dict[str, float] = {}
+    totals: dict[str, float] = {}
     count = 0
 
     for sample in samples:
@@ -71,7 +70,7 @@ def aggregate_emotion(samples: List[dict]) -> EmotionAggregate:
     )
 
 
-def compute_sentiment_trend(points: List[SentimentTrendPoint]) -> SessionSentimentTrend:
+def compute_sentiment_trend(points: list[SentimentTrendPoint]) -> SessionSentimentTrend:
     if len(points) < 2:
         return SessionSentimentTrend(
             direction="stable",
@@ -108,22 +107,18 @@ def compute_sentiment_trend(points: List[SentimentTrendPoint]) -> SessionSentime
 
 
 def compute_emotion_volatility(
-    points: List[SentimentTrendPoint],
-    emotion_samples: List[dict],
+    points: list[SentimentTrendPoint],
+    emotion_samples: list[dict],
 ) -> float:
-    sentiment_deltas: List[float] = []
+    sentiment_deltas: list[float] = []
 
     valid_scores = [p.score for p in points if p.score is not None]
     for i in range(1, len(valid_scores)):
         sentiment_deltas.append(abs(valid_scores[i] - valid_scores[i - 1]))
 
-    sentiment_component = (
-        sum(sentiment_deltas) / len(sentiment_deltas)
-        if sentiment_deltas
-        else 0.0
-    )
+    sentiment_component = sum(sentiment_deltas) / len(sentiment_deltas) if sentiment_deltas else 0.0
 
-    dominant_seq: List[str] = []
+    dominant_seq: list[str] = []
     for item in emotion_samples:
         values = item.get("values") or {}
         if isinstance(values, dict) and values:
@@ -134,11 +129,7 @@ def compute_emotion_volatility(
         if dominant_seq[i] != dominant_seq[i - 1]:
             emotion_switches += 1
 
-    switch_component = (
-        emotion_switches / max(1, len(dominant_seq) - 1)
-        if len(dominant_seq) > 1
-        else 0.0
-    )
+    switch_component = emotion_switches / max(1, len(dominant_seq) - 1) if len(dominant_seq) > 1 else 0.0
 
     raw = (0.65 * sentiment_component) + (0.35 * switch_component)
     return round(max(0.0, min(1.0, raw)), 4)
@@ -147,11 +138,11 @@ def compute_emotion_volatility(
 class SignalAggregationEngine:
     @classmethod
     def aggregate(cls, utterances: list) -> AggregatedSignals:
-        sentiment_samples_by_speaker: Dict[str, List[dict]] = {}
-        emotion_samples_by_speaker: Dict[str, List[dict]] = {}
-        trend_points: List[SentimentTrendPoint] = []
-        all_sentiment_samples: List[dict] = []
-        all_emotion_samples: List[dict] = []
+        sentiment_samples_by_speaker: dict[str, list[dict]] = {}
+        emotion_samples_by_speaker: dict[str, list[dict]] = {}
+        trend_points: list[SentimentTrendPoint] = []
+        all_sentiment_samples: list[dict] = []
+        all_emotion_samples: list[dict] = []
 
         for utt in utterances:
             speaker = getattr(utt, "speaker", None) or "UNKNOWN"
@@ -192,15 +183,9 @@ class SignalAggregationEngine:
 
         trend_points.sort(key=lambda x: (x.start, x.end, x.utterance_id))
 
-        speaker_sentiment = {
-            spk: aggregate_sentiment(samples)
-            for spk, samples in sentiment_samples_by_speaker.items()
-        }
+        speaker_sentiment = {spk: aggregate_sentiment(samples) for spk, samples in sentiment_samples_by_speaker.items()}
 
-        speaker_emotion = {
-            spk: aggregate_emotion(samples)
-            for spk, samples in emotion_samples_by_speaker.items()
-        }
+        speaker_emotion = {spk: aggregate_emotion(samples) for spk, samples in emotion_samples_by_speaker.items()}
 
         return AggregatedSignals(
             session_sentiment=aggregate_sentiment(all_sentiment_samples),

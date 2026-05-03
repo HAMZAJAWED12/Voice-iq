@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Optional
+from typing import ClassVar
 
 from app.insights.core.factcheck.source_clients.base_client import (
     BaseSourceClient,
@@ -26,7 +26,7 @@ class OpenWeatherClient(BaseSourceClient):
         super().__init__(timeout_sec=timeout_sec, client=client)
         self._api_key = (api_key or "").strip()
 
-    def fetch(self, claim: DetectedClaim) -> Optional[Evidence]:
+    def fetch(self, claim: DetectedClaim) -> Evidence | None:
         if claim.claim_type != "WEATHER":
             return None
         if not self._api_key:

@@ -14,22 +14,17 @@ Design contract:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import ClassVar, Optional
+from typing import ClassVar
 
 import httpx
 
 from app.insights.models.factcheck_models import DetectedClaim, Evidence
 from app.utils.logger import logger
 
-
 # Polite, identifiable User-Agent. Required by Wikimedia (otherwise 403)
 # and a courtesy for every other source. Includes a contact URL per
 # Wikipedia's API etiquette guidelines.
-_DEFAULT_UA: str = (
-    "VoiceIQ-FactCheck/1.0 "
-    "(+https://github.com/HAMZAJAWED12/Voice-iq) "
-    "httpx"
-)
+_DEFAULT_UA: str = "VoiceIQ-FactCheck/1.0 " "(+https://github.com/HAMZAJAWED12/Voice-iq) " "httpx"
 
 
 class BaseSourceClient(ABC):
@@ -42,7 +37,7 @@ class BaseSourceClient(ABC):
         self,
         *,
         timeout_sec: float = 5.0,
-        client: Optional[httpx.Client] = None,
+        client: httpx.Client | None = None,
     ) -> None:
         self._timeout_sec = timeout_sec
         # Allow tests to inject a mocked transport via httpx.Client(...)
@@ -53,7 +48,7 @@ class BaseSourceClient(ABC):
     # ------------------------------------------------------------------ #
 
     @abstractmethod
-    def fetch(self, claim: DetectedClaim) -> Optional[Evidence]:
+    def fetch(self, claim: DetectedClaim) -> Evidence | None:
         """Resolve `claim` against the upstream source.
 
         Concrete implementations MUST NOT raise. Returning ``None``
@@ -68,9 +63,9 @@ class BaseSourceClient(ABC):
         self,
         url: str,
         *,
-        params: Optional[dict] = None,
+        params: dict | None = None,
         retries: int = 1,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """GET `url`, return parsed JSON dict, or `None` on any error.
 
         Performs at most ``retries + 1`` attempts. Retries are *only*

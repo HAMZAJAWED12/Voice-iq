@@ -40,6 +40,7 @@ def _evidence(value=None, value_text=None):
 # Numeric verdict bands                                                       #
 # --------------------------------------------------------------------------- #
 
+
 def test_numeric_zero_diff_is_true():
     out = FactCheckComparator.compare(_numeric_claim(100.0), _evidence(value=100.0))
     assert out.verdict == "TRUE"
@@ -80,6 +81,7 @@ def test_numeric_boundary_at_10_pct_is_partial():
 # Defensive branches                                                          #
 # --------------------------------------------------------------------------- #
 
+
 def test_missing_evidence_is_source_unavailable():
     out = FactCheckComparator.compare(_numeric_claim(100.0), None)
     assert out.verdict == "SOURCE_UNAVAILABLE"
@@ -108,25 +110,20 @@ def test_missing_claim_value_is_unverified():
 # Static-fact comparison                                                      #
 # --------------------------------------------------------------------------- #
 
+
 def test_static_fact_exact_match_is_true():
-    out = FactCheckComparator.compare(
-        _static_claim("Paris"), _evidence(value_text="Paris")
-    )
+    out = FactCheckComparator.compare(_static_claim("Paris"), _evidence(value_text="Paris"))
     assert out.verdict == "TRUE"
     assert out.diff_pct is None
 
 
 def test_static_fact_case_and_accent_insensitive_match():
-    out = FactCheckComparator.compare(
-        _static_claim("sao paulo"), _evidence(value_text="São Paulo")
-    )
+    out = FactCheckComparator.compare(_static_claim("sao paulo"), _evidence(value_text="São Paulo"))
     assert out.verdict == "TRUE"
 
 
 def test_static_fact_mismatch_is_false():
-    out = FactCheckComparator.compare(
-        _static_claim("Tokyo"), _evidence(value_text="Paris")
-    )
+    out = FactCheckComparator.compare(_static_claim("Tokyo"), _evidence(value_text="Paris"))
     assert out.verdict == "FALSE"
 
 

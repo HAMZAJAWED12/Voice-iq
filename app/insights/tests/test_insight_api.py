@@ -9,8 +9,8 @@ state, no monkey-patching of module-level singletons.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 import pytest
 from fastapi import FastAPI
@@ -25,7 +25,6 @@ from app.insights.repository import (
 )
 from app.insights.repository.db import Base
 from app.insights.repository.orm_models import InsightRecordORM  # noqa: F401
-
 
 # --------------------------------------------------------------------------- #
 # Fixtures
@@ -42,9 +41,7 @@ def isolated_repo(tmp_path: Path) -> Iterator[InsightRepository]:
         connect_args={"check_same_thread": False},
     )
     Base.metadata.create_all(bind=engine)
-    factory = sessionmaker(
-        bind=engine, autoflush=False, autocommit=False, expire_on_commit=False
-    )
+    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
     repo = InsightRepository(session_factory=factory)
     try:
@@ -253,9 +250,7 @@ def test_generate_from_raw_surfaces_validation_errors_in_body(
     # `generate_from_raw` is intentionally permissive: it returns 200 with
     # a structured `validation` block describing the problem rather than
     # rejecting the request outright. Tests that contract here.
-    response = client.post(
-        "/v1/insights/generate-from-raw", json={"session_id": "x"}
-    )
+    response = client.post("/v1/insights/generate-from-raw", json={"session_id": "x"})
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "error"

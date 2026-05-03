@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Iterator
+from collections.abc import Iterator
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import create_engine
@@ -25,10 +25,10 @@ from app.insights.repository.factcheck_repository import (
     build_factcheck_repository_from_factory,
 )
 
-
 # --------------------------------------------------------------------------- #
 # Fixtures                                                                    #
 # --------------------------------------------------------------------------- #
+
 
 @pytest.fixture()
 def repo() -> Iterator[FactCheckRepository]:
@@ -79,7 +79,7 @@ def _make_result(
             value=actual_value,
             value_text=actual_text,
             unit="USD" if claim_type == "CRYPTO_PRICE" else None,
-            fetched_at=datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc),
+            fetched_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
             raw={"asset": "BTC"},
         )
         if source
@@ -102,14 +102,8 @@ def _make_response(*results: FactCheckResult) -> FactCheckResponse:
         fact_check_results=list(results),
         stats=FactCheckStats(
             claims_detected=len(results),
-            verified=sum(
-                1 for r in results if r.verdict in {"TRUE", "FALSE", "PARTIALLY_TRUE"}
-            ),
-            skipped=sum(
-                1
-                for r in results
-                if r.verdict not in {"TRUE", "FALSE", "PARTIALLY_TRUE"}
-            ),
+            verified=sum(1 for r in results if r.verdict in {"TRUE", "FALSE", "PARTIALLY_TRUE"}),
+            skipped=sum(1 for r in results if r.verdict not in {"TRUE", "FALSE", "PARTIALLY_TRUE"}),
         ),
     )
 
@@ -117,6 +111,7 @@ def _make_response(*results: FactCheckResult) -> FactCheckResponse:
 # --------------------------------------------------------------------------- #
 # Tests                                                                       #
 # --------------------------------------------------------------------------- #
+
 
 def test_save_response_persists_all_results(repo: FactCheckRepository):
     response = _make_response(_make_result(), _make_result(claim_text="ETH at 3000"))

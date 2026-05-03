@@ -20,8 +20,6 @@ Rationale:
 
 from __future__ import annotations
 
-from typing import Optional
-
 from app.insights.core.factcheck.comparator import (
     PARTIAL_MAX_DIFF_PCT,
     TRUE_MAX_DIFF_PCT,
@@ -42,7 +40,7 @@ class FactCheckScorer:
     """Stateless confidence scorer."""
 
     @classmethod
-    def score(cls, verdict: Verdict, diff_pct: Optional[float]) -> Confidence:
+    def score(cls, verdict: Verdict, diff_pct: float | None) -> Confidence:
         """Return a `Confidence` object for the given verdict + diff."""
         label, raw = cls._label_and_raw(verdict, diff_pct)
         return Confidence(label=label, score=_clamp(raw))
@@ -52,9 +50,7 @@ class FactCheckScorer:
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def _label_and_raw(
-        verdict: Verdict, diff_pct: Optional[float]
-    ) -> tuple[ConfidenceLabel, float]:
+    def _label_and_raw(verdict: Verdict, diff_pct: float | None) -> tuple[ConfidenceLabel, float]:
         if verdict == "TRUE":
             if diff_pct is None:
                 # Static fact exact match - no numeric diff.

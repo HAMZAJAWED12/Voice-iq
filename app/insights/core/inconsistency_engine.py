@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
 
 from app.insights.models.analytics_models import AnalyticsBundle
 from app.insights.models.inconsistency_models import (
@@ -13,41 +12,122 @@ from app.insights.models.inconsistency_models import (
 from app.insights.models.input_models import SessionInput, UtteranceInput
 from app.insights.models.signal_models import AggregatedSignals
 
-
 # --- Lexicons -----------------------------------------------------------------
 # Conservative, domain-agnostic word lists. They are used only to compute a
 # coarse lexical polarity signal that we cross-check against ASR-derived
 # sentiment / emotion labels. They are NOT a sentiment classifier.
 
 _POSITIVE_LEXICON = {
-    "happy", "great", "excellent", "wonderful", "love", "loved", "amazing",
-    "fantastic", "good", "thanks", "thank", "appreciate", "appreciated",
-    "perfect", "awesome", "delighted", "glad", "pleased", "enjoy", "enjoyed",
-    "fine", "okay", "ok", "nice", "helpful", "satisfied", "smooth",
+    "happy",
+    "great",
+    "excellent",
+    "wonderful",
+    "love",
+    "loved",
+    "amazing",
+    "fantastic",
+    "good",
+    "thanks",
+    "thank",
+    "appreciate",
+    "appreciated",
+    "perfect",
+    "awesome",
+    "delighted",
+    "glad",
+    "pleased",
+    "enjoy",
+    "enjoyed",
+    "fine",
+    "okay",
+    "ok",
+    "nice",
+    "helpful",
+    "satisfied",
+    "smooth",
 }
 
 _NEGATIVE_LEXICON = {
-    "hate", "hated", "terrible", "awful", "horrible", "bad", "worst",
-    "angry", "furious", "frustrated", "annoyed", "upset", "disappointed",
-    "sucks", "stupid", "ridiculous", "useless", "broken", "wrong",
-    "unhappy", "miserable", "disgusting", "pathetic", "rude", "unacceptable",
-    "lie", "lied", "lying", "complain", "complaining", "problem", "issue",
+    "hate",
+    "hated",
+    "terrible",
+    "awful",
+    "horrible",
+    "bad",
+    "worst",
+    "angry",
+    "furious",
+    "frustrated",
+    "annoyed",
+    "upset",
+    "disappointed",
+    "sucks",
+    "stupid",
+    "ridiculous",
+    "useless",
+    "broken",
+    "wrong",
+    "unhappy",
+    "miserable",
+    "disgusting",
+    "pathetic",
+    "rude",
+    "unacceptable",
+    "lie",
+    "lied",
+    "lying",
+    "complain",
+    "complaining",
+    "problem",
+    "issue",
 }
 
 _NEGATION_TOKENS = {
-    "not", "no", "never", "n't", "dont", "doesnt", "isnt", "arent",
-    "wont", "wasnt", "werent", "cant", "cannot", "didnt", "wouldnt",
-    "shouldnt", "couldnt",
+    "not",
+    "no",
+    "never",
+    "n't",
+    "dont",
+    "doesnt",
+    "isnt",
+    "arent",
+    "wont",
+    "wasnt",
+    "werent",
+    "cant",
+    "cannot",
+    "didnt",
+    "wouldnt",
+    "shouldnt",
+    "couldnt",
 }
 
 _AFFIRMATION_TOKENS = {
-    "yes", "yeah", "yep", "agree", "agreed", "absolutely", "definitely",
-    "sure", "of course", "right", "correct", "indeed", "true",
+    "yes",
+    "yeah",
+    "yep",
+    "agree",
+    "agreed",
+    "absolutely",
+    "definitely",
+    "sure",
+    "of course",
+    "right",
+    "correct",
+    "indeed",
+    "true",
 }
 
 _DENIAL_TOKENS = {
-    "no", "nope", "disagree", "disagreed", "never", "wrong", "false",
-    "incorrect", "actually no",
+    "no",
+    "nope",
+    "disagree",
+    "disagreed",
+    "never",
+    "wrong",
+    "false",
+    "incorrect",
+    "actually no",
 }
 
 # Emotion polarity buckets (must match label keys produced by upstream NLP).
@@ -63,13 +143,13 @@ def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
     return max(low, min(high, float(value)))
 
 
-def _tokenize(text: str) -> List[str]:
+def _tokenize(text: str) -> list[str]:
     if not text:
         return []
     return [t.lower().replace("'", "") for t in _TOKEN_RE.findall(text)]
 
 
-def _lexical_polarity(text: str) -> Optional[str]:
+def _lexical_polarity(text: str) -> str | None:
     """Coarse lexical polarity classifier.
 
     Returns "positive", "negative" or None when the signal is ambiguous /
@@ -116,7 +196,7 @@ def _lexical_polarity(text: str) -> Optional[str]:
     return None
 
 
-def _dominant_emotion(utt: UtteranceInput) -> Optional[str]:
+def _dominant_emotion(utt: UtteranceInput) -> str | None:
     if not utt.emotion or not utt.emotion.values:
         return None
     try:
@@ -125,7 +205,7 @@ def _dominant_emotion(utt: UtteranceInput) -> Optional[str]:
         return None
 
 
-def _emotion_polarity(emotion: Optional[str]) -> Optional[str]:
+def _emotion_polarity(emotion: str | None) -> str | None:
     if not emotion:
         return None
     e = emotion.lower()
@@ -181,35 +261,27 @@ class InsightInconsistencyEngine:
         if not session or not session.utterances:
             return InconsistencyAssessment()
 
-        utterances = sorted(
-            session.utterances, key=lambda u: (u.start, u.end, u.id)
-        )
+        utterances = sorted(session.utterances, key=lambda u: (u.start, u.end, u.id))
 
-        signals: List[InconsistencySignal] = []
-        windows: List[InconsistencyWindow] = []
+        signals: list[InconsistencySignal] = []
+        windows: list[InconsistencyWindow] = []
 
         text_signal, text_windows = cls._detect_sentiment_text_mismatch(utterances)
         if text_signal:
             signals.append(text_signal)
         windows.extend(text_windows)
 
-        sent_emotion_signal, sent_emotion_windows = (
-            cls._detect_sentiment_emotion_contradiction(utterances)
-        )
+        sent_emotion_signal, sent_emotion_windows = cls._detect_sentiment_emotion_contradiction(utterances)
         if sent_emotion_signal:
             signals.append(sent_emotion_signal)
         windows.extend(sent_emotion_windows)
 
-        reversal_signal, reversal_windows = cls._detect_abrupt_emotional_reversal(
-            utterances
-        )
+        reversal_signal, reversal_windows = cls._detect_abrupt_emotional_reversal(utterances)
         if reversal_signal:
             signals.append(reversal_signal)
         windows.extend(reversal_windows)
 
-        contradiction_signal, contradiction_windows = (
-            cls._detect_contradictory_statements(utterances)
-        )
+        contradiction_signal, contradiction_windows = cls._detect_contradictory_statements(utterances)
         if contradiction_signal:
             signals.append(contradiction_signal)
         windows.extend(contradiction_windows)
@@ -221,9 +293,7 @@ class InsightInconsistencyEngine:
 
         score = round(_clamp(sum(s.score for s in signals)), 4)
         level = cls._score_to_level(score)
-        primary_speaker = cls._infer_primary_speaker(
-            signals, analytics, aggregated_signals
-        )
+        primary_speaker = cls._infer_primary_speaker(signals, analytics, aggregated_signals)
         summary = cls._build_summary(level, signals, primary_speaker)
 
         return InconsistencyAssessment(
@@ -241,9 +311,9 @@ class InsightInconsistencyEngine:
     @classmethod
     def _detect_sentiment_text_mismatch(
         cls,
-        utterances: List[UtteranceInput],
-    ) -> Tuple[Optional[InconsistencySignal], List[InconsistencyWindow]]:
-        mismatches: List[Tuple[UtteranceInput, str, str]] = []
+        utterances: list[UtteranceInput],
+    ) -> tuple[InconsistencySignal | None, list[InconsistencyWindow]]:
+        mismatches: list[tuple[UtteranceInput, str, str]] = []
         eligible = 0
 
         for utt in utterances:
@@ -269,7 +339,7 @@ class InsightInconsistencyEngine:
 
         score = _clamp(0.08 + ratio * 0.40, high=cls._CAP_TEXT_MISMATCH)
 
-        windows: List[InconsistencyWindow] = []
+        windows: list[InconsistencyWindow] = []
         # Cap the number of emitted windows so we don't spam the timeline.
         for utt, label, lexical in mismatches[:5]:
             windows.append(
@@ -278,10 +348,7 @@ class InsightInconsistencyEngine:
                     end_sec=utt.end,
                     level="medium" if score >= 0.18 else "low",
                     speaker=utt.speaker,
-                    reason=(
-                        f"Sentiment label '{label}' disagrees with lexical tone "
-                        f"'{lexical}' in this turn."
-                    ),
+                    reason=(f"Sentiment label '{label}' disagrees with lexical tone " f"'{lexical}' in this turn."),
                     evidence={
                         "utterance_id": utt.id,
                         "sentiment_label": label,
@@ -303,8 +370,7 @@ class InsightInconsistencyEngine:
                 score=round(score, 4),
                 speaker=top_speaker,
                 reason=(
-                    "ASR sentiment label disagrees with the lexical polarity of "
-                    "the spoken text on multiple turns."
+                    "ASR sentiment label disagrees with the lexical polarity of " "the spoken text on multiple turns."
                 ),
                 evidence={
                     "mismatch_count": len(mismatches),
@@ -321,9 +387,9 @@ class InsightInconsistencyEngine:
     @classmethod
     def _detect_sentiment_emotion_contradiction(
         cls,
-        utterances: List[UtteranceInput],
-    ) -> Tuple[Optional[InconsistencySignal], List[InconsistencyWindow]]:
-        contradictions: List[Tuple[UtteranceInput, str, str]] = []
+        utterances: list[UtteranceInput],
+    ) -> tuple[InconsistencySignal | None, list[InconsistencyWindow]]:
+        contradictions: list[tuple[UtteranceInput, str, str]] = []
         eligible = 0
 
         for utt in utterances:
@@ -338,9 +404,8 @@ class InsightInconsistencyEngine:
                 continue
             eligible += 1
 
-            is_contradiction = (
-                (label == "positive" and emo_polarity == "negative")
-                or (label == "negative" and emo_polarity == "positive")
+            is_contradiction = (label == "positive" and emo_polarity == "negative") or (
+                label == "negative" and emo_polarity == "positive"
             )
             if is_contradiction:
                 contradictions.append((utt, label, emotion))
@@ -354,7 +419,7 @@ class InsightInconsistencyEngine:
 
         score = _clamp(0.07 + ratio * 0.35, high=cls._CAP_SENT_EMOTION)
 
-        windows: List[InconsistencyWindow] = []
+        windows: list[InconsistencyWindow] = []
         for utt, label, emotion in contradictions[:5]:
             windows.append(
                 InconsistencyWindow(
@@ -362,10 +427,7 @@ class InsightInconsistencyEngine:
                     end_sec=utt.end,
                     level="medium" if score >= 0.16 else "low",
                     speaker=utt.speaker,
-                    reason=(
-                        f"Sentiment '{label}' conflicts with dominant emotion "
-                        f"'{emotion}' on this turn."
-                    ),
+                    reason=(f"Sentiment '{label}' conflicts with dominant emotion " f"'{emotion}' on this turn."),
                     evidence={
                         "utterance_id": utt.id,
                         "sentiment_label": label,
@@ -404,10 +466,10 @@ class InsightInconsistencyEngine:
     @classmethod
     def _detect_abrupt_emotional_reversal(
         cls,
-        utterances: List[UtteranceInput],
-    ) -> Tuple[Optional[InconsistencySignal], List[InconsistencyWindow]]:
-        last_by_speaker: Dict[str, Tuple[UtteranceInput, str, str]] = {}
-        reversals: List[Tuple[UtteranceInput, UtteranceInput, str, str]] = []
+        utterances: list[UtteranceInput],
+    ) -> tuple[InconsistencySignal | None, list[InconsistencyWindow]]:
+        last_by_speaker: dict[str, tuple[UtteranceInput, str, str]] = {}
+        reversals: list[tuple[UtteranceInput, UtteranceInput, str, str]] = []
 
         for utt in utterances:
             emotion = _dominant_emotion(utt)
@@ -434,7 +496,7 @@ class InsightInconsistencyEngine:
         # Each reversal contributes a small amount up to the cap.
         score = _clamp(0.10 + 0.08 * len(reversals), high=cls._CAP_REVERSAL)
 
-        windows: List[InconsistencyWindow] = []
+        windows: list[InconsistencyWindow] = []
         for prev_utt, utt, prev_emotion, emotion in reversals[:5]:
             windows.append(
                 InconsistencyWindow(
@@ -486,10 +548,10 @@ class InsightInconsistencyEngine:
     @classmethod
     def _detect_contradictory_statements(
         cls,
-        utterances: List[UtteranceInput],
-    ) -> Tuple[Optional[InconsistencySignal], List[InconsistencyWindow]]:
-        last_stance_by_speaker: Dict[str, Tuple[UtteranceInput, str]] = {}
-        contradictions: List[Tuple[UtteranceInput, UtteranceInput, str, str]] = []
+        utterances: list[UtteranceInput],
+    ) -> tuple[InconsistencySignal | None, list[InconsistencyWindow]]:
+        last_stance_by_speaker: dict[str, tuple[UtteranceInput, str]] = {}
+        contradictions: list[tuple[UtteranceInput, UtteranceInput, str, str]] = []
 
         for utt in utterances:
             tokens = _tokenize(utt.text)
@@ -497,7 +559,7 @@ class InsightInconsistencyEngine:
                 continue
 
             text_lower = " " + " ".join(tokens) + " "
-            stance: Optional[str] = None
+            stance: str | None = None
             if any(f" {tok} " in text_lower for tok in _AFFIRMATION_TOKENS):
                 stance = "affirm"
             # Denial check second so a turn containing both leans toward denial,
@@ -512,10 +574,7 @@ class InsightInconsistencyEngine:
             if previous is not None:
                 prev_utt, prev_stance = previous
                 gap = utt.start - prev_utt.end
-                if (
-                    0.0 <= gap <= cls._CONTRADICTION_WINDOW_SEC
-                    and prev_stance != stance
-                ):
+                if 0.0 <= gap <= cls._CONTRADICTION_WINDOW_SEC and prev_stance != stance:
                     contradictions.append((prev_utt, utt, prev_stance, stance))
 
             last_stance_by_speaker[utt.speaker] = (utt, stance)
@@ -525,7 +584,7 @@ class InsightInconsistencyEngine:
 
         score = _clamp(0.08 + 0.06 * len(contradictions), high=cls._CAP_CONTRADICTION)
 
-        windows: List[InconsistencyWindow] = []
+        windows: list[InconsistencyWindow] = []
         for prev_utt, utt, prev_stance, stance in contradictions[:5]:
             windows.append(
                 InconsistencyWindow(
@@ -560,10 +619,7 @@ class InsightInconsistencyEngine:
                 severity="medium" if score >= 0.14 else "low",
                 score=round(score, 4),
                 speaker=top_speaker,
-                reason=(
-                    "Same speaker delivers conflicting affirmation/denial cues "
-                    "on closely spaced turns."
-                ),
+                reason=("Same speaker delivers conflicting affirmation/denial cues " "on closely spaced turns."),
                 evidence={
                     "contradiction_count": len(contradictions),
                     "window_sec": cls._CONTRADICTION_WINDOW_SEC,
@@ -578,9 +634,9 @@ class InsightInconsistencyEngine:
     @classmethod
     def _detect_masking_tone(
         cls,
-        utterances: List[UtteranceInput],
-    ) -> Tuple[Optional[InconsistencySignal], List[InconsistencyWindow]]:
-        masked: List[Tuple[UtteranceInput, str]] = []
+        utterances: list[UtteranceInput],
+    ) -> tuple[InconsistencySignal | None, list[InconsistencyWindow]]:
+        masked: list[tuple[UtteranceInput, str]] = []
 
         for utt in utterances:
             emotion = _dominant_emotion(utt)
@@ -590,11 +646,7 @@ class InsightInconsistencyEngine:
                 continue
 
             lexical = _lexical_polarity(utt.text)
-            sentiment_label = (
-                utt.sentiment.label.lower()
-                if utt.sentiment and utt.sentiment.label
-                else None
-            )
+            sentiment_label = utt.sentiment.label.lower() if utt.sentiment and utt.sentiment.label else None
 
             negative_text = lexical == "negative"
             negative_sentiment = sentiment_label == "negative"
@@ -614,7 +666,7 @@ class InsightInconsistencyEngine:
 
         score = _clamp(0.07 + 0.05 * len(masked), high=cls._CAP_MASKING)
 
-        windows: List[InconsistencyWindow] = []
+        windows: list[InconsistencyWindow] = []
         for utt, emotion in masked[:5]:
             windows.append(
                 InconsistencyWindow(
@@ -622,10 +674,7 @@ class InsightInconsistencyEngine:
                     end_sec=utt.end,
                     level="medium" if score >= 0.14 else "low",
                     speaker=utt.speaker,
-                    reason=(
-                        f"{utt.speaker} delivers negative content with a "
-                        f"flat / '{emotion}' emotional tone."
-                    ),
+                    reason=(f"{utt.speaker} delivers negative content with a " f"flat / '{emotion}' emotional tone."),
                     evidence={
                         "utterance_id": utt.id,
                         "dominant_emotion": emotion,
@@ -661,11 +710,11 @@ class InsightInconsistencyEngine:
     @classmethod
     def _infer_primary_speaker(
         cls,
-        signals: List[InconsistencySignal],
+        signals: list[InconsistencySignal],
         analytics: AnalyticsBundle,
         aggregated_signals: AggregatedSignals,
-    ) -> Optional[str]:
-        speaker_scores: Dict[str, float] = defaultdict(float)
+    ) -> str | None:
+        speaker_scores: dict[str, float] = defaultdict(float)
         for signal in signals:
             if signal.speaker:
                 speaker_scores[signal.speaker] += signal.score
@@ -698,19 +747,12 @@ class InsightInconsistencyEngine:
     @staticmethod
     def _build_summary(
         level: str,
-        signals: List[InconsistencySignal],
-        primary_speaker: Optional[str],
+        signals: list[InconsistencySignal],
+        primary_speaker: str | None,
     ) -> str:
         if level == "none" or not signals:
             return "No clear inconsistency pattern was detected."
 
         signal_names = ", ".join(s.signal_type for s in signals[:3])
-        speaker_part = (
-            f" Primary speaker of concern: {primary_speaker}."
-            if primary_speaker
-            else ""
-        )
-        return (
-            f"Inconsistency level is {level}, driven by {signal_names}."
-            f"{speaker_part}"
-        )
+        speaker_part = f" Primary speaker of concern: {primary_speaker}." if primary_speaker else ""
+        return f"Inconsistency level is {level}, driven by {signal_names}." f"{speaker_part}"

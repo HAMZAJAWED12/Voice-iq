@@ -58,10 +58,7 @@ def show_assessment(label, assessment):
     if assessment.windows:
         print(f"  windows ({len(assessment.windows)}):")
         for w in assessment.windows[:5]:
-            print(
-                f"    - [{w.start_sec:.1f}s..{w.end_sec:.1f}s] "
-                f"speaker={w.speaker} level={w.level}"
-            )
+            print(f"    - [{w.start_sec:.1f}s..{w.end_sec:.1f}s] " f"speaker={w.speaker} level={w.level}")
             print(f"        {w.reason}")
 
 
@@ -74,27 +71,43 @@ noisy = SessionInput(
     session_id="noisy_demo",
     utterances=[
         _utt(
-            "u1", "S1", 0.0, 2.0,
+            "u1",
+            "S1",
+            0.0,
+            2.0,
             "this is terrible and awful",
-            sl="positive", ss=0.9,
+            sl="positive",
+            ss=0.9,
             emo={"angry": 0.85, "calm": 0.15},
         ),
         _utt(
-            "u2", "S2", 2.5, 4.0,
+            "u2",
+            "S2",
+            2.5,
+            4.0,
             "I really hate this experience",
-            sl="positive", ss=0.85,
+            sl="positive",
+            ss=0.85,
             emo={"frustrated": 0.7, "calm": 0.3},
         ),
         _utt(
-            "u3", "S1", 4.5, 6.0,
+            "u3",
+            "S1",
+            4.5,
+            6.0,
             "yes I agree completely",
-            sl="positive", ss=0.8,
+            sl="positive",
+            ss=0.8,
             emo={"happy": 0.7, "calm": 0.3},
         ),
         _utt(
-            "u4", "S1", 6.5, 8.0,
+            "u4",
+            "S1",
+            6.5,
+            8.0,
             "actually no I disagree",
-            sl="negative", ss=0.3,
+            sl="negative",
+            ss=0.3,
             emo={"angry": 0.7, "frustrated": 0.3},
         ),
     ],
@@ -117,15 +130,23 @@ benign = SessionInput(
     session_id="benign_demo",
     utterances=[
         _utt(
-            "u1", "S1", 0.0, 2.0,
+            "u1",
+            "S1",
+            0.0,
+            2.0,
             "thanks for the helpful explanation",
-            sl="positive", ss=0.85,
+            sl="positive",
+            ss=0.85,
             emo={"happy": 0.7, "calm": 0.3},
         ),
         _utt(
-            "u2", "S2", 2.5, 4.5,
+            "u2",
+            "S2",
+            2.5,
+            4.5,
             "glad I could help",
-            sl="positive", ss=0.8,
+            sl="positive",
+            ss=0.8,
             emo={"happy": 0.65, "calm": 0.35},
         ),
     ],

@@ -1,27 +1,26 @@
 # app/services/keyword_service.py
 
-import spacy
-import numpy as np
 from functools import lru_cache
-from typing import List, Dict
-from sklearn.feature_extraction.text import TfidfVectorizer
+
+import spacy
 from sentence_transformers import SentenceTransformer, util
+from sklearn.feature_extraction.text import TfidfVectorizer
+
 from app.utils.logger import logger
 
 
 class KeywordService:
-
     # --------------------------------------------------------
     # Load NLP + Embedding models (cached)
     # --------------------------------------------------------
     @staticmethod
-    @lru_cache()
+    @lru_cache
     def _load_spacy():
         logger.info("Loading spaCy model for keyword extraction...")
         return spacy.load("en_core_web_sm")
 
     @staticmethod
-    @lru_cache()
+    @lru_cache
     def _load_sbert():
         logger.info("Loading Sentence-BERT (all-MiniLM-L6-v2)...")
         return SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
@@ -30,7 +29,7 @@ class KeywordService:
     # Extract candidate phrases (noun chunks + nouns)
     # --------------------------------------------------------
     @classmethod
-    def _extract_candidate_phrases(cls, text: str) -> List[str]:
+    def _extract_candidate_phrases(cls, text: str) -> list[str]:
         if not text.strip():
             return []
 
@@ -47,11 +46,7 @@ class KeywordService:
 
         # 2. Single nouns / proper nouns
         for token in doc:
-            if (
-                token.pos_ in ("NOUN", "PROPN")
-                and not token.is_stop
-                and token.is_alpha
-            ):
+            if token.pos_ in ("NOUN", "PROPN") and not token.is_stop and token.is_alpha:
                 candidates.append(token.text.lower())
 
         return list(set(candidates))  # remove duplicates
@@ -60,7 +55,7 @@ class KeywordService:
     # Keyword ranking = TF-IDF + semantic similarity to text
     # --------------------------------------------------------
     @classmethod
-    def extract_keywords(cls, text: str, top_k: int = 10) -> List[str]:
+    def extract_keywords(cls, text: str, top_k: int = 10) -> list[str]:
         if not text.strip():
             return []
 
@@ -108,7 +103,7 @@ class KeywordService:
     # Keyword extraction per speaker segment
     # --------------------------------------------------------
     @classmethod
-    def extract_keywords_per_segment(cls, speaker_segments: List[Dict], top_k=5):
+    def extract_keywords_per_segment(cls, speaker_segments: list[dict], top_k=5):
         enriched = []
 
         for seg in speaker_segments:

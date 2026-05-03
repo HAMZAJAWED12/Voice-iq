@@ -1,8 +1,5 @@
 # app/services/intent_service.py
 
-from typing import List, Dict
-from app.utils.logger import logger
-
 
 class IntentService:
     """
@@ -48,7 +45,7 @@ class IntentService:
         return "other"
 
     @classmethod
-    def annotate_conversation(cls, conversation: List[Dict]) -> List[Dict]:
+    def annotate_conversation(cls, conversation: list[dict]) -> list[dict]:
         """
         Takes your 'conversation' list and adds 'intent' to each turn.
         """
@@ -62,11 +59,11 @@ class IntentService:
         return result
 
     @classmethod
-    def summarize_intents(cls, conversation_with_intents: List[Dict]) -> Dict[str, int]:
+    def summarize_intents(cls, conversation_with_intents: list[dict]) -> dict[str, int]:
         """
         Returns a simple frequency dict of intents across the whole conversation.
         """
-        counts: Dict[str, int] = {}
+        counts: dict[str, int] = {}
         for turn in conversation_with_intents or []:
             intent = turn.get("intent", "other")
             counts[intent] = counts.get(intent, 0) + 1

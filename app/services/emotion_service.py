@@ -1,10 +1,11 @@
 # app/services/emotion_service.py
 
-from typing import List, Dict
+
 from app.utils.logger import logger
 
 try:
     import torch
+
     # Example: hook in a real SER model here if you want
     # from some_library import load_emotion_model
     # _emotion_model = load_emotion_model(...)
@@ -25,7 +26,7 @@ class EmotionService:
     BASIC_EMOTIONS = ["neutral", "happy", "sad", "angry", "fear"]
 
     @staticmethod
-    def _fallback_from_text_segment(segment: Dict) -> Dict:
+    def _fallback_from_text_segment(segment: dict) -> dict:
         """Map sentiment + keywords to a rough emotion label."""
         text = (segment.get("text") or "").lower()
         sentiment = (segment.get("sentiment") or "neutral").lower()
@@ -50,7 +51,7 @@ class EmotionService:
         return {"emotion": emotion, "emotion_scores": scores}
 
     @classmethod
-    def analyze_speaker_segments(cls, wav_path: str, speaker_segments: List[Dict]) -> List[Dict]:
+    def analyze_speaker_segments(cls, wav_path: str, speaker_segments: list[dict]) -> list[dict]:
         """
         Main entry: enrich each speaker_segment with:
           - emotion: str
@@ -64,8 +65,7 @@ class EmotionService:
 
         if not _HAS_TORCH:
             logger.warning(
-                "EmotionService: torch or SER model not available. "
-                "Using text-based fallback for emotions."
+                "EmotionService: torch or SER model not available. " "Using text-based fallback for emotions."
             )
 
         enriched = []
@@ -79,7 +79,7 @@ class EmotionService:
         return enriched
 
     @classmethod
-    def summarize_emotions(cls, speaker_segments: List[Dict]) -> Dict[str, Dict[str, float]]:
+    def summarize_emotions(cls, speaker_segments: list[dict]) -> dict[str, dict[str, float]]:
         """
         Returns a simple per-speaker emotion distribution:
 

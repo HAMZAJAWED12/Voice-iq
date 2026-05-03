@@ -24,21 +24,20 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 from app.insights.core.factcheck.claim_detector import ClaimDetector
 from app.insights.core.factcheck.classifier import ClaimClassifier
 from app.insights.core.factcheck.comparator import FactCheckComparator
 from app.insights.core.factcheck.scorer import FactCheckScorer
-from app.insights.core.factcheck.source_clients.base_client import (
-    BaseSourceClient,
-)
 from app.insights.core.factcheck.source_clients import (
     CoinGeckoClient,
     ForexClient,
     OpenWeatherClient,
     StaticFactsClient,
     StockClient,
+)
+from app.insights.core.factcheck.source_clients.base_client import (
+    BaseSourceClient,
 )
 from app.insights.models.factcheck_models import (
     ClaimType,
@@ -49,22 +48,22 @@ from app.insights.models.factcheck_models import (
     FactCheckStats,
 )
 
-
 # --------------------------------------------------------------------------- #
 # Source routing                                                              #
 # --------------------------------------------------------------------------- #
 
+
 class SourceRouter:
     """Maps each `ClaimType` to the source client that resolves it."""
 
-    def __init__(self, mapping: Dict[ClaimType, BaseSourceClient]) -> None:
+    def __init__(self, mapping: dict[ClaimType, BaseSourceClient]) -> None:
         self._mapping = dict(mapping)
 
-    def client_for(self, claim_type: ClaimType) -> Optional[BaseSourceClient]:
+    def client_for(self, claim_type: ClaimType) -> BaseSourceClient | None:
         return self._mapping.get(claim_type)
 
     @classmethod
-    def from_settings(cls, settings) -> "SourceRouter":
+    def from_settings(cls, settings) -> SourceRouter:
         """Build the production router from `InsightSettings`.
 
         COMMODITY_PRICE has no implemented client yet → engine returns
@@ -75,12 +74,8 @@ class SourceRouter:
             {
                 "CURRENCY_RATE": ForexClient(timeout_sec=timeout),
                 "CRYPTO_PRICE": CoinGeckoClient(timeout_sec=timeout),
-                "STOCK_PRICE": StockClient(
-                    api_key=settings.alphavantage_api_key, timeout_sec=timeout
-                ),
-                "WEATHER": OpenWeatherClient(
-                    api_key=settings.openweather_api_key, timeout_sec=timeout
-                ),
+                "STOCK_PRICE": StockClient(api_key=settings.alphavantage_api_key, timeout_sec=timeout),
+                "WEATHER": OpenWeatherClient(api_key=settings.openweather_api_key, timeout_sec=timeout),
                 "STATIC_FACT": StaticFactsClient(timeout_sec=timeout),
             }
         )
@@ -90,9 +85,10 @@ class SourceRouter:
 # Lightweight TTL cache for repeated claims                                   #
 # --------------------------------------------------------------------------- #
 
+
 @dataclass
 class _CacheEntry:
-    evidence: Optional[Evidence]
+    evidence: Evidence | None
     expires_at: float
 
 
@@ -104,9 +100,9 @@ class _TTLCache:
     def __init__(self, ttl_sec: float = 60.0, max_entries: int = 256) -> None:
         self._ttl = ttl_sec
         self._max = max_entries
-        self._store: Dict[Tuple[str, str], _CacheEntry] = {}
+        self._store: dict[tuple[str, str], _CacheEntry] = {}
 
-    def get(self, key: Tuple[str, str]) -> Optional[Optional[Evidence]]:
+    def get(self, key: tuple[str, str]) -> Evidence | None | None:
         entry = self._store.get(key)
         if entry is None:
             return None
@@ -115,19 +111,17 @@ class _TTLCache:
             return None
         return entry.evidence
 
-    def set(self, key: Tuple[str, str], evidence: Optional[Evidence]) -> None:
+    def set(self, key: tuple[str, str], evidence: Evidence | None) -> None:
         if len(self._store) >= self._max:
             # Drop the oldest entry. Cheap O(N) scan; acceptable at small N.
             oldest_key = min(self._store, key=lambda k: self._store[k].expires_at)
             self._store.pop(oldest_key, None)
-        self._store[key] = _CacheEntry(
-            evidence=evidence, expires_at=time.monotonic() + self._ttl
-        )
+        self._store[key] = _CacheEntry(evidence=evidence, expires_at=time.monotonic() + self._ttl)
 
 
-def _cache_key(claim: DetectedClaim) -> Tuple[str, str]:
+def _cache_key(claim: DetectedClaim) -> tuple[str, str]:
     """Deterministic cache signature for a claim (independent of claim_id)."""
-    parts: List[str] = [claim.claim_type]
+    parts: list[str] = [claim.claim_type]
     for k in sorted(claim.subject):
         parts.append(f"{k}={claim.subject[k]}")
     return (claim.claim_type, "|".join(parts))
@@ -136,6 +130,7 @@ def _cache_key(claim: DetectedClaim) -> Tuple[str, str]:
 # --------------------------------------------------------------------------- #
 # Engine                                                                      #
 # --------------------------------------------------------------------------- #
+
 
 class FactCheckEngine:
     """End-to-end orchestrator for the rule-based fact-check pipeline."""
@@ -166,7 +161,7 @@ class FactCheckEngine:
         detected = ClaimDetector.detect(transcript_text)
         claims = ClaimClassifier.classify(detected)
 
-        results: List[FactCheckResult] = []
+        results: list[FactCheckResult] = []
         verified_count = 0
         skipped_count = 0
 
@@ -221,9 +216,7 @@ class FactCheckEngine:
     # Internals                                                          #
     # ------------------------------------------------------------------ #
 
-    def _fetch_with_cache(
-        self, claim: DetectedClaim, client: BaseSourceClient
-    ) -> Optional[Evidence]:
+    def _fetch_with_cache(self, claim: DetectedClaim, client: BaseSourceClient) -> Evidence | None:
         key = _cache_key(claim)
         cached = self._cache.get(key)
         if cached is not None:

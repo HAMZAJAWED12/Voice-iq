@@ -8,8 +8,8 @@ for cheap listing / filtering.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,7 +19,7 @@ from app.insights.repository.db import Base
 
 def _utcnow() -> datetime:
     """Timezone-aware UTC `now`, safe across SQLite/Postgres."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class InsightRecordORM(Base):
@@ -68,7 +68,7 @@ class InsightRecordORM(Base):
             f"status={self.status!r} updated_at={self.updated_at.isoformat()!r}>"
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Lightweight representation, useful for listing endpoints."""
         return {
             "session_id": self.session_id,

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
-
 
 InconsistencyLevel = Literal["none", "low", "medium", "high"]
 
@@ -18,9 +17,9 @@ class InconsistencySignal(BaseModel):
     signal_type: str
     severity: str = "low"
     score: float = 0.0
-    speaker: Optional[str] = None
+    speaker: str | None = None
     reason: str
-    evidence: Dict[str, float | int | str | bool] = Field(default_factory=dict)
+    evidence: dict[str, float | int | str | bool] = Field(default_factory=dict)
 
 
 class InconsistencyWindow(BaseModel):
@@ -29,9 +28,9 @@ class InconsistencyWindow(BaseModel):
     start_sec: float
     end_sec: float
     level: InconsistencyLevel = "low"
-    speaker: Optional[str] = None
+    speaker: str | None = None
     reason: str
-    evidence: Dict[str, float | int | str | bool] = Field(default_factory=dict)
+    evidence: dict[str, float | int | str | bool] = Field(default_factory=dict)
 
 
 class InconsistencyAssessment(BaseModel):
@@ -44,7 +43,7 @@ class InconsistencyAssessment(BaseModel):
 
     level: InconsistencyLevel = "none"
     score: float = 0.0
-    signals: List[InconsistencySignal] = Field(default_factory=list)
-    windows: List[InconsistencyWindow] = Field(default_factory=list)
-    primary_speaker: Optional[str] = None
+    signals: list[InconsistencySignal] = Field(default_factory=list)
+    windows: list[InconsistencyWindow] = Field(default_factory=list)
+    primary_speaker: str | None = None
     summary: str = "No inconsistency detected."

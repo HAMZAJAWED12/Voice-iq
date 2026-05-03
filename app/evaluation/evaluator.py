@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import time
-from collections import Counter
-from typing import Callable, Dict, Any, List
+from collections.abc import Callable
+from typing import Any
 
 # Optional: if later you add ground truth WER/CER
 try:
-    from jiwer import wer, cer  # type: ignore
+    from jiwer import cer, wer  # type: ignore
+
     _HAS_JIWER = True
 except ImportError:
     wer = cer = None
@@ -23,14 +24,14 @@ class VoiceIQEvaluator:
     - Optionally computes supervised metrics if ground truth is provided
     """
 
-    def __init__(self, pipeline: Callable[[str], Dict[str, Any]]):
+    def __init__(self, pipeline: Callable[[str], dict[str, Any]]):
         self.pipeline = pipeline
 
     # ---------------------------
     # Proxy metrics (no GT needed)
     # ---------------------------
     @staticmethod
-    def _asr_proxy(asr_segments: List[Dict], transcript: str) -> Dict[str, Any]:
+    def _asr_proxy(asr_segments: list[dict], transcript: str) -> dict[str, Any]:
         # duration from whisper segments if present
         duration = 0.0
         if asr_segments:
@@ -42,7 +43,8 @@ class VoiceIQEvaluator:
         words_per_sec = total_words / max(duration, 1e-6)
         avg_seg_sec = (
             sum((float(s["end"]) - float(s["start"])) for s in asr_segments) / max(num_segments, 1)
-            if asr_segments else 0.0
+            if asr_segments
+            else 0.0
         )
 
         # hallucination-ish signal: repeated token ratio
@@ -61,7 +63,7 @@ class VoiceIQEvaluator:
         }
 
     @staticmethod
-    def _diar_proxy(diar_segments: List[Dict]) -> Dict[str, Any]:
+    def _diar_proxy(diar_segments: list[dict]) -> dict[str, Any]:
         if not diar_segments:
             return {"num_speakers": 0, "num_segments": 0, "avg_segment_sec": 0.0}
 
@@ -77,7 +79,7 @@ class VoiceIQEvaluator:
         }
 
     @staticmethod
-    def _alignment_health(asr_segments: List[Dict], speaker_segments: List[Dict]) -> Dict[str, Any]:
+    def _alignment_health(asr_segments: list[dict], speaker_segments: list[dict]) -> dict[str, Any]:
         total_asr = len(asr_segments) if asr_segments else 0
         total_aligned = len(speaker_segments) if speaker_segments else 0
         coverage = total_aligned / max(total_asr, 1) if total_asr else 0.0
@@ -90,7 +92,7 @@ class VoiceIQEvaluator:
         }
 
     @staticmethod
-    def _sentiment_proxy(sentiment_obj: Any) -> Dict[str, Any]:
+    def _sentiment_proxy(sentiment_obj: Any) -> dict[str, Any]:
         """
         In our pipeline we return:
         sentiment = { "distribution": {...}, "num_labeled_segments": N }
@@ -103,7 +105,7 @@ class VoiceIQEvaluator:
         return {"distribution": {}, "num_labeled_segments": 0}
 
     @staticmethod
-    def _summary_proxy(transcript: str, summary: str | None) -> Dict[str, Any]:
+    def _summary_proxy(transcript: str, summary: str | None) -> dict[str, Any]:
         t_words = len((transcript or "").split())
         s_words = len((summary or "").split())
         compression = s_words / max(t_words, 1) if t_words else 0.0
@@ -116,7 +118,7 @@ class VoiceIQEvaluator:
     # ---------------------------
     # Supervised metrics (optional)
     # ---------------------------
-    def _asr_supervised(self, gt_text: str, pred_text: str) -> Dict[str, Any]:
+    def _asr_supervised(self, gt_text: str, pred_text: str) -> dict[str, Any]:
         if wer is None or cer is None:
             return {"wer": None, "cer": None, "note": "jiwer not installed"}
         return {"wer": float(wer(gt_text, pred_text)), "cer": float(cer(gt_text, pred_text))}
@@ -124,7 +126,7 @@ class VoiceIQEvaluator:
     # ---------------------------
     # Full evaluation case
     # ---------------------------
-    def evaluate_case(self, case: Dict[str, Any]) -> Dict[str, Any]:
+    def evaluate_case(self, case: dict[str, Any]) -> dict[str, Any]:
         """
         case must contain:
           - audio_path
@@ -144,7 +146,7 @@ class VoiceIQEvaluator:
         summary = output.get("summary", None)
         sentiment = output.get("sentiment", None)
 
-        results: Dict[str, Any] = {
+        results: dict[str, Any] = {
             "latency_sec": round(latency, 3),  # type: ignore
             "proxy": {
                 "asr": self._asr_proxy(asr_segments, transcript),

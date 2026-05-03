@@ -104,10 +104,7 @@ class InsightSettings(BaseSettings):
     )
     alphavantage_api_key: str = Field(
         default="",
-        description=(
-            "Alpha Vantage API key for the STOCK_PRICE source client. "
-            "Empty string disables the client."
-        ),
+        description=("Alpha Vantage API key for the STOCK_PRICE source client. " "Empty string disables the client."),
     )
     factcheck_http_timeout_sec: float = Field(
         default=5.0,

@@ -2,17 +2,18 @@
 from __future__ import annotations
 
 import os
-from typing import List, Dict, Optional, Tuple
 from collections import defaultdict
 
-import torch
 import soundfile as sf
-from app.utils.logger import logger
+import torch
 from huggingface_hub import login
+
+from app.utils.logger import logger
 
 # Optional import: pyannote
 try:
     from pyannote.audio import Pipeline
+
     _HAS_PYANNOTE = True
 except ImportError:
     Pipeline = None
@@ -84,26 +85,21 @@ class DiarizationService:
 
             # --- PyTorch 2.6+ safe-loading allowlist (fixes OmegaConf errors) ---
             try:
-                from omegaconf.listconfig import ListConfig
-                from omegaconf.dictconfig import DictConfig
                 import torch.serialization
+                from omegaconf.dictconfig import DictConfig
+                from omegaconf.listconfig import ListConfig
+
                 torch.serialization.add_safe_globals([ListConfig, DictConfig])
             except Exception:
                 pass
 
-            _DIARIZATION_PIPELINE = Pipeline.from_pretrained(
-                self.model_id,
-                use_auth_token=token
-            ).to(DEVICE)
+            _DIARIZATION_PIPELINE = Pipeline.from_pretrained(self.model_id, use_auth_token=token).to(DEVICE)
 
             # Optional: adjust clustering threshold
             try:
-                _DIARIZATION_PIPELINE.instantiate({
-                    "clustering": {
-                        "method": "centroid",
-                        "threshold": float(self.clustering_threshold)
-                    }
-                })
+                _DIARIZATION_PIPELINE.instantiate(
+                    {"clustering": {"method": "centroid", "threshold": float(self.clustering_threshold)}}
+                )
                 logger.info("Adjusted clustering threshold for enhanced speaker separation.")
             except Exception as e:
                 logger.warning(f"Could not adjust clustering threshold: {e}")
@@ -114,39 +110,41 @@ class DiarizationService:
             logger.error(f"Failed to load Pyannote pipeline: {e}")
             _DIARIZATION_PIPELINE = None
 
-        return _DIARIZATION_PIPELINE # have add logger
+        return _DIARIZATION_PIPELINE  # have add logger
 
     # ------------------------------------------------------------
     # Mock fallback diarization
     # ------------------------------------------------------------
-    def _mock_diarization(self, wav_path: str) -> List[Dict]:
+    def _mock_diarization(self, wav_path: str) -> list[dict]:
         data, sr = sf.read(wav_path)
         duration = len(data) / sr if sr else 0.0
         logger.info(f"Mock diarization for {duration:.1f}s audio.")
-        return [{
-            "start": 0.0,
-            "end": round(duration, 3),
-            "speaker": "SPEAKER_00",
-            "confidence": 1.0,
-            "diarization_confidence": 1.0,
-            "source": "mock"
-        }]
+        return [
+            {
+                "start": 0.0,
+                "end": round(duration, 3),
+                "speaker": "SPEAKER_00",
+                "confidence": 1.0,
+                "diarization_confidence": 1.0,
+                "source": "mock",
+            }
+        ]
 
     # ------------------------------------------------------------
     # Segment smoothing helpers (anti flicker)
     # ------------------------------------------------------------
     def _smooth_segments(
         self,
-        segments: List[Dict],
-        min_duration: float = 0.5,   # tighter default than before
-        max_gap_merge: float = 0.3
-    ) -> List[Dict]:
+        segments: list[dict],
+        min_duration: float = 0.5,  # tighter default than before
+        max_gap_merge: float = 0.3,
+    ) -> list[dict]:
         """Merge tiny segments & same-speaker segments that are very close."""
         if not segments:
             return []
 
         segments = sorted(segments, key=lambda s: s["start"])
-        smoothed: List[Dict] = []
+        smoothed: list[dict] = []
 
         for seg in segments:
             duration = float(seg["end"]) - float(seg["start"])
@@ -184,10 +182,10 @@ class DiarizationService:
     # ------------------------------------------------------------
     def _cap_speakers(
         self,
-        segments: List[Dict],
+        segments: list[dict],
         max_speakers: int,
         minor_share_threshold: float = 0.05,
-    ) -> Tuple[List[Dict], bool]:
+    ) -> tuple[list[dict], bool]:
         """
         Cap number of speakers by total speaking time.
         Speakers outside the top-K are collapsed to SPEAKER_UNKNOWN.
@@ -210,7 +208,7 @@ class DiarizationService:
 
         keep = set([spk for spk, _ in speakers_sorted[:max_speakers]])
 
-        new_segments: List[Dict] = []
+        new_segments: list[dict] = []
         for s in segments:
             spk = s.get("speaker", self.unknown_label)
             share = (totals.get(spk, 0.0) / max(total_time, 1e-9)) if total_time else 0.0
@@ -233,15 +231,15 @@ class DiarizationService:
     def diarize_with_warnings(
         self,
         wav_path: str,
-        expected_speakers: Optional[int] = None,
-        max_speakers_cap: Optional[int] = None,
+        expected_speakers: int | None = None,
+        max_speakers_cap: int | None = None,
         low_snr: bool = False,
-    ) -> Tuple[List[Dict], List[str]]:
+    ) -> tuple[list[dict], list[str]]:
         """
         Run diarization with guardrails.
         Returns: (segments, warnings)
         """
-        warnings: List[str] = []
+        warnings: list[str] = []
         cap = int(max_speakers_cap or self.max_speakers_cap)
         cap = max(1, min(cap, 12))
 
@@ -272,16 +270,18 @@ class DiarizationService:
             else:
                 diarization = self.pipeline({"audio": wav_path}, min_speakers=1, max_speakers=cap)
 
-            raw_segments: List[Dict] = []
+            raw_segments: list[dict] = []
             for turn, _, speaker in diarization.itertracks(yield_label=True):
-                raw_segments.append({
-                    "start": float(round(turn.start, 3)),
-                    "end": float(round(turn.end, 3)),
-                    "speaker": str(speaker),
-                    "confidence": 1.0,
-                    "diarization_confidence": 1.0,  # heuristic baseline
-                    "source": "pyannote"
-                })
+                raw_segments.append(
+                    {
+                        "start": float(round(turn.start, 3)),
+                        "end": float(round(turn.end, 3)),
+                        "speaker": str(speaker),
+                        "confidence": 1.0,
+                        "diarization_confidence": 1.0,  # heuristic baseline
+                        "source": "pyannote",
+                    }
+                )
 
             # Tighten smoothing if low SNR
             min_d = 0.5 * (1.25 if low_snr else 1.0)
@@ -316,7 +316,7 @@ class DiarizationService:
     # ------------------------------------------------------------
     # Backwards-compatible API (old): returns segments only
     # ------------------------------------------------------------
-    def diarize(self, wav_path: str) -> List[Dict]:
+    def diarize(self, wav_path: str) -> list[dict]:
         """
         Backwards-compatible method:
         old code expects diarize(wav_path) -> List[Dict]

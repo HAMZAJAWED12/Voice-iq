@@ -1,8 +1,8 @@
 # app/utils/audio_quality.py
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from typing import Dict, Any, Optional
+from dataclasses import asdict, dataclass
+from typing import Any
 
 import numpy as np
 import soundfile as sf
@@ -20,14 +20,14 @@ class AudioQualityReport:
     peak_db: float
     silence_ratio: float
 
-    snr_db: Optional[float]  # heuristic, can be None if estimation fails
+    snr_db: float | None  # heuristic, can be None if estimation fails
 
     is_silent: bool
     is_near_silent: bool
     low_snr: bool
     very_low_snr: bool
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -103,7 +103,7 @@ def analyze_audio_quality(
 
     # SNR heuristic:
     # speech frames = above speech_gate_db, noise frames = below that gate
-    snr_db: Optional[float] = None
+    snr_db: float | None = None
     try:
         speech_mask = frame_rms_db >= float(speech_gate_db)
         noise_mask = ~speech_mask

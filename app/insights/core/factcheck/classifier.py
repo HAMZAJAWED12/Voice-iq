@@ -15,10 +15,7 @@ clients. Classification is deterministic and side-effect free.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
 from app.insights.models.factcheck_models import ClaimType, DetectedClaim
-
 
 # --------------------------------------------------------------------------- #
 # Lookup tables                                                               #
@@ -26,7 +23,7 @@ from app.insights.models.factcheck_models import ClaimType, DetectedClaim
 
 # Minimal alias map for crypto. Source clients (e.g. CoinGecko) want the
 # canonical short symbol — we normalize once here.
-_CRYPTO_ALIAS: Dict[str, str] = {
+_CRYPTO_ALIAS: dict[str, str] = {
     "bitcoin": "BTC",
     "btc": "BTC",
     "ethereum": "ETH",
@@ -44,7 +41,7 @@ _CRYPTO_ALIAS: Dict[str, str] = {
 }
 
 # Commodity normalization for the (future) commodity client.
-_COMMODITY_ALIAS: Dict[str, str] = {
+_COMMODITY_ALIAS: dict[str, str] = {
     "gold": "XAU",
     "silver": "XAG",
     "platinum": "XPT",
@@ -63,18 +60,19 @@ _DEFAULT_WEATHER_UNIT: str = "C"
 # Public API                                                                  #
 # --------------------------------------------------------------------------- #
 
+
 class ClaimClassifier:
     """Stateless normaliser for `DetectedClaim` instances."""
 
     @classmethod
-    def classify(cls, claims: List[DetectedClaim]) -> List[DetectedClaim]:
+    def classify(cls, claims: list[DetectedClaim]) -> list[DetectedClaim]:
         """Return a new list of normalized, verifiable claims.
 
         Claims that cannot be normalized (missing required metadata) are
         dropped silently; they have no fact-check evidence to gather. The
         original list is not mutated.
         """
-        cleaned: List[DetectedClaim] = []
+        cleaned: list[DetectedClaim] = []
         next_id = 1
         for claim in claims:
             normalized = cls._normalize_one(claim)
@@ -91,7 +89,7 @@ class ClaimClassifier:
     # ------------------------------------------------------------------ #
 
     @classmethod
-    def _normalize_one(cls, claim: DetectedClaim) -> Optional[DetectedClaim]:
+    def _normalize_one(cls, claim: DetectedClaim) -> DetectedClaim | None:
         """Return a normalized copy, or None if the claim is unverifiable."""
         ctype: ClaimType = claim.claim_type
         subject = dict(claim.subject)

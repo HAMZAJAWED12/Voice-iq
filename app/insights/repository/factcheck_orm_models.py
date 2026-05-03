@@ -8,8 +8,8 @@ keep listing / filtering cheap.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import DateTime, Float, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,7 +19,7 @@ from app.insights.repository.db import Base
 
 def _utcnow() -> datetime:
     """Timezone-aware UTC `now`, safe across SQLite/Postgres."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class FactCheckResultORM(Base):
@@ -57,19 +57,19 @@ class FactCheckResultORM(Base):
         nullable=False,
         index=True,
     )
-    claimed_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    claimed_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    claimed_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    claimed_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # --- Evidence -------------------------------------------------------- #
-    actual_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    actual_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    diff_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    source_fetched_at: Mapped[Optional[datetime]] = mapped_column(
+    actual_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    diff_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_fetched_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    evidence_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    evidence_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # --- Verdict + confidence ------------------------------------------- #
     verdict: Mapped[str] = mapped_column(
@@ -99,12 +99,9 @@ class FactCheckResultORM(Base):
     )
 
     def __repr__(self) -> str:  # pragma: no cover - dev ergonomics only
-        return (
-            f"<FactCheckResultORM id={self.id} "
-            f"conv={self.conversation_id!r} verdict={self.verdict!r}>"
-        )
+        return f"<FactCheckResultORM id={self.id} " f"conv={self.conversation_id!r} verdict={self.verdict!r}>"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Lightweight representation for listing endpoints."""
         return {
             "id": self.id,

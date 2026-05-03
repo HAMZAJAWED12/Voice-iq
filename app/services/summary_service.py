@@ -1,6 +1,7 @@
 # app/services/summary_service.py
 
 from transformers import pipeline
+
 from app.utils.logger import logger
 
 _summarizer = None

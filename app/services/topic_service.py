@@ -1,13 +1,13 @@
 # app/services/topic_service.py
 
-from transformers import pipeline
 from functools import lru_cache
-from typing import Dict, List
+
+from transformers import pipeline
+
 from app.utils.logger import logger
 
 
 class TopicService:
-
     # High-level taxonomy
     TOPIC_LABELS = [
         "sales",
@@ -24,7 +24,7 @@ class TopicService:
     ]
 
     @staticmethod
-    @lru_cache()
+    @lru_cache
     def _load_model():
         """
         Zero-shot classifier (fast + safe).
@@ -37,7 +37,7 @@ class TopicService:
         )
 
     @classmethod
-    def classify(cls, text: str) -> Dict:
+    def classify(cls, text: str) -> dict:
         """
         Perform zero-shot topic detection on the entire transcript.
 
@@ -56,7 +56,7 @@ class TopicService:
         model = cls._load_model()
 
         result = model(
-            text[:512],                 # truncate long transcripts safely
+            text[:512],  # truncate long transcripts safely
             candidate_labels=cls.TOPIC_LABELS,
             multi_label=False,
         )
@@ -70,7 +70,7 @@ class TopicService:
         }
 
     @classmethod
-    def classify_per_speaker(cls, segments: List[Dict]) -> List[Dict]:
+    def classify_per_speaker(cls, segments: list[dict]) -> list[dict]:
         """
         Optional speaker-level topic tagging.
         Not used in main API yet, but ready for future.
@@ -78,9 +78,11 @@ class TopicService:
         updated = []
         for seg in segments:
             t = cls.classify(seg.get("text", ""))
-            updated.append({
-                **seg,
-                "topic": t["topic"],
-                "topic_confidence": t["confidence"],
-            })
+            updated.append(
+                {
+                    **seg,
+                    "topic": t["topic"],
+                    "topic_confidence": t["confidence"],
+                }
+            )
         return updated

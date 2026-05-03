@@ -16,13 +16,12 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import ClassVar, Optional
+from typing import ClassVar
 
 from app.insights.core.factcheck.source_clients.base_client import (
     BaseSourceClient,
 )
 from app.insights.models.factcheck_models import DetectedClaim, Evidence
-
 
 # Patterns for extracting the capital from a Wikipedia summary. Tried in
 # declared order; first match wins. Patterns intentionally conservative -
@@ -45,12 +44,7 @@ _CAPITAL_PATTERNS = [
     #   "Its capital, largest city and main cultural and economic centre is Paris"
     # The bridge (`[^.]{0,120}?`) is non-greedy and forbids periods so we
     # don't span sentence boundaries.
-    re.compile(
-        r"\b(?:its\s+|the\s+)?capital"
-        r"(?:[^.]{0,120}?)?"
-        r"\s+is\s+"
-        r"(?P<capital>" + _CAPITAL_TOKEN + r")"
-    ),
+    re.compile(r"\b(?:its\s+|the\s+)?capital" r"(?:[^.]{0,120}?)?" r"\s+is\s+" r"(?P<capital>" + _CAPITAL_TOKEN + r")"),
     # "X is the capital" / "X is the nation's/country's capital"
     # Stricter token (no `.` allowed, max 2 words) so we don't swallow
     # a preceding sentence like "South Asia. Islamabad ..."
@@ -59,13 +53,9 @@ _CAPITAL_PATTERNS = [
         r"(?:the\s+|its\s+|the\s+nation's\s+|the\s+country's\s+)?capital"
     ),
     # "with its capital in Paris" / "capital in Paris" / "capital at Paris"
-    re.compile(
-        r"(?:its\s+)?capital\s+(?:in|at)\s+(?P<capital>" + _CAPITAL_TOKEN + r")"
-    ),
+    re.compile(r"(?:its\s+)?capital\s+(?:in|at)\s+(?P<capital>" + _CAPITAL_TOKEN + r")"),
     # "capital city is Madrid"
-    re.compile(
-        r"capital\s+city\s+(?:is\s+)?(?P<capital>" + _CAPITAL_TOKEN + r")"
-    ),
+    re.compile(r"capital\s+city\s+(?:is\s+)?(?P<capital>" + _CAPITAL_TOKEN + r")"),
 ]
 
 
@@ -84,7 +74,7 @@ class StaticFactsClient(BaseSourceClient):
     name: ClassVar[str] = "wikipedia"
     BASE_URL: ClassVar[str] = "https://en.wikipedia.org/api/rest_v1/page/summary/"
 
-    def fetch(self, claim: DetectedClaim) -> Optional[Evidence]:
+    def fetch(self, claim: DetectedClaim) -> Evidence | None:
         if claim.claim_type != "STATIC_FACT":
             return None
 
@@ -121,7 +111,7 @@ class StaticFactsClient(BaseSourceClient):
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def _extract_capital(extract: str) -> Optional[str]:
+    def _extract_capital(extract: str) -> str | None:
         if not extract:
             return None
         # Scan up to the first 2000 chars. Wikipedia summaries often place

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Dict, List
 
 from app.insights.models.analytics_models import (
     AnalyticsBundle,
@@ -28,11 +27,11 @@ class InsightAnalyticsEngine:
         )
 
     @staticmethod
-    def _compute_session_metrics(utterances: List[UtteranceInput]) -> SessionMetrics:
+    def _compute_session_metrics(utterances: list[UtteranceInput]) -> SessionMetrics:
         total_words = 0
         total_questions = 0
         total_duration = 0.0
-        pauses: List[float] = []
+        pauses: list[float] = []
 
         prev_end = None
         speakers = set()
@@ -73,7 +72,7 @@ class InsightAnalyticsEngine:
         )
 
     @staticmethod
-    def _compute_speaker_metrics(utterances: List[UtteranceInput]) -> Dict[str, SpeakerMetrics]:
+    def _compute_speaker_metrics(utterances: list[UtteranceInput]) -> dict[str, SpeakerMetrics]:
         speaker_stats = defaultdict(
             lambda: {
                 "time": 0.0,
@@ -116,7 +115,7 @@ class InsightAnalyticsEngine:
         total_words = sum(s["words"] for s in speaker_stats.values())
         total_time = sum(s["time"] for s in speaker_stats.values())
 
-        metrics: Dict[str, SpeakerMetrics] = {}
+        metrics: dict[str, SpeakerMetrics] = {}
         for speaker, s in speaker_stats.items():
             utterance_count = s["utterances"]
             avg_len = s["words"] / utterance_count if utterance_count else 0.0
@@ -141,8 +140,8 @@ class InsightAnalyticsEngine:
         return metrics
 
     @staticmethod
-    def _compute_pauses(utterances: List[UtteranceInput]) -> List[PauseMetric]:
-        pauses: List[PauseMetric] = []
+    def _compute_pauses(utterances: list[UtteranceInput]) -> list[PauseMetric]:
+        pauses: list[PauseMetric] = []
         prev = None
 
         for u in utterances:

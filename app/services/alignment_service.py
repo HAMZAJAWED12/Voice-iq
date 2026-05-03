@@ -1,8 +1,9 @@
 # app/services/alignment_service.py
 from __future__ import annotations
 
-from typing import List, Dict, Any, Optional
 import math
+from typing import Any
+
 from app.utils.logger import logger
 
 
@@ -23,7 +24,7 @@ class AlignmentService:
     def __init__(
         self,
         max_gap_merge: float = 0.75,
-        overlap_policy: str = "mark_overlap",   # "mark_overlap" | "dominant"
+        overlap_policy: str = "mark_overlap",  # "mark_overlap" | "dominant"
         unknown_label: str = "SPEAKER_UNKNOWN",
         overlap_min_sec: float = 0.15,
     ):
@@ -39,7 +40,7 @@ class AlignmentService:
     # Confidence & overlap helpers
     # ------------------------------------------------------------
     @staticmethod
-    def _confidence_from_whisper(seg: Dict) -> float:
+    def _confidence_from_whisper(seg: dict) -> float:
         """
         Convert Whisper segment metadata to a clean [0,1] confidence score.
         Uses:
@@ -50,7 +51,7 @@ class AlignmentService:
         no_speech_prob = seg.get("no_speech_prob", 0.0)
 
         conf = 1.0 / (1.0 + math.exp(-avg_logprob))
-        conf *= (1.0 - no_speech_prob)
+        conf *= 1.0 - no_speech_prob
         return max(0.0, min(1.0, float(conf)))
 
     @staticmethod
@@ -58,7 +59,7 @@ class AlignmentService:
         return max(0.0, min(a_end, b_end) - max(a_start, b_start))
 
     @classmethod
-    def _best_asr_for_window(cls, window: Dict, asr: List[Dict]) -> Optional[Dict]:
+    def _best_asr_for_window(cls, window: dict, asr: list[dict]) -> dict | None:
         """Find which ASR segment overlaps the window the most."""
         best = None
         best_overlap = 0.0
@@ -76,7 +77,7 @@ class AlignmentService:
         return best
 
     @staticmethod
-    def _find_diarization_overlap_windows(diarization: List[Dict], min_overlap: float) -> List[Dict]:
+    def _find_diarization_overlap_windows(diarization: list[dict], min_overlap: float) -> list[dict]:
         """
         Detect overlap regions between diarization segments.
         Returns list of windows: [{"start":..., "end":...}, ...]
@@ -85,7 +86,7 @@ class AlignmentService:
             return []
 
         diar = sorted(diarization, key=lambda d: (float(d["start"]), float(d["end"])))
-        overlap_windows: List[Dict] = []
+        overlap_windows: list[dict] = []
 
         for i in range(len(diar)):
             for j in range(i + 1, len(diar)):
@@ -101,10 +102,12 @@ class AlignmentService:
 
                 ov = max(0.0, min(a_end, b_end) - max(a_start, b_start))
                 if ov >= min_overlap:
-                    overlap_windows.append({
-                        "start": float(max(a_start, b_start)),
-                        "end": float(min(a_end, b_end)),
-                    })
+                    overlap_windows.append(
+                        {
+                            "start": float(max(a_start, b_start)),
+                            "end": float(min(a_end, b_end)),
+                        }
+                    )
 
         # merge overlap windows that touch/overlap each other
         if not overlap_windows:
@@ -125,7 +128,7 @@ class AlignmentService:
     # 1) Extract ASR segments
     # ------------------------------------------------------------
     @staticmethod
-    def _extract_asr_segments(asr_result: Any) -> List[Dict]:
+    def _extract_asr_segments(asr_result: Any) -> list[dict]:
         """
         Normalise ASR output into:
         [
@@ -150,17 +153,19 @@ class AlignmentService:
         if not segs:
             return []
 
-        norm: List[Dict] = []
+        norm: list[dict] = []
         for s in segs:
             if "start" not in s or "end" not in s:
                 continue
-            norm.append({
-                "start": float(s["start"]),
-                "end": float(s["end"]),
-                "text": (s.get("text") or "").strip(),
-                "avg_logprob": s.get("avg_logprob", -1.0),
-                "no_speech_prob": s.get("no_speech_prob", 0.0),
-            })
+            norm.append(
+                {
+                    "start": float(s["start"]),
+                    "end": float(s["end"]),
+                    "text": (s.get("text") or "").strip(),
+                    "avg_logprob": s.get("avg_logprob", -1.0),
+                    "no_speech_prob": s.get("no_speech_prob", 0.0),
+                }
+            )
 
         return norm
 
@@ -168,9 +173,9 @@ class AlignmentService:
     # 2) Word slicing
     # ------------------------------------------------------------
     @staticmethod
-    def _to_word_segments(asr_segments: List[Dict]) -> List[Dict]:
+    def _to_word_segments(asr_segments: list[dict]) -> list[dict]:
         """Approximate word timings by uniformly slicing segment duration."""
-        words_all: List[Dict] = []
+        words_all: list[dict] = []
 
         for seg in asr_segments:
             text = seg.get("text", "")
@@ -198,8 +203,8 @@ class AlignmentService:
     # 3) Map words → diarization windows
     # ------------------------------------------------------------
     @staticmethod
-    def _align_words_to_diarization(word_segments: List[Dict], diarization: List[Dict]) -> List[Dict]:
-        aligned: List[Dict] = []
+    def _align_words_to_diarization(word_segments: list[dict], diarization: list[dict]) -> list[dict]:
+        aligned: list[dict] = []
         if not word_segments or not diarization:
             return aligned
 
@@ -216,21 +221,23 @@ class AlignmentService:
 
             text = " ".join(w["word"] for w in words).strip()
 
-            aligned.append({
-                "start": round(d_start, 3),
-                "end": round(d_end, 3),
-                "speaker": speaker,
-                "text": text,
-                # propagate diarization confidence if present
-                "diarization_confidence": float(d.get("diarization_confidence", d.get("confidence", 1.0))),
-            })
+            aligned.append(
+                {
+                    "start": round(d_start, 3),
+                    "end": round(d_end, 3),
+                    "speaker": speaker,
+                    "text": text,
+                    # propagate diarization confidence if present
+                    "diarization_confidence": float(d.get("diarization_confidence", d.get("confidence", 1.0))),
+                }
+            )
 
         return aligned
 
     # ------------------------------------------------------------
     # 4) Merge blocks
     # ------------------------------------------------------------
-    def _merge_blocks(self, segments: List[Dict]) -> List[Dict]:
+    def _merge_blocks(self, segments: list[dict]) -> list[dict]:
         if not segments:
             return []
 
@@ -255,7 +262,7 @@ class AlignmentService:
     # ------------------------------------------------------------
     # Overlap policy enforcement
     # ------------------------------------------------------------
-    def _apply_overlap_policy(self, merged: List[Dict], diarization: List[Dict]) -> List[Dict]:
+    def _apply_overlap_policy(self, merged: list[dict], diarization: list[dict]) -> list[dict]:
         """
         If diarization has overlapping segments, enforce policy:
           - dominant: keep speaker as-is, but mark overlap=True and reduce confidences
@@ -296,7 +303,7 @@ class AlignmentService:
     # ------------------------------------------------------------
     # Public API: align()
     # ------------------------------------------------------------
-    def align(self, asr_result: Any, diarization_result: List[Dict]) -> Dict[str, List[Dict]]:
+    def align(self, asr_result: Any, diarization_result: list[dict]) -> dict[str, list[dict]]:
         diar = diarization_result or []
         asr = self._extract_asr_segments(asr_result)
 
@@ -331,7 +338,7 @@ class AlignmentService:
     # ------------------------------------------------------------
     # Higher-level: build conversation turns
     # ------------------------------------------------------------
-    def build_conversation(self, asr_result: Any, diarization_result: List[Dict]) -> List[Dict]:
+    def build_conversation(self, asr_result: Any, diarization_result: list[dict]) -> list[dict]:
         aligned = self.align(asr_result, diarization_result)
         segments = aligned.get("speaker_segments", [])
         if not segments:
@@ -340,7 +347,7 @@ class AlignmentService:
         segments = sorted(segments, key=lambda s: s["start"])
 
         # Speaking time per speaker (UNKNOWN can exist)
-        time_map: Dict[str, float] = {}
+        time_map: dict[str, float] = {}
         for seg in segments:
             dur = float(seg["end"]) - float(seg["start"])
             spk = seg.get("speaker", "UNKNOWN")
@@ -358,14 +365,18 @@ class AlignmentService:
         else:
             roles = {}
 
-        conv: List[Dict] = []
+        conv: list[dict] = []
         current = None
 
         for seg in segments:
             spk = seg.get("speaker", "UNKNOWN")
             role = roles.get(spk, spk)
 
-            if current and current["speaker_raw"] == spk and float(seg["start"]) - float(current["end"]) <= self.max_gap_merge:
+            if (
+                current
+                and current["speaker_raw"] == spk
+                and float(seg["start"]) - float(current["end"]) <= self.max_gap_merge
+            ):
                 current["end"] = seg["end"]
                 current["text"] = (current["text"] + " " + (seg.get("text") or "")).strip()
                 current["overlap"] = bool(current.get("overlap") or seg.get("overlap"))
@@ -390,9 +401,9 @@ class AlignmentService:
 # -------------------------------------------------------------------
 # Compatibility wrappers (keeps existing imports working)
 # -------------------------------------------------------------------
-def align_transcript_with_speakers(asr_result: Any, diarization_result: List[Dict]):
+def align_transcript_with_speakers(asr_result: Any, diarization_result: list[dict]):
     return AlignmentService().align(asr_result, diarization_result)
 
 
-def build_conversation(asr_result: Any, diarization_result: List[Dict]) -> List[Dict]:
+def build_conversation(asr_result: Any, diarization_result: list[dict]) -> list[dict]:
     return AlignmentService().build_conversation(asr_result, diarization_result)

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Dict, Any, List
 import re
+from typing import Any
 
 from transformers import (
-    AutoTokenizer,
     AutoModelForSequenceClassification,
+    AutoTokenizer,
     pipeline,
 )
 
@@ -50,7 +50,7 @@ class SentimentService:
                 "sentiment-analysis",
                 model=model,
                 tokenizer=tokenizer,
-                device=-1,   # CPU
+                device=-1,  # CPU
             )
             logger.info("Sentiment model loaded successfully.")
 
@@ -92,7 +92,7 @@ class SentimentService:
     # MAIN SENTIMENT ENTRY POINT
     # ----------------------------------------------------------------------
     @classmethod
-    def analyze_text(cls, text: str) -> Dict[str, Any]:
+    def analyze_text(cls, text: str) -> dict[str, Any]:
         """
         Main public API.
         Returns {label: positive/neutral/negative, score: confidence}

@@ -19,7 +19,6 @@ Static-fact comparison: case- and accent-insensitive string equality, via
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 from app.insights.core.factcheck.source_clients.static_facts_client import (
     StaticFactsClient,
@@ -29,7 +28,6 @@ from app.insights.models.factcheck_models import (
     Evidence,
     Verdict,
 )
-
 
 # Verdict band thresholds. Centralised here so the scorer can reuse them
 # without re-deriving the boundaries.
@@ -42,7 +40,7 @@ class ComparisonOutcome:
     """Output triple from the comparator."""
 
     verdict: Verdict
-    diff_pct: Optional[float]
+    diff_pct: float | None
     reason: str
 
 
@@ -57,7 +55,7 @@ class FactCheckComparator:
     def compare(
         cls,
         claim: DetectedClaim,
-        evidence: Optional[Evidence],
+        evidence: Evidence | None,
     ) -> ComparisonOutcome:
         """Decide the verdict for ``claim`` given ``evidence``.
 
@@ -86,9 +84,7 @@ class FactCheckComparator:
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def _compare_static_fact(
-        claim: DetectedClaim, evidence: Evidence
-    ) -> ComparisonOutcome:
+    def _compare_static_fact(claim: DetectedClaim, evidence: Evidence) -> ComparisonOutcome:
         claimed = (claim.raw_value_text or "").strip()
         actual = (evidence.value_text or "").strip()
         if not claimed or not actual:
@@ -110,9 +106,7 @@ class FactCheckComparator:
         )
 
     @classmethod
-    def _compare_numeric(
-        cls, claim: DetectedClaim, evidence: Evidence
-    ) -> ComparisonOutcome:
+    def _compare_numeric(cls, claim: DetectedClaim, evidence: Evidence) -> ComparisonOutcome:
         claimed = claim.raw_value
         actual = evidence.value
         if claimed is None or actual is None:
@@ -132,9 +126,7 @@ class FactCheckComparator:
 
         if diff_pct <= TRUE_MAX_DIFF_PCT:
             verdict: Verdict = "TRUE"
-            reason = (
-                f"Diff {diff_pct:.2f}% within 0-{TRUE_MAX_DIFF_PCT:.0f}% band → TRUE."
-            )
+            reason = f"Diff {diff_pct:.2f}% within 0-{TRUE_MAX_DIFF_PCT:.0f}% band → TRUE."
         elif diff_pct <= PARTIAL_MAX_DIFF_PCT:
             verdict = "PARTIALLY_TRUE"
             reason = (
@@ -143,8 +135,6 @@ class FactCheckComparator:
             )
         else:
             verdict = "FALSE"
-            reason = (
-                f"Diff {diff_pct:.2f}% exceeds {PARTIAL_MAX_DIFF_PCT:.0f}% threshold → FALSE."
-            )
+            reason = f"Diff {diff_pct:.2f}% exceeds {PARTIAL_MAX_DIFF_PCT:.0f}% threshold → FALSE."
 
         return ComparisonOutcome(verdict=verdict, diff_pct=diff_pct, reason=reason)

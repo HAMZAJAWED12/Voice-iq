@@ -1,4 +1,5 @@
 import os
+
 from huggingface_hub import login
 from pyannote.audio import Pipeline
 
@@ -11,8 +12,5 @@ print("Logging in to Hugging Face...")
 login(token=token)
 
 print("Loading pipeline...")
-pipeline = Pipeline.from_pretrained(
-    "pyannote/speaker-diarization-3.1",
-    use_auth_token=token
-)
+pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token=token)
 print("Loaded pipeline successfully!")

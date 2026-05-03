@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
-
 
 EscalationLevel = Literal["none", "mild", "moderate", "severe"]
 
@@ -13,22 +12,22 @@ class EscalationSignal(BaseModel):
     severity: str = "low"
     score: float = 0.0
     reason: str
-    evidence: Dict[str, float | int | str | bool] = Field(default_factory=dict)
+    evidence: dict[str, float | int | str | bool] = Field(default_factory=dict)
 
 
 class EscalationWindow(BaseModel):
     start_sec: float
     end_sec: float
     level: EscalationLevel
-    primary_speaker: Optional[str] = None
+    primary_speaker: str | None = None
     reason: str
-    evidence: Dict[str, float | int | str | bool] = Field(default_factory=dict)
+    evidence: dict[str, float | int | str | bool] = Field(default_factory=dict)
 
 
 class EscalationAssessment(BaseModel):
     level: EscalationLevel = "none"
     score: float = 0.0
-    signals: List[EscalationSignal] = Field(default_factory=list)
-    windows: List[EscalationWindow] = Field(default_factory=list)
-    primary_speaker: Optional[str] = None
+    signals: list[EscalationSignal] = Field(default_factory=list)
+    windows: list[EscalationWindow] = Field(default_factory=list)
+    primary_speaker: str | None = None
     summary: str = "No escalation detected."

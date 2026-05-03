@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from app.insights.models.input_models import SessionInput
 
@@ -11,7 +11,7 @@ class VoiceIQInsightAdapter:
     """
 
     @staticmethod
-    def _metric(value: Any, unit: str | None = None) -> Dict[str, Any]:
+    def _metric(value: Any, unit: str | None = None) -> dict[str, Any]:
         if isinstance(value, dict):
             return {
                 "value": value.get("value"),
@@ -23,7 +23,7 @@ class VoiceIQInsightAdapter:
         }
 
     @classmethod
-    def _normalize_conversation_stats(cls, conversation_stats: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    def _normalize_conversation_stats(cls, conversation_stats: dict[str, Any]) -> dict[str, dict[str, Any]]:
         conversation_stats = conversation_stats or {}
         return {
             "total_duration": cls._metric(conversation_stats.get("total_duration"), "seconds"),
@@ -36,9 +36,9 @@ class VoiceIQInsightAdapter:
         }
 
     @classmethod
-    def _normalize_speaker_stats(cls, speaker_stats: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    def _normalize_speaker_stats(cls, speaker_stats: dict[str, Any]) -> dict[str, dict[str, Any]]:
         speaker_stats = speaker_stats or {}
-        normalized: Dict[str, Dict[str, Any]] = {}
+        normalized: dict[str, dict[str, Any]] = {}
 
         for speaker, stats in speaker_stats.items():
             if isinstance(stats, dict):
@@ -52,11 +52,11 @@ class VoiceIQInsightAdapter:
     def from_orchestrator(
         *,
         session_id: str,
-        asr_meta: Dict[str, Any] | None,
-        speaker_segments: List[Dict[str, Any]] | None,
-        speaker_stats: Dict[str, Any] | None,
-        conversation_stats: Dict[str, Any] | None,
-        warnings: List[str] | None,
+        asr_meta: dict[str, Any] | None,
+        speaker_segments: list[dict[str, Any]] | None,
+        speaker_stats: dict[str, Any] | None,
+        conversation_stats: dict[str, Any] | None,
+        warnings: list[str] | None,
     ) -> SessionInput:
         asr_meta = asr_meta or {}
         speaker_segments = speaker_segments or []
@@ -64,7 +64,7 @@ class VoiceIQInsightAdapter:
         conversation_stats = conversation_stats or {}
         warnings = warnings or []
 
-        utterances: List[Dict[str, Any]] = []
+        utterances: list[dict[str, Any]] = []
 
         for idx, seg in enumerate(speaker_segments):
             text = (seg.get("text") or "").strip()

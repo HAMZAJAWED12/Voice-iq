@@ -16,7 +16,7 @@ Two construction modes are supported:
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from collections.abc import Callable
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
@@ -29,7 +29,6 @@ from app.insights.models.api_models import (
 )
 from app.insights.repository.db import get_session_factory
 from app.insights.repository.orm_models import InsightRecordORM
-
 
 SessionFactory = Callable[[], Session]
 
@@ -46,10 +45,10 @@ class InsightRepository:
     sessions or ORM objects to callers.
     """
 
-    def __init__(self, session_factory: Optional[SessionFactory] = None) -> None:
+    def __init__(self, session_factory: SessionFactory | None = None) -> None:
         # Allow tests to inject a custom factory; default to the shared
         # module-level SessionLocal at first use.
-        self._session_factory_override: Optional[SessionFactory] = session_factory
+        self._session_factory_override: SessionFactory | None = session_factory
 
     # ------------------------------------------------------------------ #
     # Internal helpers
@@ -96,14 +95,12 @@ class InsightRepository:
             session.commit()
         except SQLAlchemyError as exc:
             session.rollback()
-            raise InsightRepositoryError(
-                f"failed to save insight record for session_id={record.session_id!r}"
-            ) from exc
+            raise InsightRepositoryError(f"failed to save insight record for session_id={record.session_id!r}") from exc
         finally:
             session.close()
         return record
 
-    def get(self, session_id: str) -> Optional[InsightStoredRecord]:
+    def get(self, session_id: str) -> InsightStoredRecord | None:
         """Fetch a record by session_id, or None when missing."""
         if not session_id:
             return None
@@ -122,11 +119,7 @@ class InsightRepository:
             return False
         session = self._open()
         try:
-            stmt = (
-                select(InsightRecordORM.session_id)
-                .where(InsightRecordORM.session_id == session_id)
-                .limit(1)
-            )
+            stmt = select(InsightRecordORM.session_id).where(InsightRecordORM.session_id == session_id).limit(1)
             return session.execute(stmt).scalar_one_or_none() is not None
         finally:
             session.close()
@@ -137,32 +130,26 @@ class InsightRepository:
             return False
         session = self._open()
         try:
-            stmt = sa_delete(InsightRecordORM).where(
-                InsightRecordORM.session_id == session_id
-            )
+            stmt = sa_delete(InsightRecordORM).where(InsightRecordORM.session_id == session_id)
             result = session.execute(stmt)
             session.commit()
             return (result.rowcount or 0) > 0
         except SQLAlchemyError as exc:
             session.rollback()
-            raise InsightRepositoryError(
-                f"failed to delete insight record for session_id={session_id!r}"
-            ) from exc
+            raise InsightRepositoryError(f"failed to delete insight record for session_id={session_id!r}") from exc
         finally:
             session.close()
 
-    def list_session_ids(self) -> List[str]:
+    def list_session_ids(self) -> list[str]:
         """Return every session_id, ordered by most recent update."""
         session = self._open()
         try:
-            stmt = select(InsightRecordORM.session_id).order_by(
-                InsightRecordORM.updated_at.desc()
-            )
+            stmt = select(InsightRecordORM.session_id).order_by(InsightRecordORM.updated_at.desc())
             return [row[0] for row in session.execute(stmt).all()]
         finally:
             session.close()
 
-    def list_records(self) -> List[InsightStoredRecord]:
+    def list_records(self) -> list[InsightStoredRecord]:
         """Return every persisted record, ordered by most recent update.
 
         Note: this materialises every payload into Pydantic models, so it
@@ -170,9 +157,7 @@ class InsightRepository:
         """
         session = self._open()
         try:
-            stmt = select(InsightRecordORM).order_by(
-                InsightRecordORM.updated_at.desc()
-            )
+            stmt = select(InsightRecordORM).order_by(InsightRecordORM.updated_at.desc())
             rows = session.execute(stmt).scalars().all()
             return [self._to_stored(r) for r in rows]
         finally:

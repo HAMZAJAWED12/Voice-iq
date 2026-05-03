@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Dict, List, Optional
 
 from app.insights.models.analytics_models import AnalyticsBundle
 from app.insights.models.escalation_models import (
@@ -24,10 +23,10 @@ class InsightEscalationEngine:
         session: SessionInput,
         analytics: AnalyticsBundle,
         aggregated_signals: AggregatedSignals,
-        timeline: List[TimelineMarker],
+        timeline: list[TimelineMarker],
     ) -> EscalationAssessment:
-        signals: List[EscalationSignal] = []
-        windows: List[EscalationWindow] = []
+        signals: list[EscalationSignal] = []
+        windows: list[EscalationWindow] = []
 
         trend_signal = cls._detect_declining_trend(aggregated_signals)
         if trend_signal:
@@ -74,7 +73,7 @@ class InsightEscalationEngine:
     def _detect_declining_trend(
         cls,
         aggregated_signals: AggregatedSignals,
-    ) -> Optional[EscalationSignal]:
+    ) -> EscalationSignal | None:
         trend = aggregated_signals.session_sentiment_trend
         if not trend or trend.direction != "declining":
             return None
@@ -97,7 +96,7 @@ class InsightEscalationEngine:
     def _detect_negative_density(
         cls,
         aggregated_signals: AggregatedSignals,
-    ) -> Optional[EscalationSignal]:
+    ) -> EscalationSignal | None:
         sentiment = aggregated_signals.session_sentiment
         if not sentiment or sentiment.sample_count == 0:
             return None
@@ -126,7 +125,7 @@ class InsightEscalationEngine:
     def _detect_speaker_emotional_strain(
         cls,
         aggregated_signals: AggregatedSignals,
-    ) -> Optional[EscalationSignal]:
+    ) -> EscalationSignal | None:
         best_speaker = None
         best_score = 0.0
         best_emotion = None
@@ -167,13 +166,9 @@ class InsightEscalationEngine:
     def _detect_turn_tension(
         cls,
         analytics: AnalyticsBundle,
-    ) -> Optional[EscalationSignal]:
-        total_interruptions = sum(
-            metric.interruption_count for metric in analytics.speaker_metrics.values()
-        )
-        total_overlaps = sum(
-            metric.overlap_count for metric in analytics.speaker_metrics.values()
-        )
+    ) -> EscalationSignal | None:
+        total_interruptions = sum(metric.interruption_count for metric in analytics.speaker_metrics.values())
+        total_overlaps = sum(metric.overlap_count for metric in analytics.speaker_metrics.values())
 
         raw = total_interruptions + total_overlaps
         if raw <= 0:
@@ -195,12 +190,13 @@ class InsightEscalationEngine:
     @classmethod
     def _detect_marker_clusters(
         cls,
-        timeline: List[TimelineMarker],
-    ) -> tuple[Optional[EscalationSignal], List[EscalationWindow]]:
+        timeline: list[TimelineMarker],
+    ) -> tuple[EscalationSignal | None, list[EscalationWindow]]:
         relevant = [
             m
             for m in timeline
-            if m.type in {
+            if m.type
+            in {
                 "high_tension",
                 "emotional_shift",
                 "interruption",
@@ -212,7 +208,7 @@ class InsightEscalationEngine:
             return None, []
 
         relevant = sorted(relevant, key=lambda m: m.time_sec)
-        windows: List[EscalationWindow] = []
+        windows: list[EscalationWindow] = []
         cluster_count = 0
 
         for i in range(len(relevant) - 2):
@@ -256,9 +252,9 @@ class InsightEscalationEngine:
         cls,
         aggregated_signals: AggregatedSignals,
         analytics: AnalyticsBundle,
-        signals: List[EscalationSignal],
-    ) -> Optional[str]:
-        speaker_scores: Dict[str, float] = defaultdict(float)
+        signals: list[EscalationSignal],
+    ) -> str | None:
+        speaker_scores: dict[str, float] = defaultdict(float)
 
         for signal in signals:
             speaker = signal.evidence.get("speaker")
@@ -289,19 +285,12 @@ class InsightEscalationEngine:
     @staticmethod
     def _build_summary(
         level: str,
-        signals: List[EscalationSignal],
-        primary_speaker: Optional[str],
+        signals: list[EscalationSignal],
+        primary_speaker: str | None,
     ) -> str:
         if level == "none":
             return "No clear escalation pattern was detected."
 
         signal_names = ", ".join(signal.signal_type for signal in signals[:3])
-        speaker_part = (
-            f" Primary speaker of concern: {primary_speaker}."
-            if primary_speaker
-            else ""
-        )
-        return (
-            f"Escalation level is {level}, driven by {signal_names}."
-            f"{speaker_part}"
-        )
+        speaker_part = f" Primary speaker of concern: {primary_speaker}." if primary_speaker else ""
+        return f"Escalation level is {level}, driven by {signal_names}." f"{speaker_part}"

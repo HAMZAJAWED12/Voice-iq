@@ -11,9 +11,9 @@ Defaults to a local SQLite file (`./data/insights.db`); override via the
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, Optional
 from urllib.parse import urlparse
 
 from sqlalchemy import create_engine
@@ -29,8 +29,8 @@ class Base(DeclarativeBase):
 
 # Module-level engine + session factory. Initialised lazily so importing
 # this module (e.g. for tests) is cheap and side-effect free.
-_engine: Optional[Engine] = None
-_SessionLocal: Optional[sessionmaker[Session]] = None
+_engine: Engine | None = None
+_SessionLocal: sessionmaker[Session] | None = None
 
 
 def _ensure_sqlite_directory(database_url: str) -> None:
@@ -69,7 +69,7 @@ def _build_engine(settings: InsightSettings) -> Engine:
     return create_engine(settings.database_url, **engine_kwargs)
 
 
-def init_engine(settings: Optional[InsightSettings] = None) -> Engine:
+def init_engine(settings: InsightSettings | None = None) -> Engine:
     """Initialise the module-level engine and session factory.
 
     Idempotent: subsequent calls return the existing engine. Tests that
@@ -107,7 +107,7 @@ def get_session_factory() -> sessionmaker[Session]:
     return _SessionLocal
 
 
-def init_db(settings: Optional[InsightSettings] = None) -> None:
+def init_db(settings: InsightSettings | None = None) -> None:
     """Create all tables on the configured database.
 
     Safe to call repeatedly; SQLAlchemy issues `CREATE TABLE IF NOT EXISTS`
@@ -122,8 +122,10 @@ def init_db(settings: Optional[InsightSettings] = None) -> None:
 
     # Importing here so each ORM module registers its tables on
     # Base.metadata without forcing an import cycle at module load time.
-    from app.insights.repository import orm_models  # noqa: F401
-    from app.insights.repository import factcheck_orm_models  # noqa: F401
+    from app.insights.repository import (
+        factcheck_orm_models,  # noqa: F401
+        orm_models,  # noqa: F401
+    )
 
     Base.metadata.create_all(bind=engine)
 

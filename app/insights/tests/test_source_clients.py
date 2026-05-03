@@ -6,8 +6,7 @@ This keeps the suite deterministic and CI-safe (free Actions minutes).
 
 from __future__ import annotations
 
-import json
-from typing import Callable
+from collections.abc import Callable
 
 import httpx
 import pytest
@@ -21,10 +20,10 @@ from app.insights.core.factcheck.source_clients import (
 )
 from app.insights.models.factcheck_models import ClaimSpan, DetectedClaim
 
-
 # --------------------------------------------------------------------------- #
 # Helpers                                                                     #
 # --------------------------------------------------------------------------- #
+
 
 def _mock_client(handler: Callable[[httpx.Request], httpx.Response]) -> httpx.Client:
     """Return an httpx.Client that routes all requests through `handler`."""
@@ -55,13 +54,12 @@ def _claim(
 # ForexClient                                                                 #
 # --------------------------------------------------------------------------- #
 
+
 def test_forex_returns_evidence_on_success():
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.params["base"] == "USD"
         assert request.url.params["symbols"] == "PKR"
-        return httpx.Response(
-            200, json={"base": "USD", "rates": {"PKR": 280.5}}
-        )
+        return httpx.Response(200, json={"base": "USD", "rates": {"PKR": 280.5}})
 
     client = ForexClient(client=_mock_client(handler))
     claim = _claim(
@@ -99,6 +97,7 @@ def test_forex_skips_non_currency_claims():
 # CoinGeckoClient                                                             #
 # --------------------------------------------------------------------------- #
 
+
 def test_coingecko_returns_evidence_on_success():
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.params["ids"] == "bitcoin"
@@ -113,18 +112,15 @@ def test_coingecko_returns_evidence_on_success():
 
 
 def test_coingecko_unknown_symbol_returns_none():
-    client = CoinGeckoClient(
-        client=_mock_client(lambda r: httpx.Response(200, json={}))
-    )
-    claim = _claim(
-        claim_type="CRYPTO_PRICE", raw_value=1.0, subject={"asset": "XYZ_UNKNOWN"}
-    )
+    client = CoinGeckoClient(client=_mock_client(lambda r: httpx.Response(200, json={})))
+    claim = _claim(claim_type="CRYPTO_PRICE", raw_value=1.0, subject={"asset": "XYZ_UNKNOWN"})
     assert client.fetch(claim) is None
 
 
 # --------------------------------------------------------------------------- #
 # OpenWeatherClient                                                           #
 # --------------------------------------------------------------------------- #
+
 
 def test_openweather_returns_evidence_for_celsius():
     captured = {}
@@ -169,9 +165,7 @@ def test_openweather_returns_evidence_for_fahrenheit():
 
 def test_openweather_missing_api_key_returns_none():
     client = OpenWeatherClient(api_key="", client=_mock_client(lambda r: httpx.Response(200)))
-    claim = _claim(
-        claim_type="WEATHER", raw_value=1.0, subject={"city": "Karachi", "unit": "C"}
-    )
+    claim = _claim(claim_type="WEATHER", raw_value=1.0, subject={"city": "Karachi", "unit": "C"})
     assert client.fetch(claim) is None
 
 
@@ -180,15 +174,14 @@ def test_openweather_terminal_4xx_returns_none():
         return httpx.Response(401, json={"cod": 401, "message": "Invalid API key"})
 
     client = OpenWeatherClient(api_key="bad", client=_mock_client(handler))
-    claim = _claim(
-        claim_type="WEATHER", raw_value=32.0, subject={"city": "Karachi", "unit": "C"}
-    )
+    claim = _claim(claim_type="WEATHER", raw_value=32.0, subject={"city": "Karachi", "unit": "C"})
     assert client.fetch(claim) is None
 
 
 # --------------------------------------------------------------------------- #
 # StockClient                                                                 #
 # --------------------------------------------------------------------------- #
+
 
 def test_stock_returns_evidence_on_success():
     def handler(request: httpx.Request) -> httpx.Response:
@@ -198,9 +191,7 @@ def test_stock_returns_evidence_on_success():
         )
 
     client = StockClient(api_key="testkey", client=_mock_client(handler))
-    claim = _claim(
-        claim_type="STOCK_PRICE", raw_value=270.0, subject={"symbol": "AAPL"}
-    )
+    claim = _claim(claim_type="STOCK_PRICE", raw_value=270.0, subject={"symbol": "AAPL"})
     evidence = client.fetch(claim)
     assert evidence is not None
     assert evidence.value == 271.35
@@ -215,23 +206,20 @@ def test_stock_rate_limit_note_returns_none():
         )
 
     client = StockClient(api_key="testkey", client=_mock_client(handler))
-    claim = _claim(
-        claim_type="STOCK_PRICE", raw_value=200.0, subject={"symbol": "AAPL"}
-    )
+    claim = _claim(claim_type="STOCK_PRICE", raw_value=200.0, subject={"symbol": "AAPL"})
     assert client.fetch(claim) is None
 
 
 def test_stock_missing_api_key_returns_none():
     client = StockClient(api_key="", client=_mock_client(lambda r: httpx.Response(200)))
-    claim = _claim(
-        claim_type="STOCK_PRICE", raw_value=200.0, subject={"symbol": "AAPL"}
-    )
+    claim = _claim(claim_type="STOCK_PRICE", raw_value=200.0, subject={"symbol": "AAPL"})
     assert client.fetch(claim) is None
 
 
 # --------------------------------------------------------------------------- #
 # StaticFactsClient                                                           #
 # --------------------------------------------------------------------------- #
+
 
 def test_static_facts_extracts_capital_from_summary():
     extract = (
@@ -286,8 +274,7 @@ def test_static_facts_matches_helper_is_case_and_accent_insensitive():
         ("Its capital is Tokyo, the largest city.", "Tokyo"),
         # "with its capital in X"  (current Wikipedia phrasing for France)
         (
-            "France is a unitary semi-presidential republic with its capital in Paris, "
-            "the country's largest city.",
+            "France is a unitary semi-presidential republic with its capital in Paris, " "the country's largest city.",
             "Paris",
         ),
         # "capital and largest city is X"
@@ -300,9 +287,7 @@ def test_static_facts_matches_helper_is_case_and_accent_insensitive():
         ("Spain is a country in Europe. The capital city is Madrid.", "Madrid"),
     ],
 )
-def test_static_facts_extracts_capital_across_common_phrasings(
-    extract: str, expected_capital: str
-):
+def test_static_facts_extracts_capital_across_common_phrasings(extract: str, expected_capital: str):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"title": "X", "extract": extract})
 
@@ -339,9 +324,7 @@ _FRANCE_REAL_EXTRACT = (
 
 def test_static_facts_handles_real_france_extract():
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200, json={"title": "France", "extract": _FRANCE_REAL_EXTRACT}
-        )
+        return httpx.Response(200, json={"title": "France", "extract": _FRANCE_REAL_EXTRACT})
 
     client = StaticFactsClient(client=_mock_client(handler))
     claim = _claim(

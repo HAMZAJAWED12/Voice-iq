@@ -6,8 +6,6 @@ detector → classifier → router → comparator → scorer end-to-end.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from app.insights.core.factcheck.factcheck_engine import (
     FactCheckEngine,
     SourceRouter,
@@ -20,30 +18,30 @@ from app.insights.models.factcheck_models import (
     Evidence,
 )
 
-
 # --------------------------------------------------------------------------- #
 # Stub clients                                                                #
 # --------------------------------------------------------------------------- #
 
+
 class _StubClient(BaseSourceClient):
     """Returns a pre-canned `Evidence` (or None) regardless of input."""
 
-    def __init__(self, *, name: str, evidence: Optional[Evidence]) -> None:
+    def __init__(self, *, name: str, evidence: Evidence | None) -> None:
         super().__init__(timeout_sec=1.0)
         self.name = name
         self._evidence = evidence
         self.call_count = 0
 
-    def fetch(self, claim: DetectedClaim) -> Optional[Evidence]:
+    def fetch(self, claim: DetectedClaim) -> Evidence | None:
         self.call_count += 1
         return self._evidence
 
 
 def _build_engine(
     *,
-    crypto_evidence: Optional[Evidence] = None,
-    static_evidence: Optional[Evidence] = None,
-    forex_evidence: Optional[Evidence] = None,
+    crypto_evidence: Evidence | None = None,
+    static_evidence: Evidence | None = None,
+    forex_evidence: Evidence | None = None,
 ):
     router = SourceRouter(
         {
@@ -59,10 +57,9 @@ def _build_engine(
 # Happy paths                                                                 #
 # --------------------------------------------------------------------------- #
 
+
 def test_engine_runs_end_to_end_for_crypto_true():
-    engine = _build_engine(
-        crypto_evidence=Evidence(source="crypto_stub", value=95000.0, unit="USD")
-    )
+    engine = _build_engine(crypto_evidence=Evidence(source="crypto_stub", value=95000.0, unit="USD"))
     response = engine.run(
         conversation_id="c1",
         speaker_id="s1",
@@ -74,9 +71,7 @@ def test_engine_runs_end_to_end_for_crypto_true():
 
 
 def test_engine_handles_static_fact_match():
-    engine = _build_engine(
-        static_evidence=Evidence(source="static_stub", value_text="Paris")
-    )
+    engine = _build_engine(static_evidence=Evidence(source="static_stub", value_text="Paris"))
     response = engine.run(
         conversation_id="c1",
         speaker_id="s1",
@@ -87,9 +82,7 @@ def test_engine_handles_static_fact_match():
 
 
 def test_engine_marks_static_fact_mismatch_as_false():
-    engine = _build_engine(
-        static_evidence=Evidence(source="static_stub", value_text="Paris")
-    )
+    engine = _build_engine(static_evidence=Evidence(source="static_stub", value_text="Paris"))
     response = engine.run(
         conversation_id="c1",
         speaker_id="s1",
@@ -101,6 +94,7 @@ def test_engine_marks_static_fact_mismatch_as_false():
 # --------------------------------------------------------------------------- #
 # Empty / no-claim inputs                                                     #
 # --------------------------------------------------------------------------- #
+
 
 def test_engine_returns_empty_for_no_claims():
     engine = _build_engine()
@@ -116,6 +110,7 @@ def test_engine_returns_empty_for_no_claims():
 # --------------------------------------------------------------------------- #
 # Source-unavailable + unsupported branches                                   #
 # --------------------------------------------------------------------------- #
+
 
 def test_engine_emits_source_unavailable_when_client_returns_none():
     engine = _build_engine(crypto_evidence=None)
@@ -143,6 +138,7 @@ def test_engine_emits_unsupported_for_missing_router_entry():
 # --------------------------------------------------------------------------- #
 # Cache behaviour                                                             #
 # --------------------------------------------------------------------------- #
+
 
 def test_engine_caches_repeated_identical_claims_within_request():
     crypto_stub = _StubClient(

@@ -1,4 +1,4 @@
-# VoiceIQ-AI  
+# VoiceIQ-AI
 **Audio Conversation Intelligence Platform (ASR · Diarization · NLP · PDF Reporting)**
 
 ---
@@ -311,4 +311,3 @@ This system provides automated analytical assistance.
 Results should not be treated as ground truth, especially under noisy or adversarial audio conditions.
 
 Warnings are included to ensure transparency and responsible use.
-
