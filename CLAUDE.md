@@ -75,7 +75,7 @@ voiceiq-AI/
 | 5 | Fact-check engine: claim detector, classifier, comparator, scorer, orchestrator; 5 source clients (exchangerate.host, CoinGecko, OpenWeather, Alpha Vantage, Wikipedia REST); SQLite `fact_check_results` table; `POST /v1/fact-check` + `GET /v1/fact-check/{id}`; auto-enrichment in `/v1/process-audio`; 91 new tests (118 insight tests passing) | ✅ Done |
 | CI | GitHub Actions workflow running insight tests on every push/PR | ✅ Done |
 
-**Currently open:** Post–Sprint 5. Recommended next: purge the leaked HuggingFace token from git history (`git filter-repo` on `voiceiq-AI*.zip`) and add pre-commit hooks (ruff + black + secret scanner). Also on the menu: Docker hardening, CHANGELOG backfill, or a new engine (Trust / Persona / Conversation Quality).
+**Currently open:** pick from next-task candidates below — Docker hardening, CHANGELOG backfill, or new engine.
 
 ## Engineering standards (STRICT)
 
@@ -137,7 +137,6 @@ These need attention but are not blocking new work:
 
 - Docker: harden the existing Dockerfile, add docker-compose, document local-run flow.
 - Pre-commit hooks: ruff + black + a `git secrets` style scanner to prevent token leaks.
-- Security cleanup: purge `voiceiq-AI*.zip` from git history with `git filter-repo`, force-push.
 - CHANGELOG: start a `CHANGELOG.md` with the Sprint 1–4 history backfilled.
 - New engine: e.g., a Trust Engine, a Persona Engine, or a Conversation Quality Engine — would follow the same pattern as `escalation_engine.py` and `inconsistency_engine.py`.
 
