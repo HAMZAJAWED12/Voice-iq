@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import create_engine
@@ -79,7 +79,7 @@ def _make_result(
             value=actual_value,
             value_text=actual_text,
             unit="USD" if claim_type == "CRYPTO_PRICE" else None,
-            fetched_at=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
+            fetched_at=datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc),
             raw={"asset": "BTC"},
         )
         if source

@@ -11,7 +11,7 @@ No business logic lives here. Engines and clients import these types only.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -105,7 +105,7 @@ class Evidence(BaseModel):
 
     source: str = Field(..., description="Source client identifier, e.g. 'coingecko'.")
     fetched_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC),
+        default_factory=lambda: datetime.now(timezone.utc),
         description="UTC timestamp when the source was queried.",
     )
     value: float | None = Field(
