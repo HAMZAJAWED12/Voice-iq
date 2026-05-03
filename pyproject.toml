@@ -1,7 +1,9 @@
 [tool.ruff]
-line-length = 88
+line-length = 120
 target-version = "py311"
-extend-exclude = [".venv", "samples", "DOCS"]
+extend-exclude = [".venv", "samples", "DOCS", "data", "tmp", "uploads", "outputs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]  # pycodestyle, pyflakes, isort, bugbear, pyupgrade
+ignore = ["B008"]  # FastAPI Depends/File default-arg idiom
+per-file-ignores = { "app/utils/logger.py" = ["E402"], "**/__init__.py" = ["F401"] }

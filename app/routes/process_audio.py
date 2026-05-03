@@ -1,18 +1,17 @@
 # app/routes/process_audio.py
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
-from typing import Optional
-import uuid
 import os
+import uuid
 
-from app.utils.logger import logger
-from app.utils.job_io import JobIO
-from app.pipeline.orchestrator import VoiceIQOrchestrator
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
 # Sprint-5 fact-check engine. Imported here so the audio pipeline can
 # auto-enrich every transcript with rule-based fact verification.
 from app.insights.api.factcheck_routes import get_factcheck_engine
 from app.insights.models.factcheck_models import MAX_TRANSCRIPT_CHARS
 from app.insights.repository import factcheck_repository
+from app.pipeline.orchestrator import VoiceIQOrchestrator
+from app.utils.job_io import JobIO
+from app.utils.logger import logger
 
 router = APIRouter()
 
@@ -71,7 +70,7 @@ def _auto_run_factcheck(request_id: str, result: dict) -> None:
 @router.post("/process-audio")
 async def process_audio(
     file: UploadFile = File(...),
-    expected_speakers: Optional[int] = Query(default=None, description="Optional hint (2 for calls, 3-6 for meetings)")
+    expected_speakers: int | None = Query(default=None, description="Optional hint (2 for calls, 3-6 for meetings)"),
 ):
     request_id = str(uuid.uuid4())
     logger.info(f"[{request_id}] Received: {file.filename}")
@@ -88,7 +87,7 @@ async def process_audio(
     try:
         input_path.write_bytes(await file.read())
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save upload: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save upload: {e}") from e
 
     orch = VoiceIQOrchestrator(job_io=io)
     result = orch.run(
@@ -100,11 +99,14 @@ async def process_audio(
     )
 
     if result.get("pipeline_meta", {}).get("status") == "failed":
-        raise HTTPException(status_code=400, detail={
-            "request_id": request_id,
-            "warnings": result.get("warnings", []),
-            "pipeline_meta": result.get("pipeline_meta", {}),
-        })
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "request_id": request_id,
+                "warnings": result.get("warnings", []),
+                "pipeline_meta": result.get("pipeline_meta", {}),
+            },
+        )
 
     # Auto-enrich with rule-based fact verification (Sprint 5).
     _auto_run_factcheck(request_id, result)

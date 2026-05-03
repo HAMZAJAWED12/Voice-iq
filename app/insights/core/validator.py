@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from app.insights.models.analytics_models import ValidationIssue, ValidationResult
 
@@ -30,7 +30,7 @@ class InsightValidator:
         return result
 
     @classmethod
-    def _validate_top_level(cls, payload: Dict[str, Any], result: ValidationResult) -> None:
+    def _validate_top_level(cls, payload: dict[str, Any], result: ValidationResult) -> None:
         for field in cls.REQUIRED_TOP_LEVEL_FIELDS:
             if field not in payload:
                 result.valid = False
@@ -44,7 +44,7 @@ class InsightValidator:
                 )
 
         session_id = payload.get("session_id")
-        if session_id is not None and not isinstance(session_id, (str, int)):
+        if session_id is not None and not isinstance(session_id, str | int):
             result.valid = False
             result.errors.append(
                 ValidationIssue(
@@ -115,7 +115,7 @@ class InsightValidator:
             )
             return
 
-        previous_start: Optional[float] = None
+        previous_start: float | None = None
 
         for idx, utt in enumerate(utterances):
             field_prefix = f"utterances.{idx}"
@@ -152,7 +152,7 @@ class InsightValidator:
     def _validate_single_utterance(
         cls,
         idx: int,
-        utt: Dict[str, Any],
+        utt: dict[str, Any],
         result: ValidationResult,
     ) -> None:
         field_prefix = f"utterances.{idx}"
@@ -305,7 +305,7 @@ class InsightValidator:
 
     @staticmethod
     def _is_number(value: Any) -> bool:
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
+        return isinstance(value, int | float) and not isinstance(value, bool)
 
     @classmethod
     def _is_non_negative_number(cls, value: Any) -> bool:

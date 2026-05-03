@@ -1,5 +1,6 @@
 # app/utils/audio_utils.py
 import subprocess
+
 from app.utils.logger import logger
 
 
@@ -33,9 +34,12 @@ class AudioNormalizer:
         cmd = [
             "ffmpeg",
             "-y",
-            "-i", in_path,
-            "-ac", "1",
-            "-ar", str(sr),
+            "-i",
+            in_path,
+            "-ac",
+            "1",
+            "-ar",
+            str(sr),
             out_path,
         ]
 
@@ -43,8 +47,7 @@ class AudioNormalizer:
             subprocess.run(
                 cmd,
                 check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
             )
             logger.info(f"Audio normalized to WAV: {out_path}")
         except subprocess.CalledProcessError as e:
@@ -57,6 +60,7 @@ class AudioNormalizer:
 # -------------------------------------------------------------------
 # Compatibility helpers (IMPORTANT)
 # -------------------------------------------------------------------
+
 
 def normalize_to_wav(in_path: str, out_path: str, sr: int = 16000) -> str:
     """
