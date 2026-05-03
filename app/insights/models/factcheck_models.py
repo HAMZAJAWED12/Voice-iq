@@ -11,11 +11,10 @@ No business logic lives here. Engines and clients import these types only.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Literal, Optional
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
-
 
 # --------------------------------------------------------------------------- #
 # Enums                                                                       #
@@ -46,6 +45,7 @@ ConfidenceLabel = Literal["HIGH", "MEDIUM", "LOW", "NONE"]
 # Core building blocks                                                        #
 # --------------------------------------------------------------------------- #
 
+
 class ClaimSpan(BaseModel):
     """Character-offset span of the matched claim inside the source text."""
 
@@ -68,7 +68,7 @@ class DetectedClaim(BaseModel):
     text: str = Field(..., description="Verbatim claim substring.")
     span: ClaimSpan
     claim_type: ClaimType
-    raw_value: Optional[float] = Field(
+    raw_value: float | None = Field(
         default=None,
         description=(
             "Numeric value the speaker asserted (e.g. 95000 for "
@@ -76,7 +76,7 @@ class DetectedClaim(BaseModel):
             "weather claims with no numeric anchor."
         ),
     )
-    raw_value_text: Optional[str] = Field(
+    raw_value_text: str | None = Field(
         default=None,
         description=(
             "String value asserted (e.g. 'Paris' for "
@@ -84,7 +84,7 @@ class DetectedClaim(BaseModel):
             "non-numeric claims."
         ),
     )
-    subject: Dict[str, str] = Field(
+    subject: dict[str, str] = Field(
         default_factory=dict,
         description=(
             "Normalized subject metadata. Keys vary by ClaimType, e.g. "
@@ -94,7 +94,7 @@ class DetectedClaim(BaseModel):
             "{'country': 'France'} for STATIC_FACT."
         ),
     )
-    unit: Optional[str] = Field(
+    unit: str | None = Field(
         default=None,
         description="Unit reported with the value, e.g. 'USD', 'C', 'F'.",
     )
@@ -105,19 +105,19 @@ class Evidence(BaseModel):
 
     source: str = Field(..., description="Source client identifier, e.g. 'coingecko'.")
     fetched_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="UTC timestamp when the source was queried.",
     )
-    value: Optional[float] = Field(
+    value: float | None = Field(
         default=None,
         description="Numeric ground-truth (None for static-fact lookups).",
     )
-    value_text: Optional[str] = Field(
+    value_text: str | None = Field(
         default=None,
         description="String ground-truth (e.g. 'Paris').",
     )
-    unit: Optional[str] = Field(default=None, description="Unit of `value`.")
-    raw: Dict[str, Any] = Field(
+    unit: str | None = Field(default=None, description="Unit of `value`.")
+    raw: dict[str, Any] = Field(
         default_factory=dict,
         description="Minimal source payload stored for traceability.",
     )
@@ -134,10 +134,10 @@ class FactCheckResult(BaseModel):
     """Per-claim verdict, evidence and explanation."""
 
     claim: DetectedClaim
-    evidence: Optional[Evidence] = None
+    evidence: Evidence | None = None
     verdict: Verdict
     confidence: Confidence = Field(default_factory=Confidence)
-    diff_pct: Optional[float] = Field(
+    diff_pct: float | None = Field(
         default=None,
         description=(
             "Percentage delta between claimed and actual numeric value. "
@@ -174,5 +174,5 @@ class FactCheckResponse(BaseModel):
 
     conversation_id: str
     speaker_id: str
-    fact_check_results: List[FactCheckResult] = Field(default_factory=list)
+    fact_check_results: list[FactCheckResult] = Field(default_factory=list)
     stats: FactCheckStats = Field(default_factory=FactCheckStats)

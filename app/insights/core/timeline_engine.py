@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
 from app.insights.config.defaults import InsightThresholds
 from app.insights.models.analytics_models import AnalyticsBundle
 from app.insights.models.input_models import SessionInput, UtteranceInput
@@ -17,10 +15,10 @@ class InsightTimelineEngine:
         analytics: AnalyticsBundle,
         aggregated_signals: AggregatedSignals,
         thresholds: InsightThresholds,
-    ) -> List[TimelineMarker]:
+    ) -> list[TimelineMarker]:
         utterances = sorted(session.utterances, key=lambda u: (u.start, u.end, u.id))
 
-        markers: List[TimelineMarker] = []
+        markers: list[TimelineMarker] = []
         markers.extend(cls._detect_dominance_markers(analytics, thresholds))
         markers.extend(cls._detect_pause_markers(utterances, thresholds))
         markers.extend(cls._detect_interruption_markers(utterances))
@@ -41,8 +39,8 @@ class InsightTimelineEngine:
         cls,
         analytics: AnalyticsBundle,
         thresholds: InsightThresholds,
-    ) -> List[TimelineMarker]:
-        markers: List[TimelineMarker] = []
+    ) -> list[TimelineMarker]:
+        markers: list[TimelineMarker] = []
 
         for speaker, metric in analytics.speaker_metrics.items():
             is_dominant = (
@@ -52,11 +50,7 @@ class InsightTimelineEngine:
             if not is_dominant:
                 continue
 
-            severity = (
-                "high"
-                if (metric.speaking_ratio >= 0.75 or metric.word_ratio >= 0.75)
-                else "medium"
-            )
+            severity = "high" if (metric.speaking_ratio >= 0.75 or metric.word_ratio >= 0.75) else "medium"
 
             markers.append(
                 TimelineMarker(
@@ -80,11 +74,11 @@ class InsightTimelineEngine:
     @classmethod
     def _detect_pause_markers(
         cls,
-        utterances: List[UtteranceInput],
+        utterances: list[UtteranceInput],
         thresholds: InsightThresholds,
-    ) -> List[TimelineMarker]:
-        markers: List[TimelineMarker] = []
-        prev: Optional[UtteranceInput] = None
+    ) -> list[TimelineMarker]:
+        markers: list[TimelineMarker] = []
+        prev: UtteranceInput | None = None
         index = 0
 
         for utt in utterances:
@@ -92,11 +86,7 @@ class InsightTimelineEngine:
                 gap = utt.start - prev.end
                 if gap >= thresholds.engagement_drop_pause_threshold_sec:
                     index += 1
-                    severity = (
-                        "high"
-                        if gap >= thresholds.severe_engagement_drop_pause_threshold_sec
-                        else "medium"
-                    )
+                    severity = "high" if gap >= thresholds.severe_engagement_drop_pause_threshold_sec else "medium"
 
                     markers.append(
                         TimelineMarker(
@@ -105,10 +95,7 @@ class InsightTimelineEngine:
                             time_sec=prev.end,
                             speaker=utt.speaker,
                             severity=severity,
-                            reason=(
-                                f"Long pause of {gap:.2f}s may indicate disengagement "
-                                "or response hesitation."
-                            ),
+                            reason=(f"Long pause of {gap:.2f}s may indicate disengagement " "or response hesitation."),
                             start_sec=prev.end,
                             end_sec=utt.start,
                             evidence={
@@ -126,10 +113,10 @@ class InsightTimelineEngine:
     @classmethod
     def _detect_interruption_markers(
         cls,
-        utterances: List[UtteranceInput],
-    ) -> List[TimelineMarker]:
-        markers: List[TimelineMarker] = []
-        prev: Optional[UtteranceInput] = None
+        utterances: list[UtteranceInput],
+    ) -> list[TimelineMarker]:
+        markers: list[TimelineMarker] = []
+        prev: UtteranceInput | None = None
         index = 0
 
         for current in utterances:
@@ -166,12 +153,12 @@ class InsightTimelineEngine:
     @classmethod
     def _detect_emotional_shift_markers(
         cls,
-        utterances: List[UtteranceInput],
+        utterances: list[UtteranceInput],
         thresholds: InsightThresholds,
         aggregated_signals: AggregatedSignals,
-    ) -> List[TimelineMarker]:
-        markers: List[TimelineMarker] = []
-        previous_by_speaker: Dict[str, UtteranceInput] = {}
+    ) -> list[TimelineMarker]:
+        markers: list[TimelineMarker] = []
+        previous_by_speaker: dict[str, UtteranceInput] = {}
         index = 0
 
         # Small changes below this are ignored to reduce noisy timeline output.
@@ -199,11 +186,7 @@ class InsightTimelineEngine:
 
                 if delta >= thresholds.emotional_shift_delta_threshold or label_changed:
                     index += 1
-                    severity = (
-                        "high"
-                        if delta >= thresholds.severe_emotional_shift_delta_threshold
-                        else "medium"
-                    )
+                    severity = "high" if delta >= thresholds.severe_emotional_shift_delta_threshold else "medium"
 
                     markers.append(
                         TimelineMarker(
@@ -256,9 +239,7 @@ class InsightTimelineEngine:
                         end_sec=first_negative.end,
                         evidence={
                             "trend_direction": trend.direction,
-                            "trend_slope": (
-                                trend.slope if trend.slope is not None else 0.0
-                            ),
+                            "trend_slope": (trend.slope if trend.slope is not None else 0.0),
                         },
                     )
                 )
@@ -270,8 +251,8 @@ class InsightTimelineEngine:
         cls,
         analytics: AnalyticsBundle,
         thresholds: InsightThresholds,
-    ) -> List[TimelineMarker]:
-        markers: List[TimelineMarker] = []
+    ) -> list[TimelineMarker]:
+        markers: list[TimelineMarker] = []
 
         for speaker, metric in analytics.speaker_metrics.items():
             if (
@@ -280,11 +261,7 @@ class InsightTimelineEngine:
             ):
                 continue
 
-            severity = (
-                "high"
-                if (metric.interruption_count >= 4 or metric.overlap_count >= 4)
-                else "medium"
-            )
+            severity = "high" if (metric.interruption_count >= 4 or metric.overlap_count >= 4) else "medium"
 
             markers.append(
                 TimelineMarker(

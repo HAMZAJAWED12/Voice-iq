@@ -1,15 +1,17 @@
 # app/services/pdf_service.py
 
-from typing import List, Dict, Optional, Any
-from fpdf import FPDF
-from app.utils.logger import logger
+from typing import Any
 
+from fpdf import FPDF
+
+from app.utils.logger import logger
 
 # ============================================================
 # SAFETY HELPERS
 # ============================================================
 
-PAGE_WIDTH = 190   # usable width (A4 with margins)
+PAGE_WIDTH = 190  # usable width (A4 with margins)
+
 
 def break_long_words(text: str, max_len: int = 50) -> str:
     """Breaks extremely long 'words' to avoid overflow in FPDF."""
@@ -18,7 +20,7 @@ def break_long_words(text: str, max_len: int = 50) -> str:
     for p in parts:
         if len(p) > max_len:
             for i in range(0, len(p), max_len):
-                fixed.append(p[i:i + max_len])
+                fixed.append(p[i : i + max_len])
         else:
             fixed.append(p)
     return " ".join(fixed)
@@ -38,7 +40,7 @@ def safe_text(text: str) -> str:
     safe_words = []
     for w in text.split(" "):
         if len(w) > 40:
-            chunks = [w[i:i + 40] for i in range(0, len(w), 40)]
+            chunks = [w[i : i + 40] for i in range(0, len(w), 40)]
             safe_words.extend(chunks)
         else:
             safe_words.append(w)
@@ -78,24 +80,23 @@ def safe_multicell(pdf: FPDF, text: str, h: float = 5):
 # MAIN SERVICE
 # ============================================================
 
-class PDFService:
 
+class PDFService:
     @staticmethod
     def generate_pdf_report(
         transcript: str,
-        speaker_segments: List[Dict],
+        speaker_segments: list[dict],
         summary: str,
         topic: str,
-        conversation_stats: Dict,
-        speaker_stats: Dict,
-        emotion_overview: Optional[Dict[str, Dict[str, float]]] = None,
-        intents_summary: Optional[Dict[str, int]] = None,
-        flags: Optional[List[Dict]] = None,
-        fact_checks: Optional[List[Dict]] = None,
-        warnings: Optional[List[str]] = None,                 # ✅ NEW
-        audio_quality: Optional[Dict[str, Any]] = None,       # ✅ NEW
+        conversation_stats: dict,
+        speaker_stats: dict,
+        emotion_overview: dict[str, dict[str, float]] | None = None,
+        intents_summary: dict[str, int] | None = None,
+        flags: list[dict] | None = None,
+        fact_checks: list[dict] | None = None,
+        warnings: list[str] | None = None,  # ✅ NEW
+        audio_quality: dict[str, Any] | None = None,  # ✅ NEW
     ) -> bytes:
-
         logger.info("Generating PDF report with advanced analytics...")
 
         pdf = FPDF()
@@ -132,9 +133,17 @@ class PDFService:
 
             # print in a stable order
             ordered_keys = [
-                "duration_sec", "sample_rate", "channels",
-                "rms_db", "peak_db", "silence_ratio", "snr_db",
-                "is_silent", "is_near_silent", "low_snr", "very_low_snr",
+                "duration_sec",
+                "sample_rate",
+                "channels",
+                "rms_db",
+                "peak_db",
+                "silence_ratio",
+                "snr_db",
+                "is_silent",
+                "is_near_silent",
+                "low_snr",
+                "very_low_snr",
             ]
             for k in ordered_keys:
                 if k in audio_quality:
@@ -239,10 +248,7 @@ class PDFService:
             pdf.set_font("Helvetica", "", 9)
 
             for fc in fact_checks:
-                safe_multicell(
-                    pdf,
-                    f"- [{fc.get('type')}] {fc.get('value')} => {fc.get('status')} ({fc.get('note')})"
-                )
+                safe_multicell(pdf, f"- [{fc.get('type')}] {fc.get('value')} => {fc.get('status')} ({fc.get('note')})")
             pdf.ln(3)
 
         # --------------------------------------------------------
@@ -278,4 +284,5 @@ class PDFService:
     @staticmethod
     def to_base64(pdf_bytes: bytes) -> str:
         import base64
+
         return base64.b64encode(pdf_bytes).decode("ascii")

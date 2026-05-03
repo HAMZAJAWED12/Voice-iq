@@ -14,7 +14,8 @@ Public surface:
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
@@ -28,7 +29,6 @@ from app.insights.models.factcheck_models import (
 from app.insights.repository.db import get_session_factory
 from app.insights.repository.factcheck_orm_models import FactCheckResultORM
 
-
 SessionFactory = Callable[[], Session]
 
 
@@ -39,8 +39,8 @@ class FactCheckRepositoryError(RuntimeError):
 class FactCheckRepository:
     """Persistence gateway for `FactCheckResultORM` rows."""
 
-    def __init__(self, session_factory: Optional[SessionFactory] = None) -> None:
-        self._session_factory_override: Optional[SessionFactory] = session_factory
+    def __init__(self, session_factory: SessionFactory | None = None) -> None:
+        self._session_factory_override: SessionFactory | None = session_factory
 
     # ------------------------------------------------------------------ #
     # Internal helpers                                                   #
@@ -63,7 +63,7 @@ class FactCheckRepository:
     ) -> FactCheckResultORM:
         """Map a Pydantic `FactCheckResult` onto a fresh ORM row."""
         evidence = result.evidence
-        evidence_json: Optional[str] = None
+        evidence_json: str | None = None
         if evidence is not None:
             try:
                 evidence_json = evidence.model_dump_json()
@@ -93,7 +93,7 @@ class FactCheckRepository:
     # Public API                                                         #
     # ------------------------------------------------------------------ #
 
-    def save_response(self, response: FactCheckResponse) -> List[int]:
+    def save_response(self, response: FactCheckResponse) -> list[int]:
         """Persist every result inside a `FactCheckResponse`. Returns IDs."""
         if not response.fact_check_results:
             return []
@@ -114,8 +114,7 @@ class FactCheckRepository:
         except SQLAlchemyError as exc:
             session.rollback()
             raise FactCheckRepositoryError(
-                f"failed to save fact-check results for "
-                f"conversation_id={response.conversation_id!r}"
+                f"failed to save fact-check results for " f"conversation_id={response.conversation_id!r}"
             ) from exc
         finally:
             session.close()
@@ -142,14 +141,13 @@ class FactCheckRepository:
         except SQLAlchemyError as exc:
             session.rollback()
             raise FactCheckRepositoryError(
-                f"failed to save fact-check result for "
-                f"conversation_id={conversation_id!r}"
+                f"failed to save fact-check result for " f"conversation_id={conversation_id!r}"
             ) from exc
         finally:
             session.close()
         return row.id
 
-    def list_for_conversation(self, conversation_id: str) -> List[Dict[str, Any]]:
+    def list_for_conversation(self, conversation_id: str) -> list[dict[str, Any]]:
         """Return every result for `conversation_id`, newest first."""
         if not conversation_id:
             return []
@@ -165,9 +163,7 @@ class FactCheckRepository:
         finally:
             session.close()
 
-    def list_for_speaker(
-        self, conversation_id: str, speaker_id: str
-    ) -> List[Dict[str, Any]]:
+    def list_for_speaker(self, conversation_id: str, speaker_id: str) -> list[dict[str, Any]]:
         """Return every result for a (conversation, speaker) pair, newest first."""
         if not conversation_id or not speaker_id:
             return []
@@ -210,7 +206,7 @@ class FactCheckRepository:
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def _row_to_dict(row: FactCheckResultORM) -> Dict[str, Any]:
+    def _row_to_dict(row: FactCheckResultORM) -> dict[str, Any]:
         """Expand `to_dict` with parsed evidence + reason for full readers."""
         out = row.to_dict()
         out["claimed_value"] = row.claimed_value
@@ -218,9 +214,7 @@ class FactCheckRepository:
         out["actual_value"] = row.actual_value
         out["actual_text"] = row.actual_text
         out["reason"] = row.reason
-        out["source_fetched_at"] = (
-            row.source_fetched_at.isoformat() if row.source_fetched_at else None
-        )
+        out["source_fetched_at"] = row.source_fetched_at.isoformat() if row.source_fetched_at else None
         if row.evidence_json:
             try:
                 out["evidence"] = json.loads(row.evidence_json)

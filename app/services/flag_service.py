@@ -1,8 +1,7 @@
 # app/services/flag_service.py
 
-from typing import List, Dict
-from app.utils.logger import logger
 
+from app.utils.logger import logger
 
 HESITATION_MARKERS = ["um", "uh", "you know", "er", "ah", "kind of", "sort of", "..."]
 AGGRESSION_WORDS = ["crap", "stupid", "idiot", "hate", "dumb", "aggressive", "angry"]
@@ -24,8 +23,8 @@ class FlagService:
         return (text or "").lower()
 
     @classmethod
-    def generate_flags(cls, conversation: List[Dict]) -> List[Dict]:
-        flags: List[Dict] = []
+    def generate_flags(cls, conversation: list[dict]) -> list[dict]:
+        flags: list[dict] = []
 
         for turn in conversation or []:
             text = cls._lower(turn.get("text", ""))

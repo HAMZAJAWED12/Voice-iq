@@ -13,19 +13,19 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import List, Optional, Pattern
+from re import Pattern
 
 from app.insights.models.factcheck_models import (
+    MAX_TRANSCRIPT_CHARS,
     ClaimSpan,
     ClaimType,
     DetectedClaim,
-    MAX_TRANSCRIPT_CHARS,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Pattern table                                                               #
 # --------------------------------------------------------------------------- #
+
 
 @dataclass(frozen=True)
 class _ClaimPattern:
@@ -38,7 +38,7 @@ class _ClaimPattern:
 # Keep patterns intentionally narrow. Each must require both a recognisable
 # subject token AND an anchor (a number, "is", "=", "at"). Order matters:
 # the first match wins for any given character span.
-_PATTERNS: List[_ClaimPattern] = [
+_PATTERNS: list[_ClaimPattern] = [
     # CURRENCY_RATE: e.g. "USD to PKR is 280", "1 USD = 280 PKR"
     _ClaimPattern(
         "CURRENCY_RATE",
@@ -111,6 +111,7 @@ _PATTERNS: List[_ClaimPattern] = [
 # Public API                                                                  #
 # --------------------------------------------------------------------------- #
 
+
 class ClaimDetector:
     """Stateless detector: text in, list of `DetectedClaim` out.
 
@@ -120,7 +121,7 @@ class ClaimDetector:
     """
 
     @classmethod
-    def detect(cls, text: Optional[str]) -> List[DetectedClaim]:
+    def detect(cls, text: str | None) -> list[DetectedClaim]:
         """Return all claims found in `text`.
 
         Returns an empty list for `None`, empty strings, or whitespace-only
@@ -132,7 +133,7 @@ class ClaimDetector:
             return []
 
         scan_text = text[:MAX_TRANSCRIPT_CHARS]
-        raw_matches: List[tuple[int, int, ClaimType, re.Match[str]]] = []
+        raw_matches: list[tuple[int, int, ClaimType, re.Match[str]]] = []
 
         for rule in _PATTERNS:
             for m in rule.pattern.finditer(scan_text):
@@ -140,7 +141,7 @@ class ClaimDetector:
 
         # Resolve overlaps: prefer earliest start, then earliest declared type.
         raw_matches.sort(key=lambda item: (item[0], item[1]))
-        kept: List[tuple[int, int, ClaimType, re.Match[str]]] = []
+        kept: list[tuple[int, int, ClaimType, re.Match[str]]] = []
         last_end = -1
         for start, end, ctype, match in raw_matches:
             if start < last_end:
@@ -148,7 +149,7 @@ class ClaimDetector:
             kept.append((start, end, ctype, match))
             last_end = end
 
-        claims: List[DetectedClaim] = []
+        claims: list[DetectedClaim] = []
         for idx, (start, end, ctype, match) in enumerate(kept):
             claims.append(
                 _build_detected_claim(
@@ -166,7 +167,8 @@ class ClaimDetector:
 # Helpers                                                                     #
 # --------------------------------------------------------------------------- #
 
-def _to_float(value: str) -> Optional[float]:
+
+def _to_float(value: str) -> float | None:
     """Parse '95,000.50' or '95000.50' safely. None on failure."""
     try:
         return float(value.replace(",", ""))
@@ -213,7 +215,7 @@ def _build_detected_claim(
     elif claim_type == "STATIC_FACT":
         subject["country"] = (groups.get("country") or "").strip()
 
-    raw_value_text: Optional[str] = None
+    raw_value_text: str | None = None
     if claim_type == "STATIC_FACT":
         raw_value_text = (groups.get("capital") or "").strip() or None
 

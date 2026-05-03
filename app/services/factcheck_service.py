@@ -1,9 +1,8 @@
 # app/services/factcheck_service.py
 
 import re
-from typing import List, Dict
-from app.utils.logger import logger
 
+from app.utils.logger import logger
 
 URL_RE = re.compile(r"\bhttps?://[^\s]+", re.IGNORECASE)
 NUM_RE = re.compile(r"\b\d+\b")
@@ -22,12 +21,12 @@ class FactCheckService:
     """
 
     @staticmethod
-    def extract_candidates(transcript: str) -> List[Dict]:
+    def extract_candidates(transcript: str) -> list[dict]:
         t = transcript or ""
         urls = URL_RE.findall(t)
         nums = NUM_RE.findall(t)
 
-        candidates: List[Dict] = []
+        candidates: list[dict] = []
 
         for u in urls:
             candidates.append(
@@ -54,7 +53,7 @@ class FactCheckService:
         return candidates
 
     @classmethod
-    def fact_check(cls, transcript: str) -> List[Dict]:
+    def fact_check(cls, transcript: str) -> list[dict]:
         """
         High-level API: returns 'fact_checks' list.
 

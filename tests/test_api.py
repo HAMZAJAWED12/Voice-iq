@@ -1,10 +1,10 @@
 import io
 import wave
+
 import pytest
 from fastapi.testclient import TestClient
-from app.main import app
-from app.services.asr_service import transcribe_local
 
+from app.main import app
 
 # Create a test client
 client = TestClient(app)

@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import json
 import shutil
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from app.utils.logger import logger
 
-JsonDict = Dict[str, Any]
+JsonDict = dict[str, Any]
 
 
 @dataclass
@@ -46,7 +46,7 @@ class JobIO:
         meta.json
     """
 
-    def __init__(self, base_dir: Union[str, Path] = "data/jobs"):
+    def __init__(self, base_dir: str | Path = "data/jobs"):
         self.base_dir = Path(base_dir)
 
     def init_job(self, job_id: str) -> JobPaths:
@@ -82,7 +82,7 @@ class JobIO:
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         return path
 
-    def load_json(self, job: JobPaths, rel: str, default: Optional[Any] = None) -> Any:
+    def load_json(self, job: JobPaths, rel: str, default: Any | None = None) -> Any:
         path = self.p(job, rel)
         if not path.exists():
             return default
@@ -108,7 +108,7 @@ class JobIO:
         path.write_bytes(blob)
         return path
 
-    def copy_in(self, job: JobPaths, src_path: Union[str, Path], rel_dest: str) -> Path:
+    def copy_in(self, job: JobPaths, src_path: str | Path, rel_dest: str) -> Path:
         src = Path(src_path)
         dest = self.p(job, rel_dest)
         dest.parent.mkdir(parents=True, exist_ok=True)

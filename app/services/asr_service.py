@@ -1,5 +1,6 @@
 # app/services/asr_service.py
 import whisper
+
 from app.utils.logger import logger
 
 # Global model cache (loads once per process)
@@ -61,8 +62,6 @@ class ASRService:
             "num_chars": len(text),
         }
 
-        logger.info(
-            f"Transcription complete — {meta['num_chars']} characters, {meta['num_segments']} segments."
-        )
+        logger.info(f"Transcription complete — {meta['num_chars']} characters, {meta['num_segments']} segments.")
 
         return {"text": text, "segments": segments, "meta": meta}

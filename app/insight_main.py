@@ -20,8 +20,10 @@ from contextlib import asynccontextmanager
 try:
     from dotenv import load_dotenv
 except ImportError:  # pragma: no cover - optional dep
+
     def load_dotenv(*_args, **_kwargs):  # type: ignore[no-redef]
         return False
+
 
 from fastapi import FastAPI
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from time import perf_counter
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -41,7 +41,7 @@ class InsightService:
         started = perf_counter()
         service_version = service_version or cls.DEFAULT_SERVICE_VERSION
         threshold_profile = threshold_profile or cls.DEFAULT_THRESHOLD_PROFILE
-        warnings: List[str] = []
+        warnings: list[str] = []
 
         validation, session = cls._parse_session_input(session_input)
 
@@ -163,7 +163,7 @@ class InsightService:
     def _parse_session_input(
         cls,
         session_input: SessionInput | dict,
-    ) -> Tuple[ValidationResult, Optional[SessionInput]]:
+    ) -> tuple[ValidationResult, SessionInput | None]:
         validation = ValidationResult(valid=True)
 
         if isinstance(session_input, SessionInput):
@@ -312,7 +312,7 @@ class InsightService:
         *,
         session_id: str,
         validation: ValidationResult,
-        warnings: List[str],
+        warnings: list[str],
         started: float,
         service_version: str,
         threshold_profile: str,
@@ -367,7 +367,7 @@ class InsightService:
 
     @staticmethod
     def _utc_now_iso() -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
     @staticmethod
     def _elapsed_ms(started: float) -> int:

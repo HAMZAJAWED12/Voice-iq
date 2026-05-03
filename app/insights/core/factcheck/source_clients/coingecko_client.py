@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Dict, Optional
+from typing import ClassVar
 
 from app.insights.core.factcheck.source_clients.base_client import (
     BaseSourceClient,
 )
 from app.insights.models.factcheck_models import DetectedClaim, Evidence
 
-
 # Symbol → CoinGecko id mapping. Kept tight (only assets the detector knows).
-_SYMBOL_TO_ID: Dict[str, str] = {
+_SYMBOL_TO_ID: dict[str, str] = {
     "BTC": "bitcoin",
     "ETH": "ethereum",
     "SOL": "solana",
@@ -28,7 +27,7 @@ class CoinGeckoClient(BaseSourceClient):
     name: ClassVar[str] = "coingecko"
     BASE_URL: ClassVar[str] = "https://api.coingecko.com/api/v3/simple/price"
 
-    def fetch(self, claim: DetectedClaim) -> Optional[Evidence]:
+    def fetch(self, claim: DetectedClaim) -> Evidence | None:
         if claim.claim_type != "CRYPTO_PRICE":
             return None
         symbol = (claim.subject.get("asset") or "").upper()

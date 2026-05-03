@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, List
-
 from app.insights.models.analytics_models import AnalyticsBundle, SpeakerMetrics
 from app.insights.models.api_models import SummaryBundle
 from app.insights.models.input_models import SessionInput
@@ -49,7 +47,7 @@ class InsightSummaryEngine:
         escalation_part = cls._describe_escalation(insights)
         inconsistency_part = cls._describe_inconsistency(insights)
 
-        parts: List[str] = [
+        parts: list[str] = [
             (
                 f"This session contains {sm.total_utterances} utterances across "
                 f"{sm.total_speakers} speaker(s), with a total measured speaking time "
@@ -71,9 +69,7 @@ class InsightSummaryEngine:
         else:
             parts.append(f"The interaction appears {balance} overall.")
 
-        parts.append(
-            f"Overall engagement appears {tone}, and pause behavior suggests {pause_desc}."
-        )
+        parts.append(f"Overall engagement appears {tone}, and pause behavior suggests {pause_desc}.")
         parts.append(conflict_desc)
 
         if escalation_part:
@@ -87,14 +83,11 @@ class InsightSummaryEngine:
                 f"There are {len(high_severity_flags)} high-severity concern(s) that may deserve closer review."
             )
         elif medium_severity_flags:
-            parts.append(
-                f"There are {len(medium_severity_flags)} medium-severity signal(s) worth monitoring."
-            )
+            parts.append(f"There are {len(medium_severity_flags)} medium-severity signal(s) worth monitoring.")
         else:
             parts.append("No major high-severity conversational risks were detected.")
 
         return " ".join(parts).strip()
-
 
     @staticmethod
     def _describe_escalation(insights: InsightBundle) -> str:
@@ -115,7 +108,6 @@ class InsightSummaryEngine:
             f"{inconsistency.score:.2f}. {inconsistency.summary}"
         )
 
-
     @staticmethod
     def _describe_session_sentiment(insights: InsightBundle) -> str:
         sentiment = insights.session_sentiment
@@ -128,11 +120,7 @@ class InsightSummaryEngine:
         if trend and trend.direction:
             trend_text = f" with a {trend.direction} trend"
 
-        avg = (
-            f" (average score {sentiment.avg_score:.2f})"
-            if sentiment.avg_score is not None
-            else ""
-        )
+        avg = f" (average score {sentiment.avg_score:.2f})" if sentiment.avg_score is not None else ""
 
         return f"Overall sentiment appears {sentiment.label}{trend_text}{avg}."
 
@@ -149,8 +137,8 @@ class InsightSummaryEngine:
         cls,
         analytics: AnalyticsBundle,
         insights: InsightBundle,
-    ) -> Dict[str, str]:
-        summaries: Dict[str, str] = {}
+    ) -> dict[str, str]:
+        summaries: dict[str, str] = {}
 
         for speaker, metric in analytics.speaker_metrics.items():
             speaker_insight = insights.speaker_insights.get(speaker)
@@ -173,7 +161,7 @@ class InsightSummaryEngine:
             metric.utterance_count,
         )
 
-        parts: List[str] = [
+        parts: list[str] = [
             (
                 f"{metric.speaker} contributed {metric.utterance_count} utterances, "
                 f"{metric.word_count} words, and {metric.speaking_time_sec:.2f} seconds of speech."
@@ -188,9 +176,7 @@ class InsightSummaryEngine:
             and speaker_insight.sentiment.sample_count > 0
             and speaker_insight.sentiment.label
         ):
-            parts.append(
-                f"Their sentiment profile appears mostly {speaker_insight.sentiment.label}."
-            )
+            parts.append(f"Their sentiment profile appears mostly {speaker_insight.sentiment.label}.")
 
         if (
             speaker_insight
@@ -198,19 +184,13 @@ class InsightSummaryEngine:
             and speaker_insight.emotion.sample_count > 0
             and speaker_insight.emotion.dominant
         ):
-            parts.append(
-                f"Their dominant emotional signal is {speaker_insight.emotion.dominant}."
-            )
+            parts.append(f"Their dominant emotional signal is {speaker_insight.emotion.dominant}.")
 
         if metric.interruption_count > 0:
-            parts.append(
-                f"They were associated with {metric.interruption_count} interruption event(s)."
-            )
+            parts.append(f"They were associated with {metric.interruption_count} interruption event(s).")
 
         if metric.overlap_count > 0:
-            parts.append(
-                f"They were involved in {metric.overlap_count} overlapping turn(s)."
-            )
+            parts.append(f"They were involved in {metric.overlap_count} overlapping turn(s).")
 
         if speaker_insight and speaker_insight.flags:
             top_flags = ", ".join(flag.type for flag in speaker_insight.flags[:3])
@@ -221,7 +201,7 @@ class InsightSummaryEngine:
         return " ".join(parts).strip()
 
     @classmethod
-    def _build_notable_concerns(cls, insights: InsightBundle) -> List[str]:
+    def _build_notable_concerns(cls, insights: InsightBundle) -> list[str]:
         if not insights.flags:
             return []
 
@@ -231,7 +211,7 @@ class InsightSummaryEngine:
             reverse=True,
         )
 
-        concerns: List[str] = []
+        concerns: list[str] = []
         seen = set()
 
         for flag in ranked_flags:
@@ -282,13 +262,13 @@ class InsightSummaryEngine:
         return {"low": 1, "medium": 2, "high": 3}.get(severity, 0)
 
     @staticmethod
-    def _get_dominant_speaker(speaker_metrics: Dict[str, SpeakerMetrics]) -> str | None:
+    def _get_dominant_speaker(speaker_metrics: dict[str, SpeakerMetrics]) -> str | None:
         if not speaker_metrics:
             return None
         return max(speaker_metrics.values(), key=lambda s: s.speaking_ratio).speaker
 
     @staticmethod
-    def _infer_balance_label(speaker_metrics: Dict[str, SpeakerMetrics]) -> str:
+    def _infer_balance_label(speaker_metrics: dict[str, SpeakerMetrics]) -> str:
         if not speaker_metrics:
             return "balanced"
 

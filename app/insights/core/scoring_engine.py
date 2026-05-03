@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, List
-
 from app.insights.models.analytics_models import AnalyticsBundle
 from app.insights.models.insight_models import (
     InsightScores,
@@ -17,8 +15,8 @@ class InsightScoringEngine:
     def compute_scores(
         cls,
         analytics: AnalyticsBundle,
-        timeline: List[TimelineMarker],
-        speaker_insights: Dict[str, SpeakerInsight],
+        timeline: list[TimelineMarker],
+        speaker_insights: dict[str, SpeakerInsight],
         aggregated_signals: AggregatedSignals,
     ) -> InsightScores:
         dominance_score = cls._compute_dominance_score(analytics)
@@ -36,9 +34,7 @@ class InsightScoringEngine:
             engagement_score=engagement_score,
         )
 
-        emotion_volatility_score = cls._clamp(
-            aggregated_signals.emotion_volatility_score
-        )
+        emotion_volatility_score = cls._clamp(aggregated_signals.emotion_volatility_score)
 
         breakdown = {
             "dominance_score": [
@@ -113,9 +109,7 @@ class InsightScoringEngine:
         if not analytics.speaker_metrics:
             return 0.0
 
-        max_ratio = max(
-            metric.speaking_ratio for metric in analytics.speaker_metrics.values()
-        )
+        max_ratio = max(metric.speaking_ratio for metric in analytics.speaker_metrics.values())
         return cls._clamp(max_ratio)
 
     @classmethod
@@ -132,9 +126,7 @@ class InsightScoringEngine:
         pause_penalty = min(sm.avg_pause_sec / 5.0, 1.0)
         pause_component = 1.0 - pause_penalty
 
-        question_component = min(
-            sm.total_questions / max(sm.total_utterances, 1), 1.0
-        )
+        question_component = min(sm.total_questions / max(sm.total_utterances, 1), 1.0)
 
         trend_bonus = 0.0
         trend = aggregated_signals.session_sentiment_trend
@@ -153,14 +145,10 @@ class InsightScoringEngine:
     def _compute_conflict_score(
         cls,
         analytics: AnalyticsBundle,
-        timeline: List[TimelineMarker],
+        timeline: list[TimelineMarker],
     ) -> float:
-        total_interruptions = sum(
-            metric.interruption_count for metric in analytics.speaker_metrics.values()
-        )
-        total_overlaps = sum(
-            metric.overlap_count for metric in analytics.speaker_metrics.values()
-        )
+        total_interruptions = sum(metric.interruption_count for metric in analytics.speaker_metrics.values())
+        total_overlaps = sum(metric.overlap_count for metric in analytics.speaker_metrics.values())
         utterances = max(analytics.session_metrics.total_utterances, 1)
 
         raw = (total_interruptions + total_overlaps) / utterances
@@ -174,9 +162,5 @@ class InsightScoringEngine:
         conflict_score: float,
         engagement_score: float,
     ) -> float:
-        raw = (
-            (1.0 - dominance_score) * 0.35
-            + (1.0 - conflict_score) * 0.40
-            + engagement_score * 0.25
-        )
+        raw = (1.0 - dominance_score) * 0.35 + (1.0 - conflict_score) * 0.40 + engagement_score * 0.25
         return cls._clamp(raw)

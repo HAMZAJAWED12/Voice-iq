@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -8,12 +8,12 @@ SentimentLabel = Literal["positive", "neutral", "negative"]
 
 
 class SentimentInput(BaseModel):
-    label: Optional[SentimentLabel] = None
-    score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    label: SentimentLabel | None = None
+    score: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class EmotionInput(BaseModel):
-    values: Dict[str, float] = Field(default_factory=dict)
+    values: dict[str, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_emotion_values(self):
@@ -29,14 +29,14 @@ class UtteranceInput(BaseModel):
     start: float = Field(ge=0.0)
     end: float = Field(ge=0.0)
     text: str = ""
-    word_count: Optional[int] = Field(default=None, ge=0)
+    word_count: int | None = Field(default=None, ge=0)
 
-    sentiment: Optional[SentimentInput] = None
-    emotion: Optional[EmotionInput] = None
+    sentiment: SentimentInput | None = None
+    emotion: EmotionInput | None = None
 
     overlap: bool = False
-    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    diarization_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    diarization_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
     def validate_time_order(self):
@@ -46,23 +46,23 @@ class UtteranceInput(BaseModel):
 
 
 class SessionMetaInput(BaseModel):
-    source: Optional[str] = None
-    language: Optional[str] = None
-    created_at: Optional[str] = None
-    pipeline_version: Optional[str] = None
+    source: str | None = None
+    language: str | None = None
+    created_at: str | None = None
+    pipeline_version: str | None = None
 
 
 class SessionInput(BaseModel):
     session_id: str
-    duration_sec: Optional[float] = Field(default=None, ge=0.0)
-    speakers: List[str] = Field(default_factory=list)
-    utterances: List[UtteranceInput] = Field(default_factory=list)
+    duration_sec: float | None = Field(default=None, ge=0.0)
+    speakers: list[str] = Field(default_factory=list)
+    utterances: list[UtteranceInput] = Field(default_factory=list)
 
-    meta: Optional[SessionMetaInput] = None
-    warnings: List[str] = Field(default_factory=list)
+    meta: SessionMetaInput | None = None
+    warnings: list[str] = Field(default_factory=list)
 
-    speaker_stats: Dict[str, dict] = Field(default_factory=dict)
-    conversation_stats: Dict[str, dict] = Field(default_factory=dict)
+    speaker_stats: dict[str, dict] = Field(default_factory=dict)
+    conversation_stats: dict[str, dict] = Field(default_factory=dict)
 
     model_config = {
         "json_schema_extra": {

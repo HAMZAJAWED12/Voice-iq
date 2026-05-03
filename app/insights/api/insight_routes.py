@@ -23,9 +23,7 @@ from app.insights.service import InsightService
 router = APIRouter(prefix="/insights", tags=["Insights"])
 
 
-def _store_response(
-    repository: InsightRepository, response: InsightGenerateResponse
-) -> None:
+def _store_response(repository: InsightRepository, response: InsightGenerateResponse) -> None:
     """Persist a freshly-generated response, isolating storage failures."""
     repository.save(
         InsightStoredRecord(
@@ -139,13 +137,9 @@ def get_speakers(
 
     return InsightSpeakersResponse(
         session_id=payload.session_id,
-        speaker_metrics={
-            speaker: metric.model_dump()
-            for speaker, metric in payload.analytics.speaker_metrics.items()
-        },
+        speaker_metrics={speaker: metric.model_dump() for speaker, metric in payload.analytics.speaker_metrics.items()},
         speaker_insights={
-            speaker: insight.model_dump()
-            for speaker, insight in payload.insights.speaker_insights.items()
+            speaker: insight.model_dump() for speaker, insight in payload.insights.speaker_insights.items()
         },
         speaker_summaries=payload.summaries.speaker_summaries,
     )

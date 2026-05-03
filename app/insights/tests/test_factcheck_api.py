@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional
 
 import pytest
 from fastapi import FastAPI
@@ -14,6 +14,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.insights.api.factcheck_routes import (
     get_factcheck_engine,
+)
+from app.insights.api.factcheck_routes import (
     router as factcheck_router,
 )
 from app.insights.core.factcheck.factcheck_engine import (
@@ -25,25 +27,24 @@ from app.insights.core.factcheck.source_clients.base_client import (
 )
 from app.insights.models.factcheck_models import DetectedClaim, Evidence
 from app.insights.repository import (
-    FactCheckRepository,
     build_factcheck_repository_from_factory,
     get_factcheck_repository,
 )
 from app.insights.repository.db import Base
 from app.insights.repository.factcheck_orm_models import FactCheckResultORM  # noqa: F401
 
-
 # --------------------------------------------------------------------------- #
 # Stubs                                                                       #
 # --------------------------------------------------------------------------- #
 
+
 class _StubClient(BaseSourceClient):
-    def __init__(self, *, name: str, evidence: Optional[Evidence]) -> None:
+    def __init__(self, *, name: str, evidence: Evidence | None) -> None:
         super().__init__(timeout_sec=1.0)
         self.name = name
         self._evidence = evidence
 
-    def fetch(self, claim: DetectedClaim) -> Optional[Evidence]:
+    def fetch(self, claim: DetectedClaim) -> Evidence | None:
         return self._evidence
 
 
@@ -67,6 +68,7 @@ def _stub_engine() -> FactCheckEngine:
 # --------------------------------------------------------------------------- #
 # Fixture: app + isolated DB + stubbed engine                                 #
 # --------------------------------------------------------------------------- #
+
 
 @pytest.fixture()
 def client(tmp_path: Path) -> Iterator[TestClient]:
@@ -103,6 +105,7 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
 # --------------------------------------------------------------------------- #
 # POST /v1/fact-check                                                         #
 # --------------------------------------------------------------------------- #
+
 
 def test_post_returns_results_for_crypto_claim(client: TestClient):
     payload = {

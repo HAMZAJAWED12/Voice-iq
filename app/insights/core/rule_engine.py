@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, List
-
 from app.insights.config.defaults import DEFAULT_THRESHOLDS, InsightThresholds
 from app.insights.core.escalation_engine import InsightEscalationEngine
 from app.insights.core.inconsistency_engine import InsightInconsistencyEngine
@@ -107,11 +105,11 @@ class InsightRuleEngine:
         analytics: AnalyticsBundle,
         aggregated_signals: AggregatedSignals,
         thresholds: InsightThresholds,
-    ) -> Dict[str, SpeakerInsight]:
-        result: Dict[str, SpeakerInsight] = {}
+    ) -> dict[str, SpeakerInsight]:
+        result: dict[str, SpeakerInsight] = {}
 
         for speaker, metric in analytics.speaker_metrics.items():
-            flags: List[InsightFlag] = []
+            flags: list[InsightFlag] = []
 
             if metric.interruption_count >= thresholds.frequent_interruptions_threshold:
                 flags.append(
@@ -140,10 +138,7 @@ class InsightRuleEngine:
                     )
                 )
 
-            if (
-                metric.question_count == 0
-                and metric.utterance_count >= thresholds.low_inquiry_min_utterances
-            ):
+            if metric.question_count == 0 and metric.utterance_count >= thresholds.low_inquiry_min_utterances:
                 flags.append(
                     InsightFlag(
                         type="low_inquiry_behavior",
@@ -184,7 +179,6 @@ class InsightRuleEngine:
                 engagement_ratio=round(metric.word_ratio, 4),
                 flags=flags,
             )
-            
 
         return result
 
@@ -196,8 +190,8 @@ class InsightRuleEngine:
         thresholds: InsightThresholds,
         escalation=None,
         inconsistency: InconsistencyAssessment | None = None,
-    ) -> List[InsightFlag]:
-        flags: List[InsightFlag] = []
+    ) -> list[InsightFlag]:
+        flags: list[InsightFlag] = []
 
         for speaker, metric in analytics.speaker_metrics.items():
             is_dominant = (
@@ -206,11 +200,7 @@ class InsightRuleEngine:
             )
 
             if is_dominant:
-                severity = (
-                    "high"
-                    if (metric.speaking_ratio >= 0.75 or metric.word_ratio >= 0.75)
-                    else "medium"
-                )
+                severity = "high" if (metric.speaking_ratio >= 0.75 or metric.word_ratio >= 0.75) else "medium"
                 flags.append(
                     InsightFlag(
                         type="speaker_dominance",
@@ -229,11 +219,7 @@ class InsightRuleEngine:
                 metric.interruption_count >= thresholds.high_tension_interruption_threshold
                 or metric.overlap_count >= thresholds.high_tension_overlap_threshold
             ):
-                severity = (
-                    "high"
-                    if (metric.interruption_count >= 4 or metric.overlap_count >= 4)
-                    else "medium"
-                )
+                severity = "high" if (metric.interruption_count >= 4 or metric.overlap_count >= 4) else "medium"
                 flags.append(
                     InsightFlag(
                         type="high_tension",
@@ -285,8 +271,6 @@ class InsightRuleEngine:
                 )
             )
 
-
-
         if escalation is not None and escalation.level in {"mild", "moderate", "severe"}:
             severity_map = {
                 "mild": "low",
@@ -328,13 +312,13 @@ class InsightRuleEngine:
     def _build_inconsistency_markers(
         cls,
         inconsistency: InconsistencyAssessment | None,
-    ) -> List[TimelineMarker]:
+    ) -> list[TimelineMarker]:
         """Surface inconsistency windows as `inconsistency_candidate` markers.
 
         Only fire markers when the overall level is at least "low" to avoid
         noisy timeline output from isolated / ambiguous signals.
         """
-        markers: List[TimelineMarker] = []
+        markers: list[TimelineMarker] = []
         if inconsistency is None or inconsistency.level == "none":
             return markers
 

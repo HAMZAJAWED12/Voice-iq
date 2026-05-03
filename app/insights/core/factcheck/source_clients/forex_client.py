@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Optional
+from typing import ClassVar
 
 from app.insights.core.factcheck.source_clients.base_client import (
     BaseSourceClient,
@@ -16,7 +16,7 @@ class ForexClient(BaseSourceClient):
     name: ClassVar[str] = "exchangerate.host"
     BASE_URL: ClassVar[str] = "https://api.exchangerate.host/latest"
 
-    def fetch(self, claim: DetectedClaim) -> Optional[Evidence]:
+    def fetch(self, claim: DetectedClaim) -> Evidence | None:
         if claim.claim_type != "CURRENCY_RATE":
             return None
         base = claim.subject.get("base")
