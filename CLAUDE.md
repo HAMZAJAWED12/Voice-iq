@@ -136,7 +136,6 @@ These need attention but are not blocking new work:
 ## Next-task candidates (pick one when ready)
 
 - Docker: harden the existing Dockerfile, add docker-compose, document local-run flow.
-- Pre-commit hooks: ruff + black + a `git secrets` style scanner to prevent token leaks.
 - CHANGELOG: start a `CHANGELOG.md` with the Sprint 1–4 history backfilled.
 - New engine: e.g., a Trust Engine, a Persona Engine, or a Conversation Quality Engine — would follow the same pattern as `escalation_engine.py` and `inconsistency_engine.py`.
 
