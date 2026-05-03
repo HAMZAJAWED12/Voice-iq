@@ -1,0 +1,7 @@
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+extend-exclude = [".venv", "samples", "DOCS"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]  # pycodestyle, pyflakes, isort, bugbear, pyupgrade
