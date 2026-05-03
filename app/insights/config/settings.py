@@ -94,6 +94,28 @@ class InsightSettings(BaseSettings):
         description="Soft cap on incoming session payload size, in KB.",
     )
 
+    # --- Fact-Check source clients --------------------------------------- #
+    openweather_api_key: str = Field(
+        default="",
+        description=(
+            "OpenWeather API key for the WEATHER source client. Empty "
+            "string disables the client (verdict: SOURCE_UNAVAILABLE)."
+        ),
+    )
+    alphavantage_api_key: str = Field(
+        default="",
+        description=(
+            "Alpha Vantage API key for the STOCK_PRICE source client. "
+            "Empty string disables the client."
+        ),
+    )
+    factcheck_http_timeout_sec: float = Field(
+        default=5.0,
+        ge=0.5,
+        le=30.0,
+        description="Per-call HTTP timeout for fact-check source clients.",
+    )
+
     @property
     def is_sqlite(self) -> bool:
         """Convenience: True when the active DB is SQLite."""
