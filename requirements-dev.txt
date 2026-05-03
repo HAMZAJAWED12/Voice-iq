@@ -5,3 +5,4 @@ absl-py
 scikit-learn
 pyannote.core
 pyannote.metrics
+pre-commit==4.0.1
