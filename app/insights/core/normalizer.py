@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.insights.models.input_models import SessionInput
 
@@ -11,7 +11,7 @@ class InsightNormalizer:
     DEFAULT_LANGUAGE = "unknown"
 
     @classmethod
-    def normalize_to_session_input(cls, payload: Dict[str, Any]) -> SessionInput:
+    def normalize_to_session_input(cls, payload: dict[str, Any]) -> SessionInput:
         normalized_utterances = cls._normalize_utterances(payload.get("utterances", []))
         inferred_speakers = cls._infer_speakers(normalized_utterances)
         inferred_duration = cls._infer_duration(normalized_utterances)
@@ -30,7 +30,9 @@ class InsightNormalizer:
             "meta": cls._normalize_meta(raw_meta),
             "warnings": [str(w) for w in raw_warnings if w is not None],
             "speaker_stats": payload.get("speaker_stats", {}) if isinstance(payload.get("speaker_stats"), dict) else {},
-            "conversation_stats": payload.get("conversation_stats", {}) if isinstance(payload.get("conversation_stats"), dict) else {},
+            "conversation_stats": payload.get("conversation_stats", {})
+            if isinstance(payload.get("conversation_stats"), dict)
+            else {},
         }
 
         return SessionInput.model_validate(normalized_payload)
@@ -42,9 +44,9 @@ class InsightNormalizer:
         return str(value).strip() or "unknown_session"
 
     @classmethod
-    def _normalize_speakers(cls, value: Any, fallback: List[str]) -> List[str]:
+    def _normalize_speakers(cls, value: Any, fallback: list[str]) -> list[str]:
         if isinstance(value, list):
-            speakers: List[str] = []
+            speakers: list[str] = []
             for item in value:
                 speaker = cls._normalize_speaker(item)
                 if speaker not in speakers:
@@ -53,7 +55,7 @@ class InsightNormalizer:
         return fallback
 
     @classmethod
-    def _normalize_meta(cls, meta: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_meta(cls, meta: dict[str, Any]) -> dict[str, Any]:
         return {
             "source": cls._normalize_optional_string(meta.get("source")),
             "language": cls._normalize_optional_string(meta.get("language")) or cls.DEFAULT_LANGUAGE,
@@ -62,11 +64,11 @@ class InsightNormalizer:
         }
 
     @classmethod
-    def _normalize_utterances(cls, utterances: Any) -> List[Dict[str, Any]]:
+    def _normalize_utterances(cls, utterances: Any) -> list[dict[str, Any]]:
         if not isinstance(utterances, list):
             return []
 
-        normalized: List[Dict[str, Any]] = []
+        normalized: list[dict[str, Any]] = []
         for idx, utt in enumerate(utterances):
             if isinstance(utt, dict):
                 normalized.append(cls._normalize_single_utterance(idx, utt))
@@ -75,7 +77,7 @@ class InsightNormalizer:
         return normalized
 
     @classmethod
-    def _normalize_single_utterance(cls, idx: int, utt: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_single_utterance(cls, idx: int, utt: dict[str, Any]) -> dict[str, Any]:
         start = cls._normalize_non_negative_float(utt.get("start"), default=0.0)
         end = cls._normalize_non_negative_float(utt.get("end"), default=start)
         if end < start:
@@ -132,7 +134,7 @@ class InsightNormalizer:
         return len(text.split()) if text else 0
 
     @classmethod
-    def _normalize_sentiment(cls, value: Any) -> Optional[Dict[str, Any]]:
+    def _normalize_sentiment(cls, value: Any) -> dict[str, Any] | None:
         if not isinstance(value, dict):
             return None
 
@@ -151,7 +153,7 @@ class InsightNormalizer:
         return {"label": label, "score": score}
 
     @classmethod
-    def _normalize_emotion(cls, value: Any) -> Optional[Dict[str, Any]]:
+    def _normalize_emotion(cls, value: Any) -> dict[str, Any] | None:
         if not isinstance(value, dict):
             return None
 
@@ -159,7 +161,7 @@ class InsightNormalizer:
         if not isinstance(values, dict):
             return None
 
-        cleaned: Dict[str, float] = {}
+        cleaned: dict[str, float] = {}
         for emotion_name, emotion_value in values.items():
             if emotion_name is None:
                 continue
@@ -173,8 +175,8 @@ class InsightNormalizer:
         return {"values": cleaned}
 
     @classmethod
-    def _infer_speakers(cls, utterances: List[Dict[str, Any]]) -> List[str]:
-        speakers: List[str] = []
+    def _infer_speakers(cls, utterances: list[dict[str, Any]]) -> list[str]:
+        speakers: list[str] = []
         for utt in utterances:
             speaker = utt["speaker"]
             if speaker not in speakers:
@@ -182,13 +184,13 @@ class InsightNormalizer:
         return speakers
 
     @staticmethod
-    def _infer_duration(utterances: List[Dict[str, Any]]) -> float:
+    def _infer_duration(utterances: list[dict[str, Any]]) -> float:
         if not utterances:
             return 0.0
         return round(max(utt["end"] for utt in utterances), 3)
 
     @staticmethod
-    def _normalize_optional_string(value: Any) -> Optional[str]:
+    def _normalize_optional_string(value: Any) -> str | None:
         if value is None:
             return None
         value = str(value).strip()
@@ -211,7 +213,7 @@ class InsightNormalizer:
             return fallback
 
     @staticmethod
-    def _normalize_probability_or_none(value: Any) -> Optional[float]:
+    def _normalize_probability_or_none(value: Any) -> float | None:
         try:
             value_f = float(value)
             if 0.0 <= value_f <= 1.0:
@@ -232,7 +234,7 @@ class InsightNormalizer:
             if lowered in {"false", "0", "no", "n"}:
                 return False
 
-        if isinstance(value, (int, float)):
+        if isinstance(value, int | float):
             return bool(value)
 
         return default

@@ -1,7 +1,0 @@
-{
-  "service": "asr",
-  "status": "ok",
-  "model": "base",
-  "num_segments": 36,
-  "total_chars": 3189
-}

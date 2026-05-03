@@ -15,6 +15,11 @@ from app.insights.models.api_models import (
     InsightTimelineResponse,
     SummaryBundle,
 )
+from app.insights.models.escalation_models import (
+    EscalationAssessment,
+    EscalationSignal,
+    EscalationWindow,
+)
 from app.insights.models.input_models import (
     EmotionInput,
     SentimentInput,
@@ -32,19 +37,10 @@ from app.insights.models.insight_models import (
     SpeakerInsight,
     TimelineMarker,
 )
-
 from app.insights.models.signal_models import (
     AggregatedSignals,
-    EmotionAggregate,
-    SentimentAggregate,
     SentimentTrendPoint,
     SessionSentimentTrend,
-)
-
-from app.insights.models.escalation_models import (
-    EscalationAssessment,
-    EscalationSignal,
-    EscalationWindow,
 )
 
 __all__ = [
