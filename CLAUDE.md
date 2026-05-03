@@ -122,9 +122,8 @@ CI runs the same command on every push to `main` via `.github/workflows/test.yml
 
 These need attention but are not blocking new work:
 
-1. **Exposed Hugging Face token in git history.** A `voiceiq-AI(2).zip` containing the token was previously committed and pushed. The token has been rotated. The zip has been deleted from the working tree. **It is still in git history** — needs `git filter-repo --path "voiceiq-AI.zip" --path "voiceiq-AI(2).zip" --invert-paths --force` followed by a force push to fully purge.
-2. **`__pycache__/*.pyc` files tracked in git.** They were committed before `.gitignore` existed. Untrack with `git rm -r --cached app/**/__pycache__` and commit. They'll then be permanently ignored.
-3. **`run_eval_dev.LOCAL.py` exists alongside `run_eval_dev.py`.** Renamed during a merge conflict. Decide whether to merge or delete.
+1. **`__pycache__/*.pyc` files tracked in git.** They were committed before `.gitignore` existed. Untrack with `git rm -r --cached app/**/__pycache__` and commit. They'll then be permanently ignored.
+2. **`run_eval_dev.LOCAL.py` exists alongside `run_eval_dev.py`.** Renamed during a merge conflict. Decide whether to merge or delete.
 
 ## Working with this repo
 
