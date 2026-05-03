@@ -72,9 +72,10 @@ voiceiq-AI/
 | 2 | Intelligence: Escalation Engine + Inconsistency Engine | ✅ Done |
 | 3 | Persistence + ops: SQLite via SQLAlchemy, Dockerfile, OpenAPI polish, integration tests | ✅ Done |
 | 4 | Handoff documentation: DOCS/ markdown set + polished .docx | ✅ Done |
+| 5 | Fact-check engine: claim detector, classifier, comparator, scorer, orchestrator; 5 source clients (exchangerate.host, CoinGecko, OpenWeather, Alpha Vantage, Wikipedia REST); SQLite `fact_check_results` table; `POST /v1/fact-check` + `GET /v1/fact-check/{id}`; auto-enrichment in `/v1/process-audio`; 91 new tests (118 insight tests passing) | ✅ Done |
 | CI | GitHub Actions workflow running insight tests on every push/PR | ✅ Done |
 
-**Currently open:** Choose next improvement — Docker hardening, pre-commit hooks, CHANGELOG, security cleanup, or a new engine.
+**Currently open:** Post–Sprint 5. Recommended next: purge the leaked HuggingFace token from git history (`git filter-repo` on `voiceiq-AI*.zip`) and add pre-commit hooks (ruff + black + secret scanner). Also on the menu: Docker hardening, CHANGELOG backfill, or a new engine (Trust / Persona / Conversation Quality).
 
 ## Engineering standards (STRICT)
 
