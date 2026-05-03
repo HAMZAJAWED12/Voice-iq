@@ -8,7 +8,7 @@ for cheap listing / filtering.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import DateTime, String, Text, func
@@ -19,7 +19,7 @@ from app.insights.repository.db import Base
 
 def _utcnow() -> datetime:
     """Timezone-aware UTC `now`, safe across SQLite/Postgres."""
-    return datetime.now(UTC)
+    return datetime.now(timezone.utc)
 
 
 class InsightRecordORM(Base):
