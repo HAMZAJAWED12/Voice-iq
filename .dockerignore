@@ -55,3 +55,21 @@ tests/
 run_*.py
 *.pdf
 README.md
+
+# Claude Code / agent workspaces
+.claude/
+worktrees/
+
+# Tool caches
+.ruff_cache
+.git-blame-ignore-revs
+
+# Docs + handoff artefacts (not needed at runtime)
+DOCS/
+samples/
+*.docx
+*.bak
+
+# Compose / Dockerfile artefacts (don't recurse self-references into context)
+docker-compose*.yml
+Dockerfile*
