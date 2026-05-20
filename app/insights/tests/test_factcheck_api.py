@@ -32,6 +32,7 @@ from app.insights.repository import (
 )
 from app.insights.repository.db import Base
 from app.insights.repository.factcheck_orm_models import FactCheckResultORM  # noqa: F401
+from app.security import verify_api_key
 
 # --------------------------------------------------------------------------- #
 # Stubs                                                                       #
@@ -93,6 +94,10 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
     app.include_router(factcheck_router, prefix="/v1")
     app.dependency_overrides[get_factcheck_engine] = _stub_engine
     app.dependency_overrides[get_factcheck_repository] = lambda: repo
+    # Stub out API-key auth so existing route tests do not need to thread
+    # the X-API-Key header through every request. Dedicated auth tests
+    # live in test_auth.py.
+    app.dependency_overrides[verify_api_key] = lambda: "test-key"
 
     with TestClient(app) as c:
         yield c

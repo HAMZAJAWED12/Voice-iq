@@ -2,7 +2,7 @@
 import os
 import uuid
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 # Sprint-5 fact-check engine. Imported here so the audio pipeline can
 # auto-enrich every transcript with rule-based fact verification.
@@ -10,10 +10,13 @@ from app.insights.api.factcheck_routes import get_factcheck_engine
 from app.insights.models.factcheck_models import MAX_TRANSCRIPT_CHARS
 from app.insights.repository import factcheck_repository
 from app.pipeline.orchestrator import VoiceIQOrchestrator
+from app.security import verify_api_key
 from app.utils.job_io import JobIO
 from app.utils.logger import logger
 
-router = APIRouter()
+# Every route on this router requires a valid X-API-Key header (see
+# app.security.api_key.verify_api_key for the dev/prod behaviour matrix).
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 def _auto_run_factcheck(request_id: str, result: dict) -> None:
