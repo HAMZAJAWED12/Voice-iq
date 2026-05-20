@@ -19,8 +19,15 @@ from app.insights.models.api_models import (
 from app.insights.models.input_models import SessionInput
 from app.insights.repository import InsightRepository, get_insight_repository
 from app.insights.service import InsightService
+from app.security import verify_api_key
 
-router = APIRouter(prefix="/insights", tags=["Insights"])
+# Every route on this router requires a valid X-API-Key header (see
+# app.security.api_key.verify_api_key for the dev/prod behaviour matrix).
+router = APIRouter(
+    prefix="/insights",
+    tags=["Insights"],
+    dependencies=[Depends(verify_api_key)],
+)
 
 
 def _store_response(repository: InsightRepository, response: InsightGenerateResponse) -> None:

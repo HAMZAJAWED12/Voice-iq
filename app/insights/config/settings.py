@@ -10,9 +10,9 @@ engines themselves stay pure.
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 try:
     # pydantic-settings is the v2 home for BaseSettings.
@@ -93,6 +93,30 @@ class InsightSettings(BaseSettings):
         ge=1,
         description="Soft cap on incoming session payload size, in KB.",
     )
+
+    # --- Authentication -------------------------------------------------- #
+    api_keys: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Accepted values for the X-API-Key request header. Set "
+            "VOICEIQ_API_KEYS as a comma-separated string. Empty list "
+            "disables auth in non-production environments; in production "
+            "an empty list causes every request to fail with 503."
+        ),
+    )
+
+    @field_validator("api_keys", mode="before")
+    @classmethod
+    def _split_api_keys(cls, value: Any) -> Any:
+        """Allow `VOICEIQ_API_KEYS=key1,key2,key3` to load as a list.
+
+        Pydantic-settings reads env vars as strings; without this validator
+        a CSV string would be rejected against the `list[str]` annotation.
+        Empty entries (e.g. trailing commas) are dropped.
+        """
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
 
     # --- Fact-Check source clients --------------------------------------- #
     openweather_api_key: str = Field(

@@ -31,9 +31,16 @@ from app.insights.repository import (
     FactCheckRepositoryError,
     get_factcheck_repository,
 )
+from app.security import verify_api_key
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/fact-check", tags=["FactCheck"])
+# Every route on this router requires a valid X-API-Key header (see
+# app.security.api_key.verify_api_key for the dev/prod behaviour matrix).
+router = APIRouter(
+    prefix="/fact-check",
+    tags=["FactCheck"],
+    dependencies=[Depends(verify_api_key)],
+)
 
 
 # --------------------------------------------------------------------------- #

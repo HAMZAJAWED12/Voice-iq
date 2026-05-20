@@ -25,6 +25,7 @@ from app.insights.repository import (
 )
 from app.insights.repository.db import Base
 from app.insights.repository.orm_models import InsightRecordORM  # noqa: F401
+from app.security import verify_api_key
 
 # --------------------------------------------------------------------------- #
 # Fixtures
@@ -57,6 +58,10 @@ def client(isolated_repo: InsightRepository) -> Iterator[TestClient]:
     app = FastAPI()
     app.include_router(insight_router, prefix="/v1")
     app.dependency_overrides[get_insight_repository] = lambda: isolated_repo
+    # Stub out API-key auth so existing route tests do not need to thread
+    # the X-API-Key header through every request. Dedicated auth tests
+    # live in test_auth.py.
+    app.dependency_overrides[verify_api_key] = lambda: "test-key"
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
