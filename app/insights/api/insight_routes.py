@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.insights.config.settings import get_settings
 from app.insights.models.api_models import (
     InsightGenerateResponse,
     InsightSpeakersResponse,
@@ -19,14 +20,23 @@ from app.insights.models.api_models import (
 from app.insights.models.input_models import SessionInput
 from app.insights.repository import InsightRepository, get_insight_repository
 from app.insights.service import InsightService
-from app.security import verify_api_key
+from app.security import enforce_content_length, verify_api_key
+
+# Hard cap for /v1/insights POST bodies. Constructed once at import time
+# from settings; restart the process to pick up a new value.
+_max_payload_bytes = get_settings().api_max_session_payload_kb * 1024
+_enforce_session_size = enforce_content_length(_max_payload_bytes)
 
 # Every route on this router requires a valid X-API-Key header (see
-# app.security.api_key.verify_api_key for the dev/prod behaviour matrix).
+# app.security.api_key.verify_api_key for the dev/prod behaviour matrix)
+# and POST bodies are bounded by api_max_session_payload_kb.
 router = APIRouter(
     prefix="/insights",
     tags=["Insights"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[
+        Depends(verify_api_key),
+        Depends(_enforce_session_size),
+    ],
 )
 
 
