@@ -10,13 +10,13 @@ engines themselves stay pure.
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, field_validator
 
 try:
     # pydantic-settings is the v2 home for BaseSettings.
-    from pydantic_settings import BaseSettings, SettingsConfigDict
+    from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 except ImportError as exc:  # pragma: no cover - import-time guard
     raise ImportError(
         "pydantic-settings is required. Install it via:\n"
@@ -91,11 +91,28 @@ class InsightSettings(BaseSettings):
     api_max_session_payload_kb: int = Field(
         default=2048,
         ge=1,
-        description="Soft cap on incoming session payload size, in KB.",
+        description=(
+            "Hard cap on incoming JSON payload size (KB) for /v1/insights/* "
+            "and /v1/fact-check. Enforced via Content-Length; requests "
+            "above this are rejected with 413 before any body is read."
+        ),
+    )
+    api_max_upload_mb: int = Field(
+        default=200,
+        ge=1,
+        description=(
+            "Hard cap on multipart upload size (MB) for /v1/process-audio. "
+            "Enforced both via Content-Length and during streaming write so "
+            "a lying Content-Length header cannot bypass it."
+        ),
     )
 
     # --- Authentication -------------------------------------------------- #
-    api_keys: list[str] = Field(
+    # `NoDecode` tells pydantic-settings to skip its default JSON-decode
+    # pass on this field so a value like `key1,key2` from `.env` reaches
+    # the `_split_api_keys` validator as a raw string rather than being
+    # rejected by the JSON parser.
+    api_keys: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
         description=(
             "Accepted values for the X-API-Key request header. Set "

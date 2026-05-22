@@ -31,15 +31,24 @@ from app.insights.repository import (
     FactCheckRepositoryError,
     get_factcheck_repository,
 )
-from app.security import verify_api_key
+from app.security import enforce_content_length, verify_api_key
 from app.utils.logger import logger
 
+# Hard cap for /v1/fact-check POST bodies. Constructed once at import time
+# from settings; restart the process to pick up a new value.
+_max_payload_bytes = get_settings().api_max_session_payload_kb * 1024
+_enforce_session_size = enforce_content_length(_max_payload_bytes)
+
 # Every route on this router requires a valid X-API-Key header (see
-# app.security.api_key.verify_api_key for the dev/prod behaviour matrix).
+# app.security.api_key.verify_api_key for the dev/prod behaviour matrix)
+# and POST bodies are bounded by api_max_session_payload_kb.
 router = APIRouter(
     prefix="/fact-check",
     tags=["FactCheck"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[
+        Depends(verify_api_key),
+        Depends(_enforce_session_size),
+    ],
 )
 
 
