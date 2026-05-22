@@ -106,6 +106,20 @@ class InsightSettings(BaseSettings):
             "a lying Content-Length header cannot bypass it."
         ),
     )
+    ffmpeg_timeout_sec: float = Field(
+        default=120.0,
+        ge=1.0,
+        le=600.0,
+        description=(
+            "Wall-clock timeout (seconds) for the ffmpeg normalisation "
+            "step. Default 120s gives long-form audio (60-minute meetings "
+            "on a slow disk) room to finish — typical short clips complete "
+            "in <5s. Trade-off: raise this if real audio trips the timeout, "
+            "lower it for tighter DoS protection. A timeout surfaces as "
+            "HTTP 422 to the caller via the AUDIO_NORMALIZATION_TIMEOUT "
+            "warning code."
+        ),
+    )
 
     # --- Authentication -------------------------------------------------- #
     # `NoDecode` tells pydantic-settings to skip its default JSON-decode

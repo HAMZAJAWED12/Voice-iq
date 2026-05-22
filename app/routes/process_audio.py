@@ -143,11 +143,16 @@ async def process_audio(
     )
 
     if result.get("pipeline_meta", {}).get("status") == "failed":
+        # ffmpeg timeout is the caller's fault (corrupt / pathological input,
+        # not server malfunction), so surface it as 422. Other failures stay
+        # at 400 — malformed file the user can fix by re-encoding.
+        warnings = result.get("warnings", [])
+        status_code = 422 if "AUDIO_NORMALIZATION_TIMEOUT" in warnings else 400
         raise HTTPException(
-            status_code=400,
+            status_code=status_code,
             detail={
                 "request_id": request_id,
-                "warnings": result.get("warnings", []),
+                "warnings": warnings,
                 "pipeline_meta": result.get("pipeline_meta", {}),
             },
         )
