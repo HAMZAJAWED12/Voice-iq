@@ -22,7 +22,10 @@ from app.services.sentiment_service import SentimentService
 from app.services.summary_service import SummaryService
 from app.services.topic_service import TopicService
 from app.utils.audio_quality import analyze_audio_quality
-from app.utils.audio_utils import normalize_to_wav
+from app.utils.audio_utils import (
+    AudioNormalizationTimeout,
+    normalize_to_wav,
+)
 from app.utils.job_io import JobIO, JobPaths
 
 
@@ -111,6 +114,24 @@ class VoiceIQOrchestrator:
                     "output": normalized_wav,
                 },
             )
+        except AudioNormalizationTimeout as e:
+            # Distinct warning code so the HTTP layer can map this to 422
+            # (caller's fault, retry not useful) vs. AUDIO_NORMALIZATION_FAILED
+            # which maps to 400 (malformed file).
+            meta["status"] = "failed"
+            warn("AUDIO_NORMALIZATION_TIMEOUT")
+            self.io.save_json(
+                job,
+                "artifacts/audio/normalize.status.json",
+                {
+                    "service": "audio_normalize",
+                    "status": "timeout",
+                    "error": str(e),
+                },
+            )
+            timing("audio_normalize", t0)
+            self.io.save_json(job, "meta.json", meta)
+            return self._final_response(job, meta)
         except Exception as e:
             meta["status"] = "failed"
             warn("AUDIO_NORMALIZATION_FAILED")
