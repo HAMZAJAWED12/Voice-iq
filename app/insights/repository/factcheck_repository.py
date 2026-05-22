@@ -156,7 +156,7 @@ class FactCheckRepository:
             stmt = (
                 select(FactCheckResultORM)
                 .where(FactCheckResultORM.conversation_id == conversation_id)
-                .order_by(FactCheckResultORM.created_at.desc())
+                .order_by(FactCheckResultORM.created_at.desc(), FactCheckResultORM.id.desc())
             )
             rows = session.execute(stmt).scalars().all()
             return [self._row_to_dict(row) for row in rows]
@@ -173,7 +173,7 @@ class FactCheckRepository:
                 select(FactCheckResultORM)
                 .where(FactCheckResultORM.conversation_id == conversation_id)
                 .where(FactCheckResultORM.speaker_id == speaker_id)
-                .order_by(FactCheckResultORM.created_at.desc())
+                .order_by(FactCheckResultORM.created_at.desc(), FactCheckResultORM.id.desc())
             )
             rows = session.execute(stmt).scalars().all()
             return [self._row_to_dict(row) for row in rows]
