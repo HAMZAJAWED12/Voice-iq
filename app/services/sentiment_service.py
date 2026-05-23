@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import threading
 from typing import Any
 
 from transformers import (
@@ -28,6 +29,10 @@ class SentimentService:
 
     _pipeline = None
     _model_name = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+    # Serialises the cold-init path so N concurrent first requests load the
+    # transformer once, not N times (which would briefly hold N copies of
+    # the weights in RAM and trigger N HuggingFace downloads).
+    _load_lock = threading.Lock()
 
     # Heuristics
     _min_words_for_strong_sentiment = 4
@@ -36,29 +41,40 @@ class SentimentService:
 
     @classmethod
     def _load_pipeline(cls):
-        """Lazy-load HuggingFace sentiment pipeline."""
+        """Lazy-load HuggingFace sentiment pipeline.
+
+        Thread-safe: the cold-init path serialises on `_load_lock` with a
+        double-check so concurrent first calls produce exactly one model
+        instance. Hot calls bypass the lock entirely.
+        """
+        # Fast path: cache hit, no lock.
         if cls._pipeline is not None:
             return cls._pipeline
 
-        try:
-            logger.info("Loading HuggingFace sentiment model...")
+        # Slow path: serialise on the load lock and re-check the cache.
+        with cls._load_lock:
+            if cls._pipeline is not None:
+                return cls._pipeline
 
-            tokenizer = AutoTokenizer.from_pretrained(cls._model_name)
-            model = AutoModelForSequenceClassification.from_pretrained(cls._model_name)
+            try:
+                logger.info("Loading HuggingFace sentiment model...")
 
-            cls._pipeline = pipeline(
-                "sentiment-analysis",
-                model=model,
-                tokenizer=tokenizer,
-                device=-1,  # CPU
-            )
-            logger.info("Sentiment model loaded successfully.")
+                tokenizer = AutoTokenizer.from_pretrained(cls._model_name)
+                model = AutoModelForSequenceClassification.from_pretrained(cls._model_name)
 
-        except Exception as e:
-            logger.error(f"Failed to load sentiment model: {e}")
-            cls._pipeline = None
+                cls._pipeline = pipeline(
+                    "sentiment-analysis",
+                    model=model,
+                    tokenizer=tokenizer,
+                    device=-1,  # CPU
+                )
+                logger.info("Sentiment model loaded successfully.")
 
-        return cls._pipeline
+            except Exception as e:
+                logger.error(f"Failed to load sentiment model: {e}")
+                cls._pipeline = None
+
+            return cls._pipeline
 
     # ----------------------------------------------------------------------
     # CLEANER TEXT PREPROCESSING

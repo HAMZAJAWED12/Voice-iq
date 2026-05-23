@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from collections import defaultdict
 
 import soundfile as sf
@@ -23,6 +24,10 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Module-level cache (loads once per process)
 _DIARIZATION_PIPELINE = None
+# Guards the cold-init path so concurrent first requests do not race to
+# load the pyannote pipeline twice (double HF download + double GPU init
+# on shared hardware). Hot calls bypass the lock via double-check.
+_DIARIZATION_LOAD_LOCK = threading.Lock()
 
 
 class DiarizationService:
@@ -65,52 +70,62 @@ class DiarizationService:
     def _load_pipeline(self):
         global _DIARIZATION_PIPELINE
 
+        # Fast path: cache already populated, no lock acquisition.
         if _DIARIZATION_PIPELINE is not None:
             return _DIARIZATION_PIPELINE
 
-        if not _HAS_PYANNOTE:
-            logger.warning("Pyannote not installed. Using mock diarization.")
-            return None
+        # Slow path: serialise on the load lock and re-check the cache.
+        # Under sustained failure (bad token, no GPU), every retry pays the
+        # lock cost but only one thread at a time attempts the load — no
+        # stampede. Caller still sees the error and can apply its own
+        # retry / circuit-breaker policy upstream.
+        with _DIARIZATION_LOAD_LOCK:
+            if _DIARIZATION_PIPELINE is not None:
+                return _DIARIZATION_PIPELINE
 
-        token = os.getenv("PYANNOTE_AUTH_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
-        if not token:
-            logger.warning("No PYANNOTE_AUTH_TOKEN or HUGGINGFACE_TOKEN found. Using mock diarization.")
-            return None
+            if not _HAS_PYANNOTE:
+                logger.warning("Pyannote not installed. Using mock diarization.")
+                return None
 
-        logger.info("Loading Pyannote speaker-diarization pipeline...")
+            token = os.getenv("PYANNOTE_AUTH_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
+            if not token:
+                logger.warning("No PYANNOTE_AUTH_TOKEN or HUGGINGFACE_TOKEN found. Using mock diarization.")
+                return None
 
-        try:
-            # Login to HF for gated models
-            login(token=token)
+            logger.info("Loading Pyannote speaker-diarization pipeline...")
 
-            # --- PyTorch 2.6+ safe-loading allowlist (fixes OmegaConf errors) ---
             try:
-                import torch.serialization
-                from omegaconf.dictconfig import DictConfig
-                from omegaconf.listconfig import ListConfig
+                # Login to HF for gated models
+                login(token=token)
 
-                torch.serialization.add_safe_globals([ListConfig, DictConfig])
-            except Exception:
-                pass
+                # --- PyTorch 2.6+ safe-loading allowlist (fixes OmegaConf errors) ---
+                try:
+                    import torch.serialization
+                    from omegaconf.dictconfig import DictConfig
+                    from omegaconf.listconfig import ListConfig
 
-            _DIARIZATION_PIPELINE = Pipeline.from_pretrained(self.model_id, use_auth_token=token).to(DEVICE)
+                    torch.serialization.add_safe_globals([ListConfig, DictConfig])
+                except Exception:
+                    pass
 
-            # Optional: adjust clustering threshold
-            try:
-                _DIARIZATION_PIPELINE.instantiate(
-                    {"clustering": {"method": "centroid", "threshold": float(self.clustering_threshold)}}
-                )
-                logger.info("Adjusted clustering threshold for enhanced speaker separation.")
+                _DIARIZATION_PIPELINE = Pipeline.from_pretrained(self.model_id, use_auth_token=token).to(DEVICE)
+
+                # Optional: adjust clustering threshold
+                try:
+                    _DIARIZATION_PIPELINE.instantiate(
+                        {"clustering": {"method": "centroid", "threshold": float(self.clustering_threshold)}}
+                    )
+                    logger.info("Adjusted clustering threshold for enhanced speaker separation.")
+                except Exception as e:
+                    logger.warning(f"Could not adjust clustering threshold: {e}")
+
+                logger.info(f"Pyannote diarization pipeline loaded successfully on {DEVICE}.")
+
             except Exception as e:
-                logger.warning(f"Could not adjust clustering threshold: {e}")
+                logger.error(f"Failed to load Pyannote pipeline: {e}")
+                _DIARIZATION_PIPELINE = None
 
-            logger.info(f"Pyannote diarization pipeline loaded successfully on {DEVICE}.")
-
-        except Exception as e:
-            logger.error(f"Failed to load Pyannote pipeline: {e}")
-            _DIARIZATION_PIPELINE = None
-
-        return _DIARIZATION_PIPELINE  # have add logger
+            return _DIARIZATION_PIPELINE
 
     # ------------------------------------------------------------
     # Mock fallback diarization

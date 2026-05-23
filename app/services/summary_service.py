@@ -1,18 +1,28 @@
 # app/services/summary_service.py
 
+import threading
+
 from transformers import pipeline
 
 from app.utils.logger import logger
 
 _summarizer = None
+# Guards the cold-init path so concurrent first requests do not race to
+# load the summarisation pipeline twice (double HF download + double
+# weights in RAM). Hot calls bypass the lock via double-check.
+_summarizer_lock = threading.Lock()
 
 
 def _get_summarizer():
-    """
-    Lazily load and cache the summarization pipeline.
-    """
+    """Lazily load and cache the summarization pipeline (thread-safe)."""
     global _summarizer
-    if _summarizer is None:
+    # Fast path: cache hit, no lock acquisition.
+    if _summarizer is not None:
+        return _summarizer
+    # Slow path: serialise on the load lock and re-check the cache.
+    with _summarizer_lock:
+        if _summarizer is not None:
+            return _summarizer
         logger.info("Loading summarization model (distilbart-cnn-12-6)...")
         _summarizer = pipeline(
             "summarization",
@@ -20,7 +30,7 @@ def _get_summarizer():
             device="cpu",
         )
         logger.info("Summarization model loaded.")
-    return _summarizer
+        return _summarizer
 
 
 class SummaryService:
