@@ -124,6 +124,7 @@ These need attention but are not blocking new work:
 
 1. **`__pycache__/*.pyc` files tracked in git.** They were committed before `.gitignore` existed. Untrack with `git rm -r --cached app/**/__pycache__` and commit. They'll then be permanently ignored.
 2. **`run_eval_dev.LOCAL.py` exists alongside `run_eval_dev.py`.** Renamed during a merge conflict. Decide whether to merge or delete.
+3. **Tier 3 hardening punch list lives in trailing comments of `app/insights/tests/test_*.py` files.** Each engine's test file ends with a `# Tier 3 candidates` block enumerating dead params, identity maps, missing type hints, and fault-isolation gaps surfaced while writing its coverage. Consolidate from there when Tier 3 work begins.
 
 ## Working with this repo
 
