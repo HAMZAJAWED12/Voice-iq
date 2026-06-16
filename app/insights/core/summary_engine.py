@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.insights.models.analytics_models import AnalyticsBundle, SpeakerMetrics
 from app.insights.models.api_models import SummaryBundle
 from app.insights.models.input_models import SessionInput
-from app.insights.models.insight_models import InsightBundle, InsightFlag, TimelineMarker
+from app.insights.models.insight_models import InsightBundle, InsightFlag, SpeakerInsight, TimelineMarker
 
 
 class InsightSummaryEngine:
@@ -153,7 +153,7 @@ class InsightSummaryEngine:
     def _build_single_speaker_summary(
         cls,
         metric: SpeakerMetrics,
-        speaker_insight,
+        speaker_insight: SpeakerInsight | None,
     ) -> str:
         style = cls._describe_speaker_style(metric)
         question_desc = cls._describe_question_behavior(
