@@ -167,7 +167,7 @@ divider("Scenario 3: FULL PIPELINE on the noisy session")
 
 analytics = InsightAnalyticsEngine.run(noisy)
 bundle = InsightRuleEngine.run(noisy, analytics)
-summaries = InsightSummaryEngine.run(noisy, analytics, bundle)
+summaries = InsightSummaryEngine.run(analytics, bundle)
 
 print(f"\nescalation:    level={bundle.escalation.level}  score={bundle.escalation.score:.3f}")
 print(f"inconsistency: level={bundle.inconsistency.level}  score={bundle.inconsistency.score:.3f}")

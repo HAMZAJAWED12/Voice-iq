@@ -72,7 +72,7 @@ The end-to-end path for `POST /v1/insights/generate` is:
    - calls `_augment_validation` to add eight categories of structured warnings (missing speakers, missing duration, single-utterance, single-speaker, empty text, missing word_count, missing sentiment, missing emotion, irregular utterance order),
    - runs `InsightAnalyticsEngine.run(session)` to produce an `AnalyticsBundle`,
    - runs `InsightRuleEngine.run(session, analytics, threshold_profile=...)` to produce an `InsightBundle`,
-   - runs `InsightSummaryEngine.run(session, analytics, insights)` to produce a `SummaryBundle`,
+   - runs `InsightSummaryEngine.run(analytics, insights)` to produce a `SummaryBundle`,
    - assembles an `InsightGenerateResponse` with `status="ok"` (or `"warning"` if validation flagged issues, or `"error"` if the pipeline raised), validation, analytics, insights, summaries, warnings, and an `InsightMeta` block (service version, threshold profile, ISO-8601 generated_at, processing_ms).
 4. **Persistence.** `_store_response(repository, response)` calls `repository.save(InsightStoredRecord(...))`. Save is upsert: existing rows are updated by `session_id`.
 5. **Return.** The response model is serialised by FastAPI and returned. The same payload is what later GETs by `session_id` will return verbatim — round-trip equality is asserted by the integration tests.

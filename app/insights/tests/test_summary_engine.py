@@ -10,10 +10,9 @@ Two-pronged coverage:
   * the four orchestrators (`run`, overall, per-speaker, concerns,
     key-moments) tested through crafted bundles.
 
-Contract note: the engine never sees an empty `SessionInput`
-(`SessionInput([])` raises upstream). Its "empty" path is a *zeroed*
-`AnalyticsBundle` (total_utterances == 0). The `session` arg is in fact
-unused by the summary text (see Tier 3 punch list at bottom).
+Contract note: the engine's "empty" path is a *zeroed* `AnalyticsBundle`
+(total_utterances == 0). It reads only analytics + insights — there is no
+raw-session input to the summary text.
 
 No heavy ML deps: pure string assembly, runs in milliseconds.
 """
@@ -27,7 +26,6 @@ from app.insights.models.analytics_models import AnalyticsBundle, SessionMetrics
 from app.insights.models.api_models import SummaryBundle
 from app.insights.models.escalation_models import EscalationAssessment
 from app.insights.models.inconsistency_models import InconsistencyAssessment
-from app.insights.models.input_models import SessionInput, UtteranceInput
 from app.insights.models.insight_models import (
     InsightBundle,
     InsightFlag,
@@ -47,14 +45,6 @@ S = InsightSummaryEngine
 # --------------------------------------------------------------------------- #
 # Builders                                                                    #
 # --------------------------------------------------------------------------- #
-
-
-def _utt():
-    return UtteranceInput(id="u1", speaker="agent", start=0.0, end=1.0, text="hello")
-
-
-def _session(utts=None):
-    return SessionInput(session_id="s", utterances=utts or [_utt()])
 
 
 def _spk_metric(speaker, *, ratio=0.5, utt=2, words=4, time=2.0, q=0, interruptions=0, overlaps=0, word_ratio=0.5):
@@ -274,7 +264,7 @@ def test_run_happy_populates_all_four_fields() -> None:
         },
     )
 
-    bundle = S.run(_session(), analytics, insights)
+    bundle = S.run(analytics, insights)
 
     assert isinstance(bundle, SummaryBundle)
     assert "utterances" in bundle.overall_summary
@@ -284,7 +274,7 @@ def test_run_happy_populates_all_four_fields() -> None:
 
 
 def test_overall_summary_zeroed_analytics_returns_no_content() -> None:
-    out = S._build_overall_summary(_session(), _analytics(total_utt=0, speaker_metrics={}), _insights())
+    out = S._build_overall_summary(_analytics(total_utt=0, speaker_metrics={}), _insights())
     assert out == "No conversational content was available to summarize."
 
 
@@ -292,9 +282,7 @@ def test_overall_summary_flag_severity_cascade() -> None:
     spk = {"a": _spk_metric("a", ratio=1.0)}
 
     def build(flags):
-        return S._build_overall_summary(
-            _session(), _analytics(total_utt=2, speaker_metrics=spk), _insights(flags=flags)
-        )
+        return S._build_overall_summary(_analytics(total_utt=2, speaker_metrics=spk), _insights(flags=flags))
 
     assert "high-severity concern" in build([InsightFlag(type="t", severity="high", reason="r")])
     assert "medium-severity signal" in build([InsightFlag(type="t", severity="medium", reason="r")])
@@ -303,7 +291,7 @@ def test_overall_summary_flag_severity_cascade() -> None:
 
 def test_overall_summary_no_speakers_uses_balanced_overall_branch() -> None:
     # total_utterances > 0 but no per-speaker metrics -> dominant speaker None.
-    out = S._build_overall_summary(_session(), _analytics(total_utt=3, speaker_metrics={}), _insights())
+    out = S._build_overall_summary(_analytics(total_utt=3, speaker_metrics={}), _insights())
     assert "balanced overall" in out
 
 
@@ -369,16 +357,12 @@ def test_marker_to_sentence_empty_reason_falls_back() -> None:
 
 # --------------------------------------------------------------------------- #
 # Tier 3 candidates surfaced during this test pass
-# 1. summary_engine.py:156 — _build_single_speaker_summary
-#    `speaker_insight` param has no type hint. Should be
-#    `SpeakerInsight | None`. Fix when mypy enters CI (step 6).
-# 2. summary_engine.py — `session` param threaded through
-#    run() and _build_overall_summary is never read. Vestigial
-#    parameter. Remove or use for context-aware summary text.
-# 3. _severity_rank silently ranks unknown severities at 0.
+# (resolved: speaker_insight type hint -> commit 4466c45;
+#  vestigial session param removed -> S1.)
+# 1. _severity_rank silently ranks unknown severities at 0.
 #    Either raise on unknown OR add explicit "unknown" rank
 #    above 0. Pinned via tripwire test in this file.
-# 4. _marker_to_sentence falls back to "marker was detected"
+# 2. _marker_to_sentence falls back to "marker was detected"
 #    when reason is empty string. Either require non-empty
 #    reason at the Pydantic model level OR keep the fallback
 #    explicit. Pinned via tripwire test.
