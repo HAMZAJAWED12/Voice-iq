@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from app.insights.models.analytics_models import AnalyticsBundle, SpeakerMetrics
 from app.insights.models.api_models import SummaryBundle
-from app.insights.models.input_models import SessionInput
 from app.insights.models.insight_models import InsightBundle, InsightFlag, SpeakerInsight, TimelineMarker
 
 
@@ -10,12 +9,11 @@ class InsightSummaryEngine:
     @classmethod
     def run(
         cls,
-        session: SessionInput,
         analytics: AnalyticsBundle,
         insights: InsightBundle,
     ) -> SummaryBundle:
         return SummaryBundle(
-            overall_summary=cls._build_overall_summary(session, analytics, insights),
+            overall_summary=cls._build_overall_summary(analytics, insights),
             speaker_summaries=cls._build_speaker_summaries(analytics, insights),
             notable_concerns=cls._build_notable_concerns(insights),
             key_moments_summary=cls._build_key_moments_summary(insights),
@@ -24,7 +22,6 @@ class InsightSummaryEngine:
     @classmethod
     def _build_overall_summary(
         cls,
-        session: SessionInput,
         analytics: AnalyticsBundle,
         insights: InsightBundle,
     ) -> str:
