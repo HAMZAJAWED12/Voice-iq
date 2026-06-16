@@ -291,11 +291,10 @@ class InsightRuleEngine:
             )
 
         if inconsistency is not None and inconsistency.level in {"low", "medium", "high"}:
-            severity_map = {"low": "low", "medium": "medium", "high": "high"}
             flags.append(
                 InsightFlag(
                     type="conversation_inconsistency",
-                    severity=severity_map[inconsistency.level],
+                    severity=inconsistency.level,
                     reason=inconsistency.summary,
                     evidence={
                         "inconsistency_level": inconsistency.level,
