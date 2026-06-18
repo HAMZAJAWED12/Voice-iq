@@ -20,6 +20,7 @@ No heavy ML deps: pure string assembly, runs in milliseconds.
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from app.insights.core.summary_engine import InsightSummaryEngine
 from app.insights.models.analytics_models import AnalyticsBundle, SessionMetrics, SpeakerMetrics
@@ -348,22 +349,19 @@ def test_key_moments_populated_uses_reason() -> None:
     assert "12.50s" in out and "high tension" in out and "voices raised" in out  # reason lower-cased
 
 
-def test_marker_to_sentence_empty_reason_falls_back() -> None:
-    # KNOWN QUIRK (punch list #4): reason is a required str but may be "",
-    # in which case the sentence degrades to a generic detected-marker line.
-    marker = TimelineMarker(marker_id="m1", type="interruption", time_sec=3.0, severity="low", reason="")
-    assert S._marker_to_sentence(marker) == "At 3.00s, a interruption marker was detected."
+def test_timeline_marker_rejects_empty_reason() -> None:
+    # reason is now model-enforced non-empty (min_length=1), so the former
+    # empty-reason fallback in _marker_to_sentence is unreachable by
+    # construction — the model refuses to build such a marker.
+    with pytest.raises(ValidationError):
+        TimelineMarker(marker_id="m1", type="interruption", time_sec=3.0, severity="low", reason="")
 
 
 # --------------------------------------------------------------------------- #
 # Tier 3 candidates surfaced during this test pass
-# (resolved: speaker_insight type hint -> commit 4466c45;
-#  vestigial session param removed -> S1.)
+# (resolved: speaker_insight type hint -> 4466c45; vestigial session
+#  param removed -> S1; empty-reason fallback -> reason min_length=1 (C4).)
 # 1. _severity_rank silently ranks unknown severities at 0.
 #    Either raise on unknown OR add explicit "unknown" rank
 #    above 0. Pinned via tripwire test in this file.
-# 2. _marker_to_sentence falls back to "marker was detected"
-#    when reason is empty string. Either require non-empty
-#    reason at the Pydantic model level OR keep the fallback
-#    explicit. Pinned via tripwire test.
 # --------------------------------------------------------------------------- #

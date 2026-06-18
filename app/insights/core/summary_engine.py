@@ -246,13 +246,11 @@ class InsightSummaryEngine:
         marker_type = marker.type.replace("_", " ")
         speaker_part = f"{marker.speaker} " if marker.speaker else ""
 
-        if marker.reason:
-            return (
-                f"At {marker.time_sec:.2f}s, {speaker_part}showed a "
-                f"{marker_type} signal ({marker.severity}) because {marker.reason.lower()}."
-            )
-
-        return f"At {marker.time_sec:.2f}s, a {marker_type} marker was detected."
+        # TimelineMarker.reason is model-enforced non-empty (min_length=1).
+        return (
+            f"At {marker.time_sec:.2f}s, {speaker_part}showed a "
+            f"{marker_type} signal ({marker.severity}) because {marker.reason.lower()}."
+        )
 
     @staticmethod
     def _severity_rank(severity: str) -> int:

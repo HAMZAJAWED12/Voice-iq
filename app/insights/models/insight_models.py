@@ -57,7 +57,7 @@ class TimelineMarker(BaseModel):
     time_sec: float = Field(ge=0.0)
     speaker: str | None = None
     severity: SeverityLevel = "low"
-    reason: str
+    reason: str = Field(min_length=1)
     start_sec: float | None = Field(default=None, ge=0.0)
     end_sec: float | None = Field(default=None, ge=0.0)
     evidence: dict[str, ScalarEvidence] = Field(default_factory=dict)
