@@ -19,7 +19,7 @@ class InsightValidator:
                     code="invalid_payload_type",
                     message="Payload must be a dictionary.",
                     field="root",
-                    severity="warning",
+                    severity="error",
                 )
             )
             return result
@@ -39,7 +39,7 @@ class InsightValidator:
                         code="missing_required_field",
                         message=f"Missing required field '{field}'.",
                         field=field,
-                        severity="warning",
+                        severity="error",
                     )
                 )
 
@@ -51,7 +51,7 @@ class InsightValidator:
                     code="invalid_session_id",
                     message="session_id must be a string or integer-like value.",
                     field="session_id",
-                    severity="warning",
+                    severity="error",
                 )
             )
 
@@ -86,7 +86,7 @@ class InsightValidator:
                     code="missing_utterances",
                     message="Payload must contain 'utterances'.",
                     field="utterances",
-                    severity="warning",
+                    severity="error",
                 )
             )
             return
@@ -98,7 +98,7 @@ class InsightValidator:
                     code="invalid_utterances_type",
                     message="'utterances' must be a list.",
                     field="utterances",
-                    severity="warning",
+                    severity="error",
                 )
             )
             return
@@ -110,7 +110,7 @@ class InsightValidator:
                     code="empty_utterances",
                     message="At least one utterance is required.",
                     field="utterances",
-                    severity="warning",
+                    severity="error",
                 )
             )
             return
@@ -127,7 +127,7 @@ class InsightValidator:
                         code="invalid_utterance_type",
                         message=f"Utterance at index {idx} must be a dictionary.",
                         field=field_prefix,
-                        severity="warning",
+                        severity="error",
                     )
                 )
                 continue
@@ -165,7 +165,7 @@ class InsightValidator:
                         code="missing_utterance_field",
                         message=f"Utterance {idx} is missing required field '{field}'.",
                         field=f"{field_prefix}.{field}",
-                        severity="warning",
+                        severity="error",
                     )
                 )
 
@@ -221,7 +221,7 @@ class InsightValidator:
                     code="invalid_start_time",
                     message=f"Utterance {idx} start must be a non-negative number.",
                     field=f"{field_prefix}.start",
-                    severity="warning",
+                    severity="error",
                 )
             )
 
@@ -232,7 +232,7 @@ class InsightValidator:
                     code="invalid_end_time",
                     message=f"Utterance {idx} end must be a non-negative number.",
                     field=f"{field_prefix}.end",
-                    severity="warning",
+                    severity="error",
                 )
             )
 
@@ -243,7 +243,7 @@ class InsightValidator:
                     code="invalid_time_order",
                     message=f"Utterance {idx} end must be greater than or equal to start.",
                     field=field_prefix,
-                    severity="warning",
+                    severity="error",
                 )
             )
 

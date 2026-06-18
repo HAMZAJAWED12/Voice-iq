@@ -6,10 +6,9 @@ The validator inspects an *untrusted raw payload* and produces a
   * ``errors``   -> hard problems that flip ``valid=False``
   * ``warnings`` -> soft problems that leave ``valid=True``
 
-It never raises and never mutates the payload — it only reports. The
-real error/warning signal is **which list an issue lands in**, NOT the
-``severity`` field (which is hardcoded to "warning" everywhere — see the
-KNOWN BUG tripwire below).
+It never raises and never mutates the payload — it only reports. Issues
+carry a ``severity`` that matches their bucket: ``errors`` are
+``severity="error"``, ``warnings`` are ``severity="warning"``.
 
 No heavy ML deps: pure dict inspection, runs in milliseconds.
 """
@@ -292,21 +291,28 @@ def test_utterance_order_irregular_is_warning() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# KNOWN BUG tripwires                                                         #
+# Severity contract                                                           #
 # --------------------------------------------------------------------------- #
 
 
-def test_hard_errors_carry_warning_severity_documents_known_bug() -> None:
-    # KNOWN BUG (Tier 3 candidate): severity field hardcoded to
-    # "warning" even for hard errors. Real signal lives in which
-    # list (errors vs warnings). Locking current behavior so a
-    # future "fix" requires explicit reasoning. See production
-    # readiness review item #21.
+def test_hard_errors_carry_error_severity() -> None:
+    # Hard errors land in result.errors AND carry severity="error"; the
+    # severity now matches the bucket instead of being hardcoded "warning".
     result = V.validate_raw_payload(_valid_payload(utterances=[]))
 
     assert result.valid is False
-    assert result.errors  # a hard error was produced
-    assert result.errors[0].severity == "warning"
+    assert result.errors
+    assert all(e.severity == "error" for e in result.errors)
+
+
+def test_soft_warnings_keep_warning_severity() -> None:
+    # Advisory issues stay severity="warning" and leave valid=True.
+    payload = _valid_payload(duration_sec=-5.0, speakers="not-a-list")
+    result = V.validate_raw_payload(payload)
+
+    assert result.valid is True
+    assert result.warnings
+    assert all(w.severity == "warning" for w in result.warnings)
 
 
 def test_all_numeric_predicates_reject_bool() -> None:
