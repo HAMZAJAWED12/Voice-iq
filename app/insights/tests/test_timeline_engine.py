@@ -266,11 +266,10 @@ def test_emotional_shift_medium_down_and_high_up() -> None:
     assert m_up[0].evidence["delta"] == 0.75
 
 
-def test_emotional_shift_label_flip_bypasses_delta_threshold_quirk() -> None:
-    # KNOWN QUIRK tripwire: a label change fires a marker regardless of
-    # delta size — it bypasses BOTH the 0.06 noise band and the 0.45
-    # threshold. A 0.01 swing with a positive->negative flip is marked.
-    # Pinned so a future "respect the delta threshold" change is explicit.
+def test_emotional_shift_label_flip_with_small_delta_does_not_fire() -> None:
+    # A label change alone no longer fires a marker: the swing must also
+    # clear the delta threshold. A 0.01 positive->negative flip is below
+    # threshold, so no marker is emitted.
     utts = [
         _utt("u1", "A", 0.0, 1.0, "positive", 0.50),
         _utt("u2", "A", 2.0, 3.0, "negative", 0.49),  # delta .01, label flipped
@@ -278,8 +277,19 @@ def test_emotional_shift_label_flip_bypasses_delta_threshold_quirk() -> None:
 
     markers = T._detect_emotional_shift_markers(utts, THRESH, _signals())
 
+    assert markers == []
+
+
+def test_emotional_shift_label_flip_with_large_delta_fires() -> None:
+    # A flip that also clears the threshold still fires (delta does the work).
+    utts = [
+        _utt("u1", "A", 0.0, 1.0, "positive", 0.90),
+        _utt("u2", "A", 2.0, 3.0, "negative", 0.20),  # delta .70, label flipped
+    ]
+
+    markers = T._detect_emotional_shift_markers(utts, THRESH, _signals())
+
     assert len(markers) == 1
-    assert markers[0].severity == "medium"
     assert markers[0].evidence["previous_label"] == "positive"
     assert markers[0].evidence["current_label"] == "negative"
 

@@ -184,7 +184,7 @@ class InsightTimelineEngine:
                     previous_by_speaker[utt.speaker] = utt
                     continue
 
-                if delta >= thresholds.emotional_shift_delta_threshold or label_changed:
+                if delta >= thresholds.emotional_shift_delta_threshold:
                     index += 1
                     severity = "high" if delta >= thresholds.severe_emotional_shift_delta_threshold else "medium"
 
