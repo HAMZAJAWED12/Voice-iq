@@ -89,6 +89,14 @@ These are non-negotiable. Violations have cost time before — uphold them.
 6. **Timeline integrity.** Apply thresholds carefully. Don't introduce noisy markers. Avoid over-triggering.
 7. **Code quality.** No redundant calculations, no duplicated logic, no unused imports. Keep functions focused.
 
+## Orchestration + fault isolation
+
+Fault handling lives at the **service boundary, not inside the engines.**
+
+- `InsightRuleEngine.run` composes five sub-engines (signal aggregation → timeline → escalation → inconsistency → scoring). It deliberately has **no internal `try/except`**: a sub-engine exception propagates up by design. Do not add per-sub-engine fallbacks there — it would mask real failures and produce silently-partial bundles.
+- The single fault boundary is `InsightService` (`app/insights/service.py`): the `analytics → rule → summary` call chain runs inside one `try/except` that converts any engine failure into a `status="error"` response with the validation result preserved. Keep new orchestration failure handling at this layer.
+- Engines still uphold standard #2 (production safety) for *upstream data gaps* — empty sessions, missing sentiment, nulls — via safe defaults. That is different from *engine-level faults*, which are the service's responsibility.
+
 ## Security + authenticity rules
 
 - Don't expose internal logic in API unnecessarily.
