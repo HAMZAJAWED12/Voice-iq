@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -7,7 +9,9 @@ class ValidationIssue(BaseModel):
     code: str
     message: str
     field: str | None = None
-    severity: str = "warning"
+    # "error" issues flip ValidationResult.valid to False; "warning" issues
+    # are advisory and leave the payload usable.
+    severity: Literal["warning", "error"] = "warning"
 
 
 class ValidationResult(BaseModel):
