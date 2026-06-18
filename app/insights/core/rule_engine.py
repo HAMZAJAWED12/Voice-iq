@@ -25,7 +25,6 @@ class InsightRuleEngine:
         session: SessionInput,
         analytics: AnalyticsBundle,
         *,
-        threshold_profile: str | None = None,
         thresholds: InsightThresholds | None = None,
     ) -> InsightBundle:
         thresholds = thresholds or DEFAULT_THRESHOLDS

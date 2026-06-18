@@ -147,18 +147,6 @@ def test_run_merges_and_resorts_inconsistency_markers(monkeypatch) -> None:
     assert keys == sorted(keys)  # re-sorted chronologically after merge
 
 
-def test_threshold_profile_param_is_ignored() -> None:
-    # KNOWN QUIRK / dead param: threshold_profile is threaded from service
-    # but never read by run(). Passing a different value changes nothing.
-    session = _rich_session()
-    analytics = InsightAnalyticsEngine.run(session)
-
-    a = R.run(session, analytics, threshold_profile="strict")
-    b = R.run(session, analytics)
-
-    assert [f.type for f in a.flags] == [f.type for f in b.flags]
-
-
 def test_all_flags_carry_reason_and_evidence_compliance() -> None:
     # CLAUDE.md mandate: every output must include reason + evidence.
     # This test fails if a new flag type is added without populating both.
@@ -361,16 +349,10 @@ def test_inconsistency_markers_from_windows() -> None:
 
 # --------------------------------------------------------------------------- #
 # Tier 3 candidates surfaced during this test pass
-# 1. rule_engine.py — run() `threshold_profile` param is accepted and
-#    threaded from service.py but never read. Vestigial; remove or wire
-#    a real profile lookup. Pinned via test_threshold_profile_param_is_ignored.
-# 2. rule_engine.py:293-294 — conversation_inconsistency severity_map is an
-#    identity dict {"low":"low",...} and inconsistency.level is pre-guarded
-#    to exactly those keys, so it is dead. Replace with
-#    `severity=inconsistency.level`. (The line-325 map is NOT dead: it maps
-#    window.level "none" -> "low" via .get default.)
-# 3. rule_engine.py — run() has NO fault isolation around the five
-#    sub-engines; any sub-engine exception aborts the whole bundle. The
-#    only try/except lives in service.py. Consider per-sub-engine
-#    degradation so one failing engine yields a partial bundle + warning.
+# (resolved: threshold_profile dead param removed -> S2;
+#  dead severity_map identity dict removed -> C1.)
+# 1. rule_engine.py — run() has NO fault isolation around the five
+#    sub-engines; any sub-engine exception aborts the whole bundle. This
+#    is intentional: fault handling lives in service.py (see CLAUDE.md
+#    "Orchestration + fault isolation"). Documented, not a code fix.
 # --------------------------------------------------------------------------- #

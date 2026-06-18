@@ -62,7 +62,7 @@ class InsightService:
 
         try:
             analytics = InsightAnalyticsEngine.run(session)
-            insights = InsightRuleEngine.run(session, analytics, threshold_profile=threshold_profile)
+            insights = InsightRuleEngine.run(session, analytics)
             summaries = InsightSummaryEngine.run(analytics, insights)
 
             status = "ok" if validation.valid else "warning"
