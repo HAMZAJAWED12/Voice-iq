@@ -313,7 +313,9 @@ class InsightValidator:
 
     @staticmethod
     def _is_non_negative_int(value: Any) -> bool:
-        return isinstance(value, int) and value >= 0
+        # bool is an int subclass; reject it so the numeric predicates agree
+        # (a bool word_count is invalid, same as a bool start/end time).
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
     @classmethod
     def _is_probability(cls, value: Any) -> bool:

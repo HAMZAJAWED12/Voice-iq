@@ -309,17 +309,13 @@ def test_hard_errors_carry_warning_severity_documents_known_bug() -> None:
     assert result.errors[0].severity == "warning"
 
 
-def test_bool_handling_asymmetry_between_predicates_documents_known_bug() -> None:
-    # KNOWN BUG (Tier 3 candidate): bool is a subclass of int, and the
-    # numeric predicates disagree on it. _is_number explicitly rejects
-    # bool, but _is_non_negative_int accepts it. Same True, opposite
-    # verdicts -> a bool start time is a hard error while a bool
-    # word_count passes clean. Pinned side-by-side so a future unifier
-    # must reconcile both call sites. See production readiness review.
+def test_all_numeric_predicates_reject_bool() -> None:
+    # bool is an int subclass; every numeric predicate must reject it so a
+    # bool word_count is treated as invalid, the same as a bool start/end.
     assert V._is_number(True) is False
     assert V._is_probability(True) is False
-    assert V._is_non_negative_number(True) is False  # rides on _is_number -> False
-    assert V._is_non_negative_int(True) is True  # the odd one out
+    assert V._is_non_negative_number(True) is False
+    assert V._is_non_negative_int(True) is False
 
 
 # --------------------------------------------------------------------------- #
@@ -345,7 +341,7 @@ def test_is_non_negative_number(value, expected) -> None:
 
 @pytest.mark.parametrize(
     ("value", "expected"),
-    [(0, True), (5, True), (-1, False), (1.5, False), ("3", False)],
+    [(0, True), (5, True), (-1, False), (1.5, False), ("3", False), (True, False), (False, False)],
 )
 def test_is_non_negative_int(value, expected) -> None:
     assert V._is_non_negative_int(value) is expected
