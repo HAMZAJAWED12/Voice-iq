@@ -93,9 +93,14 @@ def _scores_insights(*, engagement=0.0, conflict=0.0):
 
 @pytest.mark.parametrize(("severity", "rank"), [("low", 1), ("medium", 2), ("high", 3), ("unknown", 0), ("", 0)])
 def test_severity_rank(severity, rank) -> None:
-    # "unknown"/"" -> 0 is a KNOWN QUIRK (see punch list #3): unrecognised
-    # severities silently sort lowest instead of raising.
+    # Unknown labels map to 0 by design (defensive against novel upstream
+    # severity strings), so they sort below every known severity.
     assert S._severity_rank(severity) == rank
+
+
+def test_severity_rank_unknown_sorts_below_known() -> None:
+    assert S._severity_rank("nonsense") == 0
+    assert S._severity_rank("nonsense") < S._severity_rank("low")
 
 
 @pytest.mark.parametrize(
@@ -355,13 +360,3 @@ def test_timeline_marker_rejects_empty_reason() -> None:
     # construction — the model refuses to build such a marker.
     with pytest.raises(ValidationError):
         TimelineMarker(marker_id="m1", type="interruption", time_sec=3.0, severity="low", reason="")
-
-
-# --------------------------------------------------------------------------- #
-# Tier 3 candidates surfaced during this test pass
-# (resolved: speaker_insight type hint -> 4466c45; vestigial session
-#  param removed -> S1; empty-reason fallback -> reason min_length=1 (C4).)
-# 1. _severity_rank silently ranks unknown severities at 0.
-#    Either raise on unknown OR add explicit "unknown" rank
-#    above 0. Pinned via tripwire test in this file.
-# --------------------------------------------------------------------------- #
