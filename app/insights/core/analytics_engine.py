@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Any
 
 from app.insights.models.analytics_models import (
     AnalyticsBundle,
@@ -73,7 +74,7 @@ class InsightAnalyticsEngine:
 
     @staticmethod
     def _compute_speaker_metrics(utterances: list[UtteranceInput]) -> dict[str, SpeakerMetrics]:
-        speaker_stats = defaultdict(
+        speaker_stats: defaultdict[str, dict[str, Any]] = defaultdict(
             lambda: {
                 "time": 0.0,
                 "utterances": 0,

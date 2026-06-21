@@ -133,7 +133,9 @@ class InsightRepository:
             stmt = sa_delete(InsightRecordORM).where(InsightRecordORM.session_id == session_id)
             result = session.execute(stmt)
             session.commit()
-            return (result.rowcount or 0) > 0
+            # rowcount lives on CursorResult (returned for DELETE) but not on the
+            # base Result type the stubs expose.
+            return (result.rowcount or 0) > 0  # type: ignore[attr-defined]
         except SQLAlchemyError as exc:
             session.rollback()
             raise InsightRepositoryError(f"failed to delete insight record for session_id={session_id!r}") from exc
