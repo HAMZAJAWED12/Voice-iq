@@ -15,6 +15,8 @@ clients. Classification is deterministic and side-effect free.
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.insights.models.factcheck_models import ClaimType, DetectedClaim
 
 # --------------------------------------------------------------------------- #
@@ -142,7 +144,7 @@ class ClaimClassifier:
         else:  # pragma: no cover - exhaustive enum guard
             return None
 
-        update = {"subject": subject}
+        update: dict[str, Any] = {"subject": subject}
         if ctype == "WEATHER":
             update["unit"] = subject.get("unit")
         return claim.model_copy(update=update)

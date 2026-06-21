@@ -200,7 +200,7 @@ def _dominant_emotion(utt: UtteranceInput) -> str | None:
     if not utt.emotion or not utt.emotion.values:
         return None
     try:
-        return max(utt.emotion.values, key=utt.emotion.values.get)
+        return max(utt.emotion.values, key=utt.emotion.values.__getitem__)
     except ValueError:
         return None
 
@@ -358,10 +358,10 @@ class InsightInconsistencyEngine:
             )
 
         # Track the most affected speaker for primary_speaker inference.
-        per_speaker = defaultdict(int)
+        per_speaker: defaultdict[str, int] = defaultdict(int)
         for utt, _, _ in mismatches:
             per_speaker[utt.speaker] += 1
-        top_speaker = max(per_speaker, key=per_speaker.get) if per_speaker else None
+        top_speaker = max(per_speaker, key=per_speaker.__getitem__) if per_speaker else None
 
         return (
             InconsistencySignal(
@@ -436,10 +436,10 @@ class InsightInconsistencyEngine:
                 )
             )
 
-        per_speaker = defaultdict(int)
+        per_speaker: defaultdict[str, int] = defaultdict(int)
         for utt, _, _ in contradictions:
             per_speaker[utt.speaker] += 1
-        top_speaker = max(per_speaker, key=per_speaker.get) if per_speaker else None
+        top_speaker = max(per_speaker, key=per_speaker.__getitem__) if per_speaker else None
 
         return (
             InconsistencySignal(
@@ -519,10 +519,10 @@ class InsightInconsistencyEngine:
                 )
             )
 
-        per_speaker = defaultdict(int)
+        per_speaker: defaultdict[str, int] = defaultdict(int)
         for _, utt, _, _ in reversals:
             per_speaker[utt.speaker] += 1
-        top_speaker = max(per_speaker, key=per_speaker.get) if per_speaker else None
+        top_speaker = max(per_speaker, key=per_speaker.__getitem__) if per_speaker else None
 
         return (
             InconsistencySignal(
@@ -608,10 +608,10 @@ class InsightInconsistencyEngine:
                 )
             )
 
-        per_speaker = defaultdict(int)
+        per_speaker: defaultdict[str, int] = defaultdict(int)
         for _, utt, _, _ in contradictions:
             per_speaker[utt.speaker] += 1
-        top_speaker = max(per_speaker, key=per_speaker.get) if per_speaker else None
+        top_speaker = max(per_speaker, key=per_speaker.__getitem__) if per_speaker else None
 
         return (
             InconsistencySignal(
@@ -682,10 +682,10 @@ class InsightInconsistencyEngine:
                 )
             )
 
-        per_speaker = defaultdict(int)
+        per_speaker: defaultdict[str, int] = defaultdict(int)
         for utt, _ in masked:
             per_speaker[utt.speaker] += 1
-        top_speaker = max(per_speaker, key=per_speaker.get) if per_speaker else None
+        top_speaker = max(per_speaker, key=per_speaker.__getitem__) if per_speaker else None
 
         return (
             InconsistencySignal(
@@ -724,7 +724,7 @@ class InsightInconsistencyEngine:
                     speaker_scores[evidence_speaker] += signal.score
 
         if speaker_scores:
-            return max(speaker_scores, key=speaker_scores.get)
+            return max(speaker_scores, key=speaker_scores.__getitem__)
 
         if analytics and analytics.speaker_metrics:
             return max(

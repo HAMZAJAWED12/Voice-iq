@@ -16,8 +16,10 @@ class InsightNormalizer:
         inferred_speakers = cls._infer_speakers(normalized_utterances)
         inferred_duration = cls._infer_duration(normalized_utterances)
 
-        raw_meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
-        raw_warnings = payload.get("warnings") if isinstance(payload.get("warnings"), list) else []
+        meta_value = payload.get("meta")
+        raw_meta: dict[str, Any] = meta_value if isinstance(meta_value, dict) else {}
+        warnings_value = payload.get("warnings")
+        raw_warnings: list[Any] = warnings_value if isinstance(warnings_value, list) else []
 
         normalized_payload = {
             "session_id": cls._normalize_session_id(payload.get("session_id")),

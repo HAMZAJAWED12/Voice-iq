@@ -58,7 +58,7 @@ class StockClient(BaseSourceClient):
 
         quote = payload.get("Global Quote") or {}
         price_raw = quote.get("05. price")
-        if price_raw in (None, ""):
+        if price_raw is None or price_raw == "":
             return None
         try:
             value = float(price_raw)

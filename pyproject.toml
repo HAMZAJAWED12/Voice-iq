@@ -7,3 +7,12 @@ extend-exclude = [".venv", "samples", "DOCS", "data", "tmp", "uploads", "outputs
 select = ["E", "F", "I", "B", "UP"]  # pycodestyle, pyflakes, isort, bugbear, pyupgrade
 ignore = ["B008"]  # FastAPI Depends/File default-arg idiom
 per-file-ignores = { "app/utils/logger.py" = ["E402"], "**/__init__.py" = ["F401"] }
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+check_untyped_defs = true
+# Tests use intentionally loose patterns (SimpleNamespace stand-ins,
+# **kwargs builders) that mypy can't follow; scope type-checking to the
+# production tree.
+exclude = ['app/insights/tests/', '^tests/']

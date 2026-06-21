@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeGuard
 
 from app.insights.models.analytics_models import ValidationIssue, ValidationResult
 
@@ -304,7 +304,7 @@ class InsightValidator:
             )
 
     @staticmethod
-    def _is_number(value: Any) -> bool:
+    def _is_number(value: Any) -> TypeGuard[int | float]:
         return isinstance(value, int | float) and not isinstance(value, bool)
 
     @classmethod

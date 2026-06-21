@@ -24,7 +24,7 @@ def aggregate_sentiment(samples: list[dict]) -> SentimentAggregate:
 
     distribution = dict(Counter(labels))
     avg_score = round(sum(scores) / len(scores), 4) if scores else None
-    dominant_label = max(distribution, key=distribution.get) if distribution else None
+    dominant_label = max(distribution, key=distribution.__getitem__) if distribution else None
 
     return SentimentAggregate(
         label=dominant_label,
@@ -61,7 +61,7 @@ def aggregate_emotion(samples: list[dict]) -> EmotionAggregate:
     averaged = {k: v / count for k, v in totals.items()}
     total_sum = sum(averaged.values()) or 1.0
     normalized = {k: round(v / total_sum, 4) for k, v in averaged.items()}
-    dominant = max(normalized, key=normalized.get) if normalized else None
+    dominant = max(normalized, key=normalized.__getitem__) if normalized else None
 
     return EmotionAggregate(
         dominant=dominant,
@@ -122,7 +122,7 @@ def compute_emotion_volatility(
     for item in emotion_samples:
         values = item.get("values") or {}
         if isinstance(values, dict) and values:
-            dominant_seq.append(max(values, key=values.get))
+            dominant_seq.append(max(values, key=values.__getitem__))
 
     emotion_switches = 0
     for i in range(1, len(dominant_seq)):

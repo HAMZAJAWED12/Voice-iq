@@ -262,7 +262,7 @@ class InsightEscalationEngine:
                 speaker_scores[speaker] += signal.score
 
         if speaker_scores:
-            return max(speaker_scores, key=speaker_scores.get)
+            return max(speaker_scores, key=speaker_scores.__getitem__)
 
         if analytics.speaker_metrics:
             return max(
