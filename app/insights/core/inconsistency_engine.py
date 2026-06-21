@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 
+from app.insights.core._math import clamp
 from app.insights.models.analytics_models import AnalyticsBundle
 from app.insights.models.inconsistency_models import (
     InconsistencyAssessment,
@@ -137,10 +138,6 @@ _NEUTRAL_EMOTIONS = {"neutral", "calm"}
 
 # Tokenizer that keeps contractions reasonably handle-able.
 _TOKEN_RE = re.compile(r"[a-zA-Z']+")
-
-
-def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
-    return max(low, min(high, float(value)))
 
 
 def _tokenize(text: str) -> list[str]:
@@ -291,7 +288,7 @@ class InsightInconsistencyEngine:
             signals.append(masking_signal)
         windows.extend(masking_windows)
 
-        score = round(_clamp(sum(s.score for s in signals)), 4)
+        score = round(clamp(sum(s.score for s in signals)), 4)
         level = cls._score_to_level(score)
         primary_speaker = cls._infer_primary_speaker(signals, analytics, aggregated_signals)
         summary = cls._build_summary(level, signals, primary_speaker)
@@ -337,7 +334,7 @@ class InsightInconsistencyEngine:
         if len(mismatches) < 2 and ratio < 0.5:
             return None, []
 
-        score = _clamp(0.08 + ratio * 0.40, high=cls._CAP_TEXT_MISMATCH)
+        score = clamp(0.08 + ratio * 0.40, high=cls._CAP_TEXT_MISMATCH)
 
         windows: list[InconsistencyWindow] = []
         # Cap the number of emitted windows so we don't spam the timeline.
@@ -417,7 +414,7 @@ class InsightInconsistencyEngine:
         if len(contradictions) < 2 and ratio < 0.5:
             return None, []
 
-        score = _clamp(0.07 + ratio * 0.35, high=cls._CAP_SENT_EMOTION)
+        score = clamp(0.07 + ratio * 0.35, high=cls._CAP_SENT_EMOTION)
 
         windows: list[InconsistencyWindow] = []
         for utt, label, emotion in contradictions[:5]:
@@ -494,7 +491,7 @@ class InsightInconsistencyEngine:
             return None, []
 
         # Each reversal contributes a small amount up to the cap.
-        score = _clamp(0.10 + 0.08 * len(reversals), high=cls._CAP_REVERSAL)
+        score = clamp(0.10 + 0.08 * len(reversals), high=cls._CAP_REVERSAL)
 
         windows: list[InconsistencyWindow] = []
         for prev_utt, utt, prev_emotion, emotion in reversals[:5]:
@@ -582,7 +579,7 @@ class InsightInconsistencyEngine:
         if not contradictions:
             return None, []
 
-        score = _clamp(0.08 + 0.06 * len(contradictions), high=cls._CAP_CONTRADICTION)
+        score = clamp(0.08 + 0.06 * len(contradictions), high=cls._CAP_CONTRADICTION)
 
         windows: list[InconsistencyWindow] = []
         for prev_utt, utt, prev_stance, stance in contradictions[:5]:
@@ -664,7 +661,7 @@ class InsightInconsistencyEngine:
         if len(masked) < 2:
             return None, []
 
-        score = _clamp(0.07 + 0.05 * len(masked), high=cls._CAP_MASKING)
+        score = clamp(0.07 + 0.05 * len(masked), high=cls._CAP_MASKING)
 
         windows: list[InconsistencyWindow] = []
         for utt, emotion in masked[:5]:

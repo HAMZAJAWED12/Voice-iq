@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.insights.core._math import clamp
 from app.insights.models.analytics_models import AnalyticsBundle
 from app.insights.models.insight_models import (
     InsightScores,
@@ -102,7 +103,9 @@ class InsightScoringEngine:
 
     @staticmethod
     def _clamp(value: float) -> float:
-        return max(0.0, min(1.0, round(float(value), 4)))
+        # Round-then-clamp via the shared helper (preserves prior behavior:
+        # max(0.0, min(1.0, round(x, 4))) == clamp(round(x, 4))).
+        return clamp(round(float(value), 4))
 
     @classmethod
     def _compute_dominance_score(cls, analytics: AnalyticsBundle) -> float:
