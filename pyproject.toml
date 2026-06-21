@@ -14,5 +14,5 @@ ignore_missing_imports = true
 check_untyped_defs = true
 # Tests use intentionally loose patterns (SimpleNamespace stand-ins,
 # **kwargs builders) that mypy can't follow; scope type-checking to the
-# production tree.
-exclude = ['app/insights/tests/', '^tests/']
+# production tree. The '/tests/' pattern covers every package's tests dir.
+exclude = ['/tests/', '^tests/']
