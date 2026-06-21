@@ -252,9 +252,13 @@ class InsightSummaryEngine:
             f"{marker_type} signal ({marker.severity}) because {marker.reason.lower()}."
         )
 
-    @staticmethod
-    def _severity_rank(severity: str) -> int:
-        return {"low": 1, "medium": 2, "high": 3}.get(severity, 0)
+    _SEVERITY_RANKS = {"low": 1, "medium": 2, "high": 3}
+
+    @classmethod
+    def _severity_rank(cls, severity: str) -> int:
+        # Unknown labels rank 0 so they sort below every known severity.
+        # Defensive: upstream NLP can emit novel labels we have not catalogued.
+        return cls._SEVERITY_RANKS.get(severity, 0)
 
     @staticmethod
     def _get_dominant_speaker(speaker_metrics: dict[str, SpeakerMetrics]) -> str | None:
