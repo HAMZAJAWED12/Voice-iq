@@ -12,6 +12,7 @@ from app.insights.models.factcheck_models import MAX_TRANSCRIPT_CHARS
 from app.insights.repository import factcheck_repository
 from app.pipeline.orchestrator import VoiceIQOrchestrator
 from app.security import enforce_content_length, verify_api_key
+from app.utils.audio_sniff import is_recognized_audio
 from app.utils.job_io import JobIO
 from app.utils.logger import logger
 
@@ -92,6 +93,7 @@ async def process_audio(
     request_id = str(uuid.uuid4())
     logger.info(f"[{request_id}] Received: {file.filename}")
 
+    # First gate: cheap filename-extension allowlist.
     if not file.filename.lower().endswith((".mp3", ".wav", ".m4a", ".flac")):
         raise HTTPException(status_code=400, detail="Unsupported file format")
 
@@ -109,12 +111,22 @@ async def process_audio(
     chunk_size = 1024 * 1024
     total_bytes = 0
     exceeded = False
+    bad_content = False
+    first_chunk = True
     try:
         with open(input_path, "wb") as out:
             while True:
                 chunk = await file.read(chunk_size)
                 if not chunk:
                     break
+                # Second gate: magic-byte content sniff on the first chunk.
+                # Defends against a renamed non-audio file slipping past the
+                # extension check (e.g. evil.exe -> evil.mp3).
+                if first_chunk:
+                    first_chunk = False
+                    if not is_recognized_audio(chunk[:64]):
+                        bad_content = True
+                        break
                 total_bytes += len(chunk)
                 if total_bytes > MAX_UPLOAD_BYTES:
                     exceeded = True
@@ -125,6 +137,13 @@ async def process_audio(
     except Exception as e:
         input_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Failed to save upload: {e}") from e
+
+    if bad_content:
+        input_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=415,
+            detail="File content is not a recognized audio format.",
+        )
 
     if exceeded:
         input_path.unlink(missing_ok=True)
