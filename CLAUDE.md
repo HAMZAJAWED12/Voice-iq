@@ -73,9 +73,12 @@ voiceiq-AI/
 | 3 | Persistence + ops: SQLite via SQLAlchemy, Dockerfile, OpenAPI polish, integration tests | ✅ Done |
 | 4 | Handoff documentation: DOCS/ markdown set + polished .docx | ✅ Done |
 | 5 | Fact-check engine: claim detector, classifier, comparator, scorer, orchestrator; 5 source clients (exchangerate.host, CoinGecko, OpenWeather, Alpha Vantage, Wikipedia REST); SQLite `fact_check_results` table; `POST /v1/fact-check` + `GET /v1/fact-check/{id}`; auto-enrichment in `/v1/process-audio`; 91 new tests (118 insight tests passing) | ✅ Done |
-| CI | GitHub Actions workflow running insight tests on every push/PR | ✅ Done |
+| CI | GitHub Actions: lint (ruff + mypy hard-gate + gitleaks) + tests on Python 3.10/3.11, every push/PR | ✅ Done |
+| Tier 1 | Production-readiness security: X-API-Key auth, payload-size caps, ffmpeg subprocess timeout, model-loader concurrency locks | ✅ Done |
+| Tier 2 | Test-coverage closure: 6 insight-core engines to 100%; CI ruff + gitleaks + mypy + 3.10/3.11 matrix | ✅ Done |
+| Tier 3 | Waves A/B/D: cleanups, schema fixes, mypy hard-gate | ✅ Done |
 
-**Currently open:** pick from next-task candidates below — Docker hardening, CHANGELOG backfill, or new engine.
+**Currently open:** Tier 3 Wave E — see next-task candidates below.
 
 ## Engineering standards (STRICT)
 
@@ -132,17 +135,27 @@ These need attention but are not blocking new work:
 
 1. **`__pycache__/*.pyc` files tracked in git.** They were committed before `.gitignore` existed. Untrack with `git rm -r --cached app/**/__pycache__` and commit. They'll then be permanently ignored.
 2. **`run_eval_dev.LOCAL.py` exists alongside `run_eval_dev.py`.** Renamed during a merge conflict. Decide whether to merge or delete.
-3. **Tier 3 hardening punch list lives in trailing comments of `app/insights/tests/test_*.py` files.** Each engine's test file ends with a `# Tier 3 candidates` block enumerating dead params, identity maps, missing type hints, and fault-isolation gaps surfaced while writing its coverage. Consolidate from there when Tier 3 work begins.
+3. **Wave E punch list lives in CLAUDE.md next-task candidates.** Tier 3 Waves A/B/D consumed the per-engine `# Tier 3 candidates` comment blocks (dead params, identity maps, type hints, schema fixes, mypy gate). The remaining structural items are scoped under next-task candidates below.
 
 ## Working with this repo
 
 - **OS:** Windows. PowerShell is the default shell. Paths use backslashes.
 - **OneDrive:** The repo lives inside a synced OneDrive folder. This causes occasional `index.lock` collisions during git operations — pause OneDrive sync if git starts fighting itself.
-- **Python:** Use the project `.venv` for local work. CI uses Python 3.11.
+- **Python:** Use the project `.venv` for local work. CI tests on a Python 3.10 + 3.11 matrix.
 - **Git editor:** Set to `notepad` to avoid vim swap-file disasters: `git config --global core.editor notepad`.
 - **Never** run `git add .` without checking `git status` first — it has previously staged the entire `.venv` (10,000+ files).
 
 ## Next-task candidates (pick one when ready)
+
+### Tier 3 Wave E (structural hardening — deferred from the Tier 3 pass)
+
+- **Consolidate `_clamp()` (C2).** Three independent `_clamp()` impls (`scoring_engine.py`, `signal_aggregation.py`, `inconsistency_engine.py`) — extract one into `core/_math.py`. *Rationale:* CLAUDE.md mandates uniform clamping (standard #5); divergence risk today.
+- **Stage `orchestrator.run()`.** `app/pipeline/orchestrator.py` `run()` is a ~500-LOC monolith. Break into checkpointed stages. *Rationale:* unit-testability, resume-on-failure, no all-or-nothing aborts.
+- **O(n²) hot paths.** `keyword_service.py` TF-IDF vocab scan and `alignment_service.py` ASR window search are quadratic. Dict/bisect fixes. *Rationale:* wall-clock on long transcripts.
+- **MIME / magic-byte upload check.** `process_audio.py` validates by `.endswith()` only — add content sniffing. *Rationale:* `evil.exe` renamed to `.mp3` currently reaches pyannote.
+- **Low-pri: `_severity_rank` unknown→0.** `summary_engine.py` silently ranks unknown severities at 0 — raise or add explicit rank. Pinned by a tripwire test.
+
+### Other candidates
 
 - Docker: harden the existing Dockerfile, add docker-compose, document local-run flow.
 - CHANGELOG: start a `CHANGELOG.md` with the Sprint 1–4 history backfilled.
