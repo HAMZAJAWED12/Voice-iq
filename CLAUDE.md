@@ -136,6 +136,11 @@ These need attention but are not blocking new work:
 1. **`__pycache__/*.pyc` files tracked in git.** They were committed before `.gitignore` existed. Untrack with `git rm -r --cached app/**/__pycache__` and commit. They'll then be permanently ignored.
 2. **`run_eval_dev.LOCAL.py` exists alongside `run_eval_dev.py`.** Renamed during a merge conflict. Decide whether to merge or delete.
 3. **Wave E punch list lives in CLAUDE.md next-task candidates.** Tier 3 Waves A/B/D consumed the per-engine `# Tier 3 candidates` comment blocks (dead params, identity maps, type hints, schema fixes, mypy gate). The remaining structural items are scoped under next-task candidates below.
+4. **E3 profile finding — `alignment_service` O(n²) is below the optimization bar (for now).** Profiled `AlignmentService.align()` on a realistic 60-minute-call fixture (600 ASR segments / ~6000 words / 600 diarization turns): mean ~1.15 s. Top cumulative:
+   - `_best_asr_for_window` ~1.19 s — O(M·A): each merged segment scans every ASR segment (600×600 → 360k `_overlap` calls).
+   - `_align_words_to_diarization` listcomp (line ~218) ~0.72 s — O(D·W): each diarization window scans every word.
+
+   Both are genuine quadratics, but ~1.1 s is **<5% of end-to-end pipeline wall-clock** (whisper ASR + pyannote diarization on the same audio run tens of seconds to minutes), so optimizing now fails the cost/benefit bar. **Deferred, not dropped.** When it matters (much longer/denser audio): both inputs are already time-sorted, so replace the full scans with a two-pointer sweep (`_align_words_to_diarization`) and a bisect-bounded window (`_best_asr_for_window`) → O(D+W) / O(M·log A). Reproduce with the fixture above.
 
 ## Working with this repo
 
@@ -157,7 +162,7 @@ These need attention but are not blocking new work:
 
   Only AFTER that net exists: decompose `run()` into named stages. Per-stage timings are ALREADY captured in `meta["timings_ms"]` — refactor changes shape, not data. Refactor value is maintainability of the monolith, not new telemetry.
 
-- **E3 — O(n²) hot paths.** `signal_aggregation` keyword loops and `alignment_service` pairwise comparisons are quadratic candidates. *Profile first* — only optimize with data. Dict/set/bisect fixes.
+- **E3 — O(n²) hot paths (profiled, deferred).** `alignment_service` has genuine quadratics but they sit below the optimization bar at current scale — see "Known issues / tech debt" #4 for the profile data, fixture, and the two-pointer/bisect recipe to apply when audio grows.
 - **E5 — `_severity_rank` unknown→0.** `summary_engine.py` ranks unknown severities at 0 implicitly — make it explicit + defensive.
 
 ### Other candidates
