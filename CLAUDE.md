@@ -149,11 +149,16 @@ These need attention but are not blocking new work:
 
 ### Tier 3 Wave E (structural hardening — deferred from the Tier 3 pass)
 
-- **Consolidate `_clamp()` (C2).** Three independent `_clamp()` impls (`scoring_engine.py`, `signal_aggregation.py`, `inconsistency_engine.py`) — extract one into `core/_math.py`. *Rationale:* CLAUDE.md mandates uniform clamping (standard #5); divergence risk today.
-- **Stage `orchestrator.run()`.** `app/pipeline/orchestrator.py` `run()` is a ~500-LOC monolith. Break into checkpointed stages. *Rationale:* unit-testability, resume-on-failure, no all-or-nothing aborts.
-- **O(n²) hot paths.** `keyword_service.py` TF-IDF vocab scan and `alignment_service.py` ASR window search are quadratic. Dict/bisect fixes. *Rationale:* wall-clock on long transcripts.
-- **MIME / magic-byte upload check.** `process_audio.py` validates by `.endswith()` only — add content sniffing. *Rationale:* `evil.exe` renamed to `.mp3` currently reaches pyannote.
-- **Low-pri: `_severity_rank` unknown→0.** `summary_engine.py` silently ranks unknown severities at 0 — raise or add explicit rank. Pinned by a tripwire test.
+- ✅ **Consolidate `_clamp()` (E1 / E1.b).** Done — single `core/_math.py:clamp`; `scoring_engine`, `signal_aggregation`, `inconsistency_engine`, and `factcheck/scorer` all repointed.
+- ✅ **MIME / magic-byte upload check (E4).** Done — `app/utils/audio_sniff.py` rejects non-audio uploads with 415; extension check kept as first gate.
+- **E2 (deferred — needs harness first):** `orchestrator.run()` decomposition. 678 LOC, ~10 stages, shared local state across stages (`normalized_wav` / `low_snr_flag` / `transcript_text` / `diar_segments` / ...). CRITICAL: no `test_orchestrator.py` exists today — refactoring blind violates project standard "no behavior change without verification."
+
+  Prerequisite: test-first sub-project. Write `app/insights/tests/test_orchestrator.py` mocking the service layer (~16 services) + JobIO. Assert stage order + every fail-soft warning code (`MISSING_INPUT_AUDIO`, `AUDIO_NORMALIZATION_TIMEOUT`, `ASR_FAILED`, `DIARIZATION_FALLBACK`, `SINGLE_SPEAKER_MODE`, and any others present at the time).
+
+  Only AFTER that net exists: decompose `run()` into named stages. Per-stage timings are ALREADY captured in `meta["timings_ms"]` — refactor changes shape, not data. Refactor value is maintainability of the monolith, not new telemetry.
+
+- **E3 — O(n²) hot paths.** `signal_aggregation` keyword loops and `alignment_service` pairwise comparisons are quadratic candidates. *Profile first* — only optimize with data. Dict/set/bisect fixes.
+- **E5 — `_severity_rank` unknown→0.** `summary_engine.py` ranks unknown severities at 0 implicitly — make it explicit + defensive.
 
 ### Other candidates
 
