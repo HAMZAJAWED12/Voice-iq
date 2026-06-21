@@ -31,8 +31,7 @@ jobs:
       - name: Ruff lint
         run: ruff check .
 
-      - name: Mypy (informational)
-        continue-on-error: true
+      - name: Mypy
         run: mypy --ignore-missing-imports --check-untyped-defs app/insights/
 
       - name: Install gitleaks
