@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 
+from app.insights.core._math import clamp
 from app.insights.models.signal_models import (
     AggregatedSignals,
     EmotionAggregate,
@@ -11,16 +12,12 @@ from app.insights.models.signal_models import (
 )
 
 
-def clamp01(value: float) -> float:
-    return max(0.0, min(1.0, float(value)))
-
-
 def aggregate_sentiment(samples: list[dict]) -> SentimentAggregate:
     if not samples:
         return SentimentAggregate()
 
     labels = [str(s["label"]).lower() for s in samples if s.get("label")]
-    scores = [clamp01(s["score"]) for s in samples if s.get("score") is not None]
+    scores = [clamp(s["score"]) for s in samples if s.get("score") is not None]
 
     distribution = dict(Counter(labels))
     avg_score = round(sum(scores) / len(scores), 4) if scores else None
