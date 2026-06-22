@@ -19,7 +19,7 @@ def _titles_similar(a: str, b: str) -> bool:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio() >= _TITLE_SIMILARITY
 
 
-def _is_duplicate(candidate: Recommendation, kept: Recommendation) -> bool:
+def is_duplicate(candidate: Recommendation, kept: Recommendation) -> bool:
     if candidate.action_type != kept.action_type:
         return False
     # Same fact-check claim.
@@ -45,6 +45,6 @@ def deduplicate(recommendations: list[Recommendation]) -> list[Recommendation]:
     # Highest confidence first so the survivor of each duplicate group is the
     # most confident one.
     for candidate in sorted(recommendations, key=lambda r: r.confidence, reverse=True):
-        if not any(_is_duplicate(candidate, k) for k in kept):
+        if not any(is_duplicate(candidate, k) for k in kept):
             kept.append(candidate)
     return kept
