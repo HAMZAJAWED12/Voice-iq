@@ -48,6 +48,14 @@ voiceiq-AI/
 │   │   ├── config/            # settings module
 │   │   ├── service.py         # orchestration service
 │   │   └── tests/             # pytest tests for the insight layer
+│   ├── agent_brain/           # Sprint 6: action-recommendation layer
+│   │   ├── models/            # AgentContext, Recommendation (camelCase Java contract)
+│   │   ├── core/              # 5 agents + confidence/dedup/ranker/runner
+│   │   ├── extraction/        # signals, assignee/date/priority extractors
+│   │   ├── api/               # POST /internal/v1/agent-brain/recommendations/generate
+│   │   ├── adapters/          # internal SessionInput/Insight/FactCheck -> AgentContext
+│   │   ├── integrations/      # HMAC-signed Java callback client
+│   │   ├── config/, service.py, tests/
 │   ├── pipeline/              # upstream pipeline (ASR, NLP)
 │   ├── routes/
 │   ├── services/              # ASR, diarization, sentiment, etc.
@@ -77,8 +85,9 @@ voiceiq-AI/
 | Tier 1 | Production-readiness security: X-API-Key auth, payload-size caps, ffmpeg subprocess timeout, model-loader concurrency locks | ✅ Done |
 | Tier 2 | Test-coverage closure: 6 insight-core engines to 100%; CI ruff + gitleaks + mypy + 3.10/3.11 matrix | ✅ Done |
 | Tier 3 | Waves A/B/D: cleanups, schema fixes, mypy hard-gate | ✅ Done |
+| Sprint 6 | Agent Brain (`app/agent_brain/`): 5 rule-based agents (Task/FollowUp/Email/Escalation/FactCheckReview), confidence refine, difflib dedup, ranker, runner w/ per-agent fault isolation, internal API, pipeline adapter, HMAC Java callback; 103 tests, 100% | ✅ Done |
 
-**Currently open:** Tier 3 Wave E — see next-task candidates below.
+**Currently open:** Tier 3 Wave E (see next-task candidates) + Agent Brain Phase 2 (NLP/model extraction; see the handoff doc §13).
 
 ## Engineering standards (STRICT)
 
@@ -99,6 +108,17 @@ Fault handling lives at the **service boundary, not inside the engines.**
 - `InsightRuleEngine.run` composes five sub-engines (signal aggregation → timeline → escalation → inconsistency → scoring). It deliberately has **no internal `try/except`**: a sub-engine exception propagates up by design. Do not add per-sub-engine fallbacks there — it would mask real failures and produce silently-partial bundles.
 - The single fault boundary is `InsightService` (`app/insights/service.py`): the `analytics → rule → summary` call chain runs inside one `try/except` that converts any engine failure into a `status="error"` response with the validation result preserved. Keep new orchestration failure handling at this layer.
 - Engines still uphold standard #2 (production safety) for *upstream data gaps* — empty sessions, missing sentiment, nulls — via safe defaults. That is different from *engine-level faults*, which are the service's responsibility.
+
+**Two fault-isolation models live in this repo — pick by topology, not preference:**
+
+| | `InsightRuleEngine` (insight pipeline) | `AgentRunner` (agent brain) |
+|---|---|---|
+| Topology | **Linear** dependency chain (each stage feeds the next) | **Independent fan-out** (agents don't depend on each other) |
+| On a component fault | **Raise** — propagate up | **Catch + log + skip** that one agent |
+| Partial output | Invalid — a missing mid-stage corrupts everything downstream | **Valid** — the other agents' recommendations still stand |
+| Fault boundary | `InsightService` try/except → `status="error"` | inside `AgentRunner` itself (per-agent try/except) |
+
+The reason they differ: in a linear pipeline a swallowed mid-stage failure produces a *silently wrong* bundle, so failing loud is safer. In an independent fan-out, one agent crashing should not deny the user the other four agents' correct output, so isolating per-agent and returning partial results is safer. Do not "harmonise" these — applying the rule-engine rule to the runner would drop good recommendations; applying the runner rule to the pipeline would hide corruption.
 
 ## Security + authenticity rules
 

@@ -32,7 +32,7 @@ jobs:
         run: ruff check .
 
       - name: Mypy
-        run: mypy --ignore-missing-imports --check-untyped-defs app/insights/
+        run: mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/
 
       - name: Install gitleaks
         run: |
@@ -70,8 +70,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-insight.txt
 
-      - name: Run insight tests
+      - name: Run insight + agent-brain tests
         run: |
-          pytest -v app/insights/tests/
+          pytest -v app/insights/tests/ app/agent_brain/tests/
         env:
           PYTHONPATH: .
