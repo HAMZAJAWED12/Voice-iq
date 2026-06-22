@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.agent_brain.models.base import CamelModel
 from app.agent_brain.models.enums import ActionType, AgentType, Priority
@@ -51,6 +51,14 @@ class Recommendation(CamelModel):
     entities: Entities = Field(default_factory=Entities)
     suggested_payload: dict[str, Any] = Field(default_factory=dict)
     explanation: str = Field(min_length=1)
+
+    @field_validator("confidence")
+    @classmethod
+    def _round_confidence(cls, value: float) -> float:
+        # Uniform 4dp rounding so floating-point accumulation in the agents'
+        # provisional scoring never leaks into the contract (0.85, not
+        # 0.8500000000000001).
+        return round(value, 4)
 
 
 class RecommendationResponse(CamelModel):
