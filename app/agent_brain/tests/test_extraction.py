@@ -58,6 +58,7 @@ def test_extract_assignee(text, expected) -> None:
         ("Please send it by Friday.", "by Friday"),
         ("I'll do it tomorrow.", "tomorrow"),
         ("No date here.", None),
+        ("", None),
     ],
 )
 def test_extract_date_phrase(text, expected) -> None:
@@ -70,6 +71,7 @@ def test_extract_date_phrase(text, expected) -> None:
         ("Call at 2 PM.", "2 PM"),
         ("Around 10:30am works.", "10:30am"),
         ("No time mentioned.", None),
+        ("", None),
     ],
 )
 def test_extract_time_phrase(text, expected) -> None:
