@@ -305,3 +305,163 @@ class TestAudioQualityStage:
         assert "AUDIO_QUALITY_FAILED" in res["warnings"]
         # ASR still ran.
         mx.asr.assert_called()
+
+
+# --------------------------------------------------------------------------- #
+# Stage C — asr                                                                #
+# --------------------------------------------------------------------------- #
+class TestASRStage:
+    def test_ok_transcript_reaches_response(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert res["transcript"] == GOLDEN_ASR["text"]
+        assert "asr" in res["pipeline_meta"]["timings_ms"]
+
+    def test_empty_transcript_warns(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.asr.return_value.transcribe.return_value = {"text": "   ", "segments": [], "meta": {}}
+
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "EMPTY_TRANSCRIPT" in res["warnings"]
+
+    def test_asr_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.asr.return_value.transcribe.side_effect = RuntimeError("whisper crashed")
+
+        res = orch.run(JOB_ID)
+
+        # ASR failure is fail-soft — pipeline continues, status stays ok.
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "ASR_FAILED" in res["warnings"]
+        # No whisper.json saved → alignment has no ASR input to consume.
+        assert "ALIGNMENT_SKIPPED_MISSING_INPUT" in res["warnings"]
+
+
+# --------------------------------------------------------------------------- #
+# Stage D — diarization                                                        #
+# --------------------------------------------------------------------------- #
+class TestDiarizeStage:
+    def test_ok_two_speakers_not_single_mode(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "SINGLE_SPEAKER_MODE" not in res["warnings"]
+        assert res["single_speaker_mode"] is False
+        assert res["segments"] == GOLDEN_DIAR
+
+    def test_forwarded_service_warnings_propagate(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
+    ) -> None:
+        _seed_input(io)
+        mx.diar.return_value.diarize_with_warnings.return_value = (
+            list(GOLDEN_DIAR),
+            ["SPEAKER_CAP_APPLIED", "LOW_SNR_DIARIZATION_UNRELIABLE"],
+        )
+
+        res = orch.run(JOB_ID)
+
+        assert "SPEAKER_CAP_APPLIED" in res["warnings"]
+        assert "LOW_SNR_DIARIZATION_UNRELIABLE" in res["warnings"]
+
+    def test_single_speaker_mode(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.diar.return_value.diarize_with_warnings.return_value = (
+            [{"speaker": "SPEAKER_00", "start": 0.0, "end": 4.0}],
+            [],
+        )
+
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "SINGLE_SPEAKER_MODE" in res["warnings"]
+        assert res["single_speaker_mode"] is True
+        # Single-speaker also limits flag generation.
+        assert "FLAGS_LIMITED_SINGLE_SPEAKER" in res["warnings"]
+
+    def test_empty_diarization_is_single_speaker(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
+    ) -> None:
+        _seed_input(io)
+        mx.diar.return_value.diarize_with_warnings.return_value = ([], [])
+
+        res = orch.run(JOB_ID)
+
+        assert "SINGLE_SPEAKER_MODE" in res["warnings"]
+        # Empty diarization.json is falsy → alignment skips.
+        assert "ALIGNMENT_SKIPPED_MISSING_INPUT" in res["warnings"]
+
+    def test_diarization_exception_falls_back(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.diar.return_value.diarize_with_warnings.side_effect = RuntimeError("pyannote died")
+
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        # Real literal is DIARIZATION_FAILED_FALLBACK (not "DIARIZATION_FALLBACK").
+        assert "DIARIZATION_FAILED_FALLBACK" in res["warnings"]
+        # Empty fallback segments → single-speaker mode.
+        assert "SINGLE_SPEAKER_MODE" in res["warnings"]
+
+    def test_legacy_service_without_warnings_api(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
+    ) -> None:
+        # An older DiarizationService lacking diarize_with_warnings falls back
+        # to the plain diarize() path. Drop the attr so hasattr() is False.
+        del mx.diar.return_value.diarize_with_warnings
+        mx.diar.return_value.diarize.return_value = list(GOLDEN_DIAR)
+
+        _seed_input(io)
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert res["segments"] == GOLDEN_DIAR
+        mx.diar.return_value.diarize.assert_called_once()
+
+
+# --------------------------------------------------------------------------- #
+# Stage E — alignment (real service; proves the disk round-trip)               #
+# --------------------------------------------------------------------------- #
+class TestAlignmentStage:
+    def test_reads_asr_and_diar_from_disk(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        """Crown-jewel invariant #3: stage E consumes what stages C/D saved.
+
+        Alignment loads whisper.json + diarization.json *from disk*, not from
+        in-memory state. Prove the artifacts exist and drove a non-empty
+        alignment that reached the response.
+        """
+        _seed_input(io)
+        res = orch.run(JOB_ID)
+
+        job = io.init_job(JOB_ID)
+        # Stages C/D wrote their inputs to disk...
+        assert io.exists(job, "artifacts/asr/whisper.json")
+        assert io.exists(job, "artifacts/diarization/diarization.json")
+        # ...and stage E consumed them into a non-empty alignment artifact.
+        on_disk = io.load_json(job, "artifacts/alignment/speaker_segments.json", default=[])
+        assert on_disk, "alignment produced no speaker_segments from disk inputs"
+        # The conversation in the response derives from the golden transcript.
+        assert res["conversation"], "conversation should be non-empty on happy path"
+        assert any("billing" in (turn.get("text") or "") for turn in res["conversation"])
+
+    def test_skipped_when_asr_output_missing(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.asr.return_value.transcribe.side_effect = RuntimeError("no asr")
+
+        res = orch.run(JOB_ID)
+
+        assert "ALIGNMENT_SKIPPED_MISSING_INPUT" in res["warnings"]
+        assert res["speaker_segments"] == []
+
+    def test_alignment_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        with patch(f"{_ORCH}.AlignmentService", autospec=True) as align_cls:
+            align_cls.return_value.align.side_effect = RuntimeError("align blew up")
+            res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "ALIGNMENT_FAILED" in res["warnings"]
