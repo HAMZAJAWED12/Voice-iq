@@ -167,6 +167,7 @@ These need attention but are not blocking new work:
 - **OS:** Windows. PowerShell is the default shell. Paths use backslashes.
 - **OneDrive:** The repo lives inside a synced OneDrive folder. This causes occasional `index.lock` collisions during git operations — pause OneDrive sync if git starts fighting itself.
 - **Python:** Use the project `.venv` for local work. CI tests on a Python 3.10 + 3.11 matrix.
+- **Interpreter trap:** a bare `python`/`pytest` on PATH may resolve to a different interpreter (e.g. `D:\Downloads\python`) that is **missing the project deps** (`pydantic_settings`, etc.) — collection then dies with confusing `ModuleNotFoundError`s. Always run via the venv: `.venv\Scripts\python.exe -m pytest ...` / `.venv\Scripts\python.exe -m mypy ...`. `where python` surfaces the trap.
 - **Git editor:** Set to `notepad` to avoid vim swap-file disasters: `git config --global core.editor notepad`.
 - **Never** run `git add .` without checking `git status` first — it has previously staged the entire `.venv` (10,000+ files).
 
@@ -176,14 +177,14 @@ These need attention but are not blocking new work:
 
 - ✅ **Consolidate `_clamp()` (E1 / E1.b).** Done — single `core/_math.py:clamp`; `scoring_engine`, `signal_aggregation`, `inconsistency_engine`, and `factcheck/scorer` all repointed.
 - ✅ **MIME / magic-byte upload check (E4).** Done — `app/utils/audio_sniff.py` rejects non-audio uploads with 415; extension check kept as first gate.
-- **E2 (deferred — needs harness first):** `orchestrator.run()` decomposition. 678 LOC, ~10 stages, shared local state across stages (`normalized_wav` / `low_snr_flag` / `transcript_text` / `diar_segments` / ...). CRITICAL: no `test_orchestrator.py` exists today — refactoring blind violates project standard "no behavior change without verification."
+- **E2 Phase 1 — harness DONE ✅; decomposition (Phase 2) now UNBLOCKED.** `app/insights/tests/test_orchestrator.py` is the behavioral safety net: **51 tests, `orchestrator.py` at 100% coverage**, proving current behavior with zero production edits. It uses real `JobIO(base_dir=tmp_path)` (the disk-driven `_final_response` demands it), mocks the 11 side-effect points (7 heavy ML services + 2 heavy audio utils + network FactCheckService + byte-producing PDFService) with `autospec=True`, and runs the 6 cheap pure-python services real. Two crown-jewel invariants pin the fault contract Phase 2 must preserve:
+  - `test_exactly_four_hard_fail_gates` — only `MISSING_INPUT_AUDIO`, `AUDIO_NORMALIZATION_TIMEOUT`, `AUDIO_NORMALIZATION_FAILED`, `AUDIO_SILENT_OR_NEAR_SILENT` produce `status="failed"` + early return;
+  - `test_late_stage_exception_never_flips_status` — every other stage failure is fail-soft (`status="ok"` + a `*_FAILED`/`*_SKIPPED_*` warning).
+  Stage order is locked via the insertion-ordered `timings_ms` keys. (Warning-literal note: the real diarization fallback code is `DIARIZATION_FAILED_FALLBACK`, not `DIARIZATION_FALLBACK`.)
 
-  Prerequisite: test-first sub-project. Write `app/insights/tests/test_orchestrator.py` mocking the service layer (~16 services) + JobIO. Assert stage order + every fail-soft warning code (`MISSING_INPUT_AUDIO`, `AUDIO_NORMALIZATION_TIMEOUT`, `ASR_FAILED`, `DIARIZATION_FALLBACK`, `SINGLE_SPEAKER_MODE`, and any others present at the time).
-
-  Only AFTER that net exists: decompose `run()` into named stages. Per-stage timings are ALREADY captured in `meta["timings_ms"]` — refactor changes shape, not data. Refactor value is maintainability of the monolith, not new telemetry.
+  **Phase 2 (the actual refactor):** decompose `run()` into named stages. Per-stage timings are ALREADY captured in `meta["timings_ms"]` — refactor changes shape, not data. Refactor value is maintainability of the monolith, not new telemetry. Run the harness after each extraction; any red = behavior drift.
 
 - **E3 — O(n²) hot paths (profiled, deferred).** `alignment_service` has genuine quadratics but they sit below the optimization bar at current scale — see "Known issues / tech debt" #4 for the profile data, fixture, and the two-pointer/bisect recipe to apply when audio grows.
-- **E5 — `_severity_rank` unknown→0.** `summary_engine.py` ranks unknown severities at 0 implicitly — make it explicit + defensive.
 
 ### Other candidates
 
