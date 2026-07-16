@@ -669,3 +669,105 @@ class TestSafeCtorKwargs:
         monkeypatch.setattr(_inspect, "signature", _boom)
         payload = {"anything": 1}
         assert _safe_ctor_kwargs(object, payload) == payload
+
+
+# --------------------------------------------------------------------------- #
+# End-to-end orchestration invariants                                          #
+# --------------------------------------------------------------------------- #
+class TestOrchestrationE2E:
+    """The behavioral spine the Phase 2 decomposition must not break."""
+
+    def test_full_success_stage_order(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        # timings_ms is insertion-ordered, so its key order IS the stage
+        # execution order. Locking it pins the pipeline sequence.
+        _seed_input(io)
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert list(res["pipeline_meta"]["timings_ms"].keys()) == ALL_TIMINGS
+
+    def test_late_stage_exception_never_flips_status(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
+    ) -> None:
+        """Crown-jewel invariant #1: only the 4 early gates hard-fail.
+
+        A failure in a late stage (PDF, the very last one) must stay soft:
+        status remains "ok", the *_FAILED warning is recorded, and upstream
+        output (the transcript) is preserved.
+        """
+        _seed_input(io)
+        mx.pdf.generate_pdf_report.side_effect = RuntimeError("late boom")
+
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "PDF_FAILED" in res["warnings"]
+        # Upstream output survived the late failure.
+        assert res["transcript"] == GOLDEN_ASR["text"]
+
+    @pytest.mark.parametrize(
+        ("seed", "perturb", "code", "uncalled"),
+        [
+            (False, lambda m: None, "MISSING_INPUT_AUDIO", lambda m: m.normalize),
+            (
+                True,
+                lambda m: setattr(m.normalize, "side_effect", AudioNormalizationTimeout("t")),
+                "AUDIO_NORMALIZATION_TIMEOUT",
+                lambda m: m.aq,
+            ),
+            (
+                True,
+                lambda m: setattr(m.normalize, "side_effect", RuntimeError("bad file")),
+                "AUDIO_NORMALIZATION_FAILED",
+                lambda m: m.aq,
+            ),
+            (
+                True,
+                lambda m: setattr(m.aq, "return_value", _golden_aq(is_silent=True)),
+                "AUDIO_SILENT_OR_NEAR_SILENT",
+                lambda m: m.asr,
+            ),
+        ],
+        ids=["missing_input", "normalize_timeout", "normalize_failed", "audio_silent"],
+    )
+    def test_exactly_four_hard_fail_gates(
+        self,
+        orch: VoiceIQOrchestrator,
+        io: JobIO,
+        mx: SimpleNamespace,
+        seed: bool,
+        perturb: Any,
+        code: str,
+        uncalled: Any,
+    ) -> None:
+        """Crown-jewel invariant #2: these 4 — and only these 4 — hard-fail.
+
+        Each drives status=="failed", records its code, and short-circuits so
+        the next stage never runs. Every *other* stage failing is proven soft
+        by the per-stage suites above.
+        """
+        if seed:
+            _seed_input(io)
+        perturb(mx)
+
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "failed"
+        assert code in res["warnings"]
+        # Early return short-circuits the immediately-downstream stage.
+        uncalled(mx).assert_not_called()
+
+    def test_graceful_degradation_preserves_upstream(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
+    ) -> None:
+        # A mid-pipeline soft failure (diarization) must not deny the user the
+        # upstream ASR output nor flip the overall status.
+        _seed_input(io)
+        mx.diar.return_value.diarize_with_warnings.side_effect = RuntimeError("diar down")
+
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "DIARIZATION_FAILED_FALLBACK" in res["warnings"]
+        # Upstream transcript preserved despite the downstream fault.
+        assert res["transcript"] == GOLDEN_ASR["text"]
