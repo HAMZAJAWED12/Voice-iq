@@ -465,3 +465,89 @@ class TestAlignmentStage:
 
         assert res["pipeline_meta"]["status"] == "ok"
         assert "ALIGNMENT_FAILED" in res["warnings"]
+
+
+# --------------------------------------------------------------------------- #
+# Stage F — stats                                                              #
+# --------------------------------------------------------------------------- #
+class TestStatsStage:
+    def test_ok_stats_reach_response(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        res = orch.run(JOB_ID)
+        # Real MetadataExtractor ran on the golden speaker segments.
+        assert res["speaker_stats"]
+        assert res["conversation_stats"]
+
+    def test_stats_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        with patch(f"{_ORCH}.MetadataExtractor", autospec=True) as meta_cls:
+            meta_cls.compute_speaker_stats.side_effect = RuntimeError("stats blew up")
+            res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "STATS_FAILED" in res["warnings"]
+
+
+# --------------------------------------------------------------------------- #
+# Stage G1-G6 — NLP enrichment (sentiment/keywords/gender/emotion/topic/summary)#
+# --------------------------------------------------------------------------- #
+class TestNLPEnrichment:
+    def test_no_speaker_segments_skips_segment_enrichers(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
+    ) -> None:
+        # Empty alignment → the segment-scoped enrichers all skip (but ASR text
+        # still exists, so topic/summary run normally).
+        _seed_input(io)
+        with patch(f"{_ORCH}.AlignmentService", autospec=True) as align_cls:
+            align_cls.return_value.align.return_value = {"speaker_segments": []}
+            align_cls.return_value.build_conversation.return_value = []
+            res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "SENTIMENT_SKIPPED_NO_SPEAKER_SEGMENTS" in res["warnings"]
+        assert "KEYWORDS_SKIPPED_NO_SPEAKER_SEGMENTS" in res["warnings"]
+        assert "GENDER_SKIPPED_NO_SPEAKER_SEGMENTS" in res["warnings"]
+        assert "EMOTION_SKIPPED_NO_SPEAKER_SEGMENTS" in res["warnings"]
+
+    def test_sentiment_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.sentiment.analyze_speaker_segments.side_effect = RuntimeError("sentiment died")
+        res = orch.run(JOB_ID)
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "SENTIMENT_FAILED" in res["warnings"]
+
+    def test_keywords_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        with patch(f"{_ORCH}.KeywordService", autospec=True) as kw_cls:
+            kw_cls.extract_keywords_per_segment.side_effect = RuntimeError("keywords died")
+            res = orch.run(JOB_ID)
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "KEYWORDS_FAILED" in res["warnings"]
+
+    def test_gender_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.gender.add_gender_to_segments.side_effect = RuntimeError("gender died")
+        res = orch.run(JOB_ID)
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "GENDER_FAILED" in res["warnings"]
+
+    def test_emotion_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.emotion.analyze_speaker_segments.side_effect = RuntimeError("emotion died")
+        res = orch.run(JOB_ID)
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "EMOTION_FAILED" in res["warnings"]
+
+    def test_topic_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.topic.classify.side_effect = RuntimeError("topic died")
+        res = orch.run(JOB_ID)
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "TOPIC_FAILED" in res["warnings"]
+
+    def test_summary_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.summary.generate_summary.side_effect = RuntimeError("summary died")
+        res = orch.run(JOB_ID)
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "SUMMARY_FAILED" in res["warnings"]
