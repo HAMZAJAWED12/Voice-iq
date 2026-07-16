@@ -37,7 +37,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.pipeline.orchestrator import VoiceIQOrchestrator
+from app.pipeline.orchestrator import VoiceIQOrchestrator, _safe_ctor_kwargs
 from app.utils.audio_quality import AudioQualityReport
 from app.utils.audio_utils import AudioNormalizationTimeout
 from app.utils.job_io import JobIO
@@ -551,3 +551,121 @@ class TestNLPEnrichment:
         res = orch.run(JOB_ID)
         assert res["pipeline_meta"]["status"] == "ok"
         assert "SUMMARY_FAILED" in res["warnings"]
+
+
+# --------------------------------------------------------------------------- #
+# Stage G7-G9 — intent / factcheck / flags                                     #
+# --------------------------------------------------------------------------- #
+class TestIntentFactcheckFlags:
+    def test_intent_skipped_without_conversation(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
+    ) -> None:
+        # Speaker segments present (enrichers run) but no conversation turns.
+        _seed_input(io)
+        with patch(f"{_ORCH}.AlignmentService", autospec=True) as align_cls:
+            align_cls.return_value.align.return_value = {"speaker_segments": list(GOLDEN_DIAR)}
+            align_cls.return_value.build_conversation.return_value = []
+            res = orch.run(JOB_ID)
+
+        assert "INTENT_SKIPPED_NO_CONVERSATION" in res["warnings"]
+
+    def test_intent_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        with patch(f"{_ORCH}.IntentService", autospec=True) as intent_cls:
+            intent_cls.annotate_conversation.side_effect = RuntimeError("intent died")
+            res = orch.run(JOB_ID)
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "INTENT_FAILED" in res["warnings"]
+
+    def test_factcheck_ok_populates_legacy_key(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.factcheck.fact_check.return_value = [{"claim": "x", "verdict": "unverified"}]
+        res = orch.run(JOB_ID)
+        # The orchestrator owns the legacy `fact_checks` key. The Sprint-5
+        # `fact_checks_v2` is added later by the route, not here.
+        assert res["fact_checks"] == [{"claim": "x", "verdict": "unverified"}]
+        assert "fact_checks_v2" not in res
+
+    def test_factcheck_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.factcheck.fact_check.side_effect = RuntimeError("factcheck died")
+        res = orch.run(JOB_ID)
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "FACTCHECK_FAILED" in res["warnings"]
+        assert res["fact_checks"] == []
+
+    def test_flags_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        with patch(f"{_ORCH}.FlagService", autospec=True) as flag_cls:
+            flag_cls.generate_flags.side_effect = RuntimeError("flags died")
+            res = orch.run(JOB_ID)
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "FLAGS_FAILED" in res["warnings"]
+
+
+# --------------------------------------------------------------------------- #
+# Stage H — insights                                                           #
+# --------------------------------------------------------------------------- #
+class TestInsightsStage:
+    def test_ok_insights_reach_response(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        res = orch.run(JOB_ID)
+        # Real InsightService produced a bundle from the golden segments.
+        assert res["insights"] is not None
+
+    def test_skipped_without_speaker_segments(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        with patch(f"{_ORCH}.AlignmentService", autospec=True) as align_cls:
+            align_cls.return_value.align.return_value = {"speaker_segments": []}
+            align_cls.return_value.build_conversation.return_value = []
+            res = orch.run(JOB_ID)
+        assert "INSIGHTS_SKIPPED_NO_SPEAKER_SEGMENTS" in res["warnings"]
+
+    def test_insights_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        with patch(f"{_ORCH}.InsightService", autospec=True) as insight_cls:
+            insight_cls.generate.side_effect = RuntimeError("insight died")
+            res = orch.run(JOB_ID)
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "INSIGHTS_FAILED" in res["warnings"]
+
+
+# --------------------------------------------------------------------------- #
+# Stage I — pdf report                                                         #
+# --------------------------------------------------------------------------- #
+class TestPDFStage:
+    def test_ok_report_base64_present(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        res = orch.run(JOB_ID)
+        assert res["report_pdf_base64"] is not None
+
+    def test_pdf_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        mx.pdf.generate_pdf_report.side_effect = RuntimeError("reportlab died")
+        res = orch.run(JOB_ID)
+        # PDF is the last stage; its failure is still soft.
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "PDF_FAILED" in res["warnings"]
+        assert res["report_pdf_base64"] is None
+
+
+# --------------------------------------------------------------------------- #
+# Helper — _safe_ctor_kwargs                                                    #
+# --------------------------------------------------------------------------- #
+class TestSafeCtorKwargs:
+    def test_filters_to_constructor_signature(self) -> None:
+        class C:
+            def __init__(self, a: int, b: int) -> None: ...
+
+        assert _safe_ctor_kwargs(C, {"a": 1, "z": 99}) == {"a": 1}
+
+    def test_returns_all_kwargs_when_signature_inspection_fails(self, monkeypatch: Any) -> None:
+        # Defensive branch: if signature introspection raises, pass kwargs through.
+        import inspect as _inspect
+
+        def _boom(*_a: Any, **_k: Any) -> Any:
+            raise ValueError("no signature")
+
+        monkeypatch.setattr(_inspect, "signature", _boom)
+        payload = {"anything": 1}
+        assert _safe_ctor_kwargs(object, payload) == payload
