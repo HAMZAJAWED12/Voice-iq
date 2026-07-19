@@ -70,8 +70,44 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-insight.txt
 
+      # test_orchestrator.py is excluded here on purpose: it imports
+      # app.pipeline.orchestrator, which eagerly imports the whole ML stack
+      # (whisper / torch / transformers / librosa) at module top level. Those
+      # deps are deliberately absent from requirements-insight.txt, so the
+      # harness runs in the dedicated orchestrator-harness job below instead.
       - name: Run insight + agent-brain tests
         run: |
-          pytest -v app/insights/tests/ app/agent_brain/tests/
+          pytest -v app/insights/tests/ app/agent_brain/tests/ \
+            --ignore=app/insights/tests/test_orchestrator.py
+        env:
+          PYTHONPATH: .
+
+  orchestrator-harness:
+    name: Orchestrator harness (heavy ML deps)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # This job intentionally installs the heavy requirements.txt (torch,
+      # whisper, pyannote, transformers). It is slow (~8-12 min) and is kept
+      # as its own job so the lightweight lint/test jobs stay ~30s, per the
+      # CI policy in CLAUDE.md.
+      - name: Install full ML stack
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run orchestrator harness
+        run: |
+          pytest -v app/insights/tests/test_orchestrator.py
         env:
           PYTHONPATH: .
