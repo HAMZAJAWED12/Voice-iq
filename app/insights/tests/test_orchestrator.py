@@ -12,14 +12,22 @@ Design
 * **Real ``JobIO(base_dir=tmp_path)``** throughout. ``_final_response`` reads
   every field back *from disk*, so mocked stages must save through the real
   stage code for the returned dict to see their values.
-* **The 11 side-effect points are mocked** (7 heavy ML services + the two
+* **The 12 side-effect points are mocked** (7 heavy ML services + the two
   heavy audio utils + the network-bound FactCheckService + the byte-producing
-  PDFService), all ``autospec=True`` so call-signature drift fails loudly.
-* **The 6 cheap, pure-python services run REAL** (alignment, metadata,
-  keyword, intent, flag, insight + adapter). They are deterministic and
+  PDFService + KeywordService), all ``autospec=True`` so call-signature drift
+  fails loudly.
+* **The 5 cheap, pure-python services run REAL** (alignment, metadata,
+  intent, flag, insight + adapter). They are deterministic and
   side-effect-free, so running them real gives truer coverage than hand-built
   return shapes — and it exercises the disk round-trip for free (stage E's
   ``align`` reads the whisper.json / diarization.json that stages C/D saved).
+
+  KeywordService looks pure-python but is **not**: it calls
+  ``spacy.load("en_core_web_sm")`` and builds a ``SentenceTransformer``. The
+  spaCy model is a separate ``python -m spacy download`` artifact declared in
+  no requirements file, so running it real passed locally and failed in CI
+  with ``KEYWORDS_FAILED``. A safety net must not depend on model artifacts
+  or an HF network fetch — hence mocked, not "install the model in CI".
 * Fixtures are **module-local, not a shared conftest**, to avoid leaking this
   wiring into the 118 sibling insight tests.
 
@@ -107,14 +115,15 @@ def _wire_happy(m: SimpleNamespace) -> None:
     """Point every mocked side-effect stage at its golden return value.
 
     Heavy NLP enrichers use pass-through ``side_effect`` so the in-place
-    ``speaker_segments`` reassignment chain is preserved (real keyword
-    enrichment survives between the mocked sentiment/gender/emotion steps).
+    ``speaker_segments`` reassignment chain is preserved — each enricher
+    hands the segments it was given to the next stage.
     """
     m.normalize.return_value = None
     m.aq.return_value = _golden_aq()
     m.asr.return_value.transcribe.return_value = dict(GOLDEN_ASR)
     m.diar.return_value.diarize_with_warnings.return_value = (list(GOLDEN_DIAR), [])
     m.sentiment.analyze_speaker_segments.side_effect = lambda segs: segs
+    m.keywords.extract_keywords_per_segment.side_effect = lambda segs, top_k=5: segs
     m.gender.add_gender_to_segments.side_effect = lambda segs, wav: segs
     m.emotion.analyze_speaker_segments.side_effect = lambda wav, segs: segs
     m.emotion.summarize_emotions.return_value = {"SPEAKER_00": {"neutral": 1.0}}
@@ -148,9 +157,9 @@ def _seed_input(io: JobIO, job_id: str = JOB_ID) -> None:
 
 @pytest.fixture
 def mx() -> Iterator[SimpleNamespace]:
-    """Patch the 11 side-effect points (autospec) and wire the happy path.
+    """Patch the 12 side-effect points (autospec) and wire the happy path.
 
-    Cheap pure-python services (alignment/metadata/keyword/intent/flag/insight
+    Cheap pure-python services (alignment/metadata/intent/flag/insight
     + adapter) are deliberately left real.
     """
     with contextlib.ExitStack() as stack:
@@ -164,6 +173,7 @@ def mx() -> Iterator[SimpleNamespace]:
             asr=_p("ASRService"),
             diar=_p("DiarizationService"),
             sentiment=_p("SentimentService"),
+            keywords=_p("KeywordService"),
             gender=_p("GenderService"),
             emotion=_p("EmotionService"),
             topic=_p("TopicService"),
@@ -518,9 +528,8 @@ class TestNLPEnrichment:
 
     def test_keywords_exception_is_soft(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
         _seed_input(io)
-        with patch(f"{_ORCH}.KeywordService", autospec=True) as kw_cls:
-            kw_cls.extract_keywords_per_segment.side_effect = RuntimeError("keywords died")
-            res = orch.run(JOB_ID)
+        mx.keywords.extract_keywords_per_segment.side_effect = RuntimeError("keywords died")
+        res = orch.run(JOB_ID)
         assert res["pipeline_meta"]["status"] == "ok"
         assert "KEYWORDS_FAILED" in res["warnings"]
 
