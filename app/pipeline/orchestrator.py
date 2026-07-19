@@ -411,45 +411,10 @@ class VoiceIQOrchestrator:
         self._run_topic(st)
         self._run_summary(st)
 
-        # Intent / flags / factcheck (fail-soft)
-        t0 = _now_ms()
-        try:
-            if st.conversation:
-                st.conversation_with_intents = IntentService.annotate_conversation(st.conversation)
-                st.intents_summary = IntentService.summarize_intents(st.conversation_with_intents)
-            else:
-                st.skip("intent")
-                st.warn("INTENT_SKIPPED_NO_CONVERSATION")
-
-            self.io.save_json(job, "artifacts/nlp/conversation_with_intents.json", st.conversation_with_intents)
-            self.io.save_json(job, "artifacts/nlp/intents_summary.json", st.intents_summary)
-        except Exception as e:
-            st.warn("INTENT_FAILED")
-            self.io.save_json(job, "artifacts/nlp/intents_summary.json", {})
-            self.io.save_json(job, "artifacts/nlp/intent.status.json", {"status": "failed", "error": str(e)})
-        st.timing("intent", t0)
-
-        t0 = _now_ms()
-        try:
-            st.fact_checks = FactCheckService.fact_check(st.transcript_text or "")
-            self.io.save_json(job, "artifacts/nlp/fact_checks.json", st.fact_checks)
-        except Exception as e:
-            st.warn("FACTCHECK_FAILED")
-            self.io.save_json(job, "artifacts/nlp/fact_checks.json", [])
-            self.io.save_json(job, "artifacts/nlp/factcheck.status.json", {"status": "failed", "error": str(e)})
-        st.timing("factcheck", t0)
-
-        t0 = _now_ms()
-        try:
-            if st.single_speaker_mode:
-                st.warn("FLAGS_LIMITED_SINGLE_SPEAKER")
-            st.flags = FlagService.generate_flags(st.conversation_with_intents) if st.conversation_with_intents else []
-            self.io.save_json(job, "artifacts/nlp/flags.json", st.flags)
-        except Exception as e:
-            st.warn("FLAGS_FAILED")
-            self.io.save_json(job, "artifacts/nlp/flags.json", [])
-            self.io.save_json(job, "artifacts/nlp/flags.status.json", {"status": "failed", "error": str(e)})
-        st.timing("flags", t0)
+        # Intent / factcheck / flags (fail-soft)
+        self._run_intent(st)
+        self._run_factcheck(st)
+        self._run_flags(st)
 
         # -----------------------
         # Step H: Insight Service
@@ -664,6 +629,48 @@ class VoiceIQOrchestrator:
             self.io.save_text(st.job, "artifacts/nlp/summary.txt", "")
             self.io.save_json(st.job, "artifacts/nlp/summary.status.json", {"status": "failed", "error": str(e)})
         st.timing("summary", t0)
+
+    def _run_intent(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            if st.conversation:
+                st.conversation_with_intents = IntentService.annotate_conversation(st.conversation)
+                st.intents_summary = IntentService.summarize_intents(st.conversation_with_intents)
+            else:
+                st.skip("intent")
+                st.warn("INTENT_SKIPPED_NO_CONVERSATION")
+
+            self.io.save_json(st.job, "artifacts/nlp/conversation_with_intents.json", st.conversation_with_intents)
+            self.io.save_json(st.job, "artifacts/nlp/intents_summary.json", st.intents_summary)
+        except Exception as e:
+            st.warn("INTENT_FAILED")
+            self.io.save_json(st.job, "artifacts/nlp/intents_summary.json", {})
+            self.io.save_json(st.job, "artifacts/nlp/intent.status.json", {"status": "failed", "error": str(e)})
+        st.timing("intent", t0)
+
+    def _run_factcheck(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            st.fact_checks = FactCheckService.fact_check(st.transcript_text or "")
+            self.io.save_json(st.job, "artifacts/nlp/fact_checks.json", st.fact_checks)
+        except Exception as e:
+            st.warn("FACTCHECK_FAILED")
+            self.io.save_json(st.job, "artifacts/nlp/fact_checks.json", [])
+            self.io.save_json(st.job, "artifacts/nlp/factcheck.status.json", {"status": "failed", "error": str(e)})
+        st.timing("factcheck", t0)
+
+    def _run_flags(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            if st.single_speaker_mode:
+                st.warn("FLAGS_LIMITED_SINGLE_SPEAKER")
+            st.flags = FlagService.generate_flags(st.conversation_with_intents) if st.conversation_with_intents else []
+            self.io.save_json(st.job, "artifacts/nlp/flags.json", st.flags)
+        except Exception as e:
+            st.warn("FLAGS_FAILED")
+            self.io.save_json(st.job, "artifacts/nlp/flags.json", [])
+            self.io.save_json(st.job, "artifacts/nlp/flags.status.json", {"status": "failed", "error": str(e)})
+        st.timing("flags", t0)
 
     def _final_response(self, job: JobPaths, meta: dict[str, Any]) -> dict[str, Any]:
         transcript = self.io.load_text(job, "artifacts/asr/transcript.txt", default="")
