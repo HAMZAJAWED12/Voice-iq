@@ -404,64 +404,12 @@ class VoiceIQOrchestrator:
         # Step G: NLP enrichment (modular)
         self._run_sentiment(st)
         self._run_keywords(st)
-
-        t0 = _now_ms()
-        try:
-            if st.low_snr_flag:
-                st.skip("gender")
-                st.warn("GENDER_SKIPPED_LOW_SNR")
-            elif st.speaker_segments:
-                out = GenderService.add_gender_to_segments(st.speaker_segments, st.normalized_wav)
-                st.speaker_segments = out
-                self.io.save_json(job, "artifacts/nlp/gender_segments.json", st.speaker_segments)
-            else:
-                st.skip("gender")
-                st.warn("GENDER_SKIPPED_NO_SPEAKER_SEGMENTS")
-        except Exception as e:
-            st.warn("GENDER_FAILED")
-            self.io.save_json(job, "artifacts/nlp/gender.status.json", {"status": "failed", "error": str(e)})
-        st.timing("gender", t0)
-
-        t0 = _now_ms()
-        try:
-            if st.low_snr_flag:
-                st.skip("emotion")
-                st.warn("EMOTION_SKIPPED_LOW_SNR")
-                st.emotion_overview = {}
-            elif st.speaker_segments:
-                out = EmotionService.analyze_speaker_segments(st.normalized_wav, st.speaker_segments)
-                st.speaker_segments = out
-                st.emotion_overview = EmotionService.summarize_emotions(st.speaker_segments)
-                self.io.save_json(job, "artifacts/nlp/emotion_segments.json", st.speaker_segments)
-                self.io.save_json(job, "artifacts/nlp/emotion_overview.json", st.emotion_overview)
-            else:
-                st.skip("emotion")
-                st.warn("EMOTION_SKIPPED_NO_SPEAKER_SEGMENTS")
-                st.emotion_overview = {}
-        except Exception as e:
-            st.warn("EMOTION_FAILED")
-            self.io.save_json(job, "artifacts/nlp/emotion.status.json", {"status": "failed", "error": str(e)})
-        st.timing("emotion", t0)
+        self._run_gender(st)
+        self._run_emotion(st)
 
         # Topic / Summary from transcript
-        t0 = _now_ms()
-        try:
-            st.topic = TopicService.classify(st.transcript_text or "")
-            self.io.save_json(job, "artifacts/nlp/topic.json", st.topic)
-        except Exception as e:
-            st.warn("TOPIC_FAILED")
-            self.io.save_json(job, "artifacts/nlp/topic.json", {"topic": "unknown", "confidence": 0.0, "error": str(e)})
-        st.timing("topic", t0)
-
-        t0 = _now_ms()
-        try:
-            st.summary_text = SummaryService.generate_summary(st.transcript_text or "")
-            self.io.save_text(job, "artifacts/nlp/summary.txt", st.summary_text or "")
-        except Exception as e:
-            st.warn("SUMMARY_FAILED")
-            self.io.save_text(job, "artifacts/nlp/summary.txt", "")
-            self.io.save_json(job, "artifacts/nlp/summary.status.json", {"status": "failed", "error": str(e)})
-        st.timing("summary", t0)
+        self._run_topic(st)
+        self._run_summary(st)
 
         # Intent / flags / factcheck (fail-soft)
         t0 = _now_ms()
@@ -653,6 +601,69 @@ class VoiceIQOrchestrator:
             st.warn("KEYWORDS_FAILED")
             self.io.save_json(st.job, "artifacts/nlp/keywords.status.json", {"status": "failed", "error": str(e)})
         st.timing("keywords", t0)
+
+    def _run_gender(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            if st.low_snr_flag:
+                st.skip("gender")
+                st.warn("GENDER_SKIPPED_LOW_SNR")
+            elif st.speaker_segments:
+                out = GenderService.add_gender_to_segments(st.speaker_segments, st.normalized_wav)
+                st.speaker_segments = out
+                self.io.save_json(st.job, "artifacts/nlp/gender_segments.json", st.speaker_segments)
+            else:
+                st.skip("gender")
+                st.warn("GENDER_SKIPPED_NO_SPEAKER_SEGMENTS")
+        except Exception as e:
+            st.warn("GENDER_FAILED")
+            self.io.save_json(st.job, "artifacts/nlp/gender.status.json", {"status": "failed", "error": str(e)})
+        st.timing("gender", t0)
+
+    def _run_emotion(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            if st.low_snr_flag:
+                st.skip("emotion")
+                st.warn("EMOTION_SKIPPED_LOW_SNR")
+                st.emotion_overview = {}
+            elif st.speaker_segments:
+                out = EmotionService.analyze_speaker_segments(st.normalized_wav, st.speaker_segments)
+                st.speaker_segments = out
+                st.emotion_overview = EmotionService.summarize_emotions(st.speaker_segments)
+                self.io.save_json(st.job, "artifacts/nlp/emotion_segments.json", st.speaker_segments)
+                self.io.save_json(st.job, "artifacts/nlp/emotion_overview.json", st.emotion_overview)
+            else:
+                st.skip("emotion")
+                st.warn("EMOTION_SKIPPED_NO_SPEAKER_SEGMENTS")
+                st.emotion_overview = {}
+        except Exception as e:
+            st.warn("EMOTION_FAILED")
+            self.io.save_json(st.job, "artifacts/nlp/emotion.status.json", {"status": "failed", "error": str(e)})
+        st.timing("emotion", t0)
+
+    def _run_topic(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            st.topic = TopicService.classify(st.transcript_text or "")
+            self.io.save_json(st.job, "artifacts/nlp/topic.json", st.topic)
+        except Exception as e:
+            st.warn("TOPIC_FAILED")
+            self.io.save_json(
+                st.job, "artifacts/nlp/topic.json", {"topic": "unknown", "confidence": 0.0, "error": str(e)}
+            )
+        st.timing("topic", t0)
+
+    def _run_summary(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            st.summary_text = SummaryService.generate_summary(st.transcript_text or "")
+            self.io.save_text(st.job, "artifacts/nlp/summary.txt", st.summary_text or "")
+        except Exception as e:
+            st.warn("SUMMARY_FAILED")
+            self.io.save_text(st.job, "artifacts/nlp/summary.txt", "")
+            self.io.save_json(st.job, "artifacts/nlp/summary.status.json", {"status": "failed", "error": str(e)})
+        st.timing("summary", t0)
 
     def _final_response(self, job: JobPaths, meta: dict[str, Any]) -> dict[str, Any]:
         transcript = self.io.load_text(job, "artifacts/asr/transcript.txt", default="")
