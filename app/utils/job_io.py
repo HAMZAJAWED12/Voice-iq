@@ -98,7 +98,15 @@ class JobIO:
         path.write_text(text or "", encoding="utf-8")
         return path
 
-    def load_text(self, job: JobPaths, rel: str, default: str = "") -> str:
+    def load_text(self, job: JobPaths, rel: str, default: str | None = "") -> str | None:
+        """Read a text artifact, or return ``default`` when it does not exist.
+
+        ``default`` is deliberately ``str | None``: callers that want an
+        absent artifact to surface as ``None`` rather than an empty string
+        pass ``default=None`` (the orchestrator does this for the PDF base64,
+        where ``None`` means "no report produced"). Coercing the default to
+        ``str`` would silently flip that response contract from None to "".
+        """
         path = self.p(job, rel)
         return path.read_text(encoding="utf-8") if path.exists() else default
 
