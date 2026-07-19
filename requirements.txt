@@ -22,6 +22,7 @@ librosa==0.10.2.post1
 soundfile==0.12.1
 
 pyannote.audio==3.3.2
+fpdf==1.7.2
 
 pytest==8.3.3
 pytest-asyncio==0.24.0
