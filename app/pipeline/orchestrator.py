@@ -52,6 +52,18 @@ def _safe_ctor_kwargs(cls, kwargs: dict[str, Any]) -> dict[str, Any]:
         return kwargs
 
 
+class _HardFail(Exception):
+    """Raised by a gate stage to abort the pipeline early.
+
+    Only the four hard-fail gates raise it: missing input audio, the two
+    audio-normalization failures, and silent/near-silent audio. The gate
+    is responsible for setting ``status="failed"``, recording its warning,
+    and persisting meta.json before raising; ``run`` catches it once and
+    returns the (failed) final response. Every later stage is fail-soft
+    and never raises this.
+    """
+
+
 @dataclass
 class _PipelineState:
     """Mutable state threaded through the pipeline stages.
@@ -145,110 +157,15 @@ class VoiceIQOrchestrator:
             language=language,
         )
 
-        # Find uploaded file saved by API as input/original.<ext>
-        input_candidates = list(job.input_dir.glob("original.*"))
-        if not input_candidates:
-            meta["status"] = "failed"
-            st.warn("MISSING_INPUT_AUDIO")
-            self.io.save_json(job, "meta.json", meta)
-            return self._final_response(job, meta)
-
-        st.input_audio_path = input_candidates[0]
-
-        # -----------------------
-        # Step A: Normalize audio
-        # -----------------------
-        t0 = _now_ms()
-        st.normalized_wav = str(self.io.p(job, "artifacts/audio/normalized.wav"))
+        # Hard-fail gates (input presence, normalize, audio quality). Any of
+        # these raising _HardFail aborts the pipeline early with
+        # status="failed"; every later stage is fail-soft.
         try:
-            normalize_to_wav(str(st.input_audio_path), st.normalized_wav, sr=16000)
-            self.io.save_json(
-                job,
-                "artifacts/audio/normalize.status.json",
-                {
-                    "service": "audio_normalize",
-                    "status": "ok",
-                    "input": str(st.input_audio_path),
-                    "output": st.normalized_wav,
-                },
-            )
-        except AudioNormalizationTimeout as e:
-            # Distinct warning code so the HTTP layer can map this to 422
-            # (caller's fault, retry not useful) vs. AUDIO_NORMALIZATION_FAILED
-            # which maps to 400 (malformed file).
-            meta["status"] = "failed"
-            st.warn("AUDIO_NORMALIZATION_TIMEOUT")
-            self.io.save_json(
-                job,
-                "artifacts/audio/normalize.status.json",
-                {
-                    "service": "audio_normalize",
-                    "status": "timeout",
-                    "error": str(e),
-                },
-            )
-            st.timing("audio_normalize", t0)
-            self.io.save_json(job, "meta.json", meta)
+            self._run_input_gate(st)
+            self._run_normalize(st)
+            self._run_audio_quality(st)
+        except _HardFail:
             return self._final_response(job, meta)
-        except Exception as e:
-            meta["status"] = "failed"
-            st.warn("AUDIO_NORMALIZATION_FAILED")
-            self.io.save_json(
-                job,
-                "artifacts/audio/normalize.status.json",
-                {
-                    "service": "audio_normalize",
-                    "status": "failed",
-                    "error": str(e),
-                },
-            )
-            st.timing("audio_normalize", t0)
-            self.io.save_json(job, "meta.json", meta)
-            return self._final_response(job, meta)
-        st.timing("audio_normalize", t0)
-
-        # -----------------------
-        # Step B: Audio quality guardrails
-        # -----------------------
-        t0 = _now_ms()
-        try:
-            st.aq = analyze_audio_quality(st.normalized_wav)
-            st.audio_quality_payload = st.aq.to_dict()
-            self.io.save_json(job, "artifacts/audio/audio_quality.json", st.audio_quality_payload)
-            self.io.save_json(
-                job,
-                "artifacts/audio/audio_quality.status.json",
-                {
-                    "service": "audio_quality",
-                    "status": "ok",
-                },
-            )
-
-            if st.aq.is_silent or st.aq.is_near_silent:
-                meta["status"] = "failed"
-                st.warn("AUDIO_SILENT_OR_NEAR_SILENT")
-                self.io.save_json(job, "meta.json", meta)
-                return self._final_response(job, meta)
-
-            if st.aq.low_snr:
-                st.warn("LOW_SNR_AUDIO")
-            if st.aq.very_low_snr:
-                st.warn("HEAVY_NOISE_AUDIO")
-
-        except Exception as e:
-            st.warn("AUDIO_QUALITY_FAILED")
-            self.io.save_json(
-                job,
-                "artifacts/audio/audio_quality.status.json",
-                {
-                    "service": "audio_quality",
-                    "status": "failed",
-                    "error": str(e),
-                },
-            )
-        st.timing("audio_quality", t0)
-
-        st.low_snr_flag = bool(st.aq and (st.aq.low_snr or st.aq.very_low_snr))
 
         # Step C: ASR
         self._run_asr(st)
@@ -295,6 +212,112 @@ class VoiceIQOrchestrator:
     # records its own timing. All are fail-soft (warn + continue) except
     # the four hard-fail gates, which raise _HardFail.
     # ------------------------------------------------------------------
+
+    def _run_input_gate(self, st: _PipelineState) -> None:
+        # Find uploaded file saved by API as input/original.<ext>
+        input_candidates = list(st.job.input_dir.glob("original.*"))
+        if not input_candidates:
+            st.meta["status"] = "failed"
+            st.warn("MISSING_INPUT_AUDIO")
+            self.io.save_json(st.job, "meta.json", st.meta)
+            raise _HardFail
+
+        st.input_audio_path = input_candidates[0]
+
+    def _run_normalize(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        st.normalized_wav = str(self.io.p(st.job, "artifacts/audio/normalized.wav"))
+        try:
+            normalize_to_wav(str(st.input_audio_path), st.normalized_wav, sr=16000)
+            self.io.save_json(
+                st.job,
+                "artifacts/audio/normalize.status.json",
+                {
+                    "service": "audio_normalize",
+                    "status": "ok",
+                    "input": str(st.input_audio_path),
+                    "output": st.normalized_wav,
+                },
+            )
+        except AudioNormalizationTimeout as e:
+            # Distinct warning code so the HTTP layer can map this to 422
+            # (caller's fault, retry not useful) vs. AUDIO_NORMALIZATION_FAILED
+            # which maps to 400 (malformed file).
+            st.meta["status"] = "failed"
+            st.warn("AUDIO_NORMALIZATION_TIMEOUT")
+            self.io.save_json(
+                st.job,
+                "artifacts/audio/normalize.status.json",
+                {
+                    "service": "audio_normalize",
+                    "status": "timeout",
+                    "error": str(e),
+                },
+            )
+            st.timing("audio_normalize", t0)
+            self.io.save_json(st.job, "meta.json", st.meta)
+            raise _HardFail from e
+        except Exception as e:
+            st.meta["status"] = "failed"
+            st.warn("AUDIO_NORMALIZATION_FAILED")
+            self.io.save_json(
+                st.job,
+                "artifacts/audio/normalize.status.json",
+                {
+                    "service": "audio_normalize",
+                    "status": "failed",
+                    "error": str(e),
+                },
+            )
+            st.timing("audio_normalize", t0)
+            self.io.save_json(st.job, "meta.json", st.meta)
+            raise _HardFail from e
+        st.timing("audio_normalize", t0)
+
+    def _run_audio_quality(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            st.aq = analyze_audio_quality(st.normalized_wav)
+            st.audio_quality_payload = st.aq.to_dict()
+            self.io.save_json(st.job, "artifacts/audio/audio_quality.json", st.audio_quality_payload)
+            self.io.save_json(
+                st.job,
+                "artifacts/audio/audio_quality.status.json",
+                {
+                    "service": "audio_quality",
+                    "status": "ok",
+                },
+            )
+
+            if st.aq.is_silent or st.aq.is_near_silent:
+                st.meta["status"] = "failed"
+                st.warn("AUDIO_SILENT_OR_NEAR_SILENT")
+                self.io.save_json(st.job, "meta.json", st.meta)
+                raise _HardFail
+
+            if st.aq.low_snr:
+                st.warn("LOW_SNR_AUDIO")
+            if st.aq.very_low_snr:
+                st.warn("HEAVY_NOISE_AUDIO")
+
+        except _HardFail:
+            # Silent/near-silent is a hard fail, not a soft AUDIO_QUALITY_FAILED —
+            # must not be swallowed by the generic handler below.
+            raise
+        except Exception as e:
+            st.warn("AUDIO_QUALITY_FAILED")
+            self.io.save_json(
+                st.job,
+                "artifacts/audio/audio_quality.status.json",
+                {
+                    "service": "audio_quality",
+                    "status": "failed",
+                    "error": str(e),
+                },
+            )
+        st.timing("audio_quality", t0)
+
+        st.low_snr_flag = bool(st.aq and (st.aq.low_snr or st.aq.very_low_snr))
 
     def _run_asr(self, st: _PipelineState) -> None:
         t0 = _now_ms()
