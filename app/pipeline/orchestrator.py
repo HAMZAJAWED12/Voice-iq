@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import base64
 import time
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from app.insights.adapters import VoiceIQInsightAdapter
@@ -21,7 +23,7 @@ from app.services.pdf_service import PDFService
 from app.services.sentiment_service import SentimentService
 from app.services.summary_service import SummaryService
 from app.services.topic_service import TopicService
-from app.utils.audio_quality import analyze_audio_quality
+from app.utils.audio_quality import AudioQualityReport, analyze_audio_quality
 from app.utils.audio_utils import (
     AudioNormalizationTimeout,
     normalize_to_wav,
@@ -48,6 +50,59 @@ def _safe_ctor_kwargs(cls, kwargs: dict[str, Any]) -> dict[str, Any]:
         return {k: v for k, v in kwargs.items() if k in allowed}
     except Exception:
         return kwargs
+
+
+@dataclass
+class _PipelineState:
+    """Mutable state threaded through the pipeline stages.
+
+    Every value that one stage produces and a later stage consumes lives
+    here, so the sequencing contract between stages is visible in one
+    place instead of being implied by ~20 locals in a single long
+    function. Stage-internal temporaries stay as locals.
+    """
+
+    # Per-run context
+    job: JobPaths
+    meta: dict[str, Any]
+    job_id: str
+    expected_speakers: int | None = None
+    max_speakers_cap: int = 8
+    whisper_model: str = "base"
+    language: str | None = None
+
+    # Stage outputs, in production order
+    input_audio_path: Path | None = None
+    normalized_wav: str = ""
+    aq: AudioQualityReport | None = None
+    audio_quality_payload: dict[str, Any] = field(default_factory=dict)
+    low_snr_flag: bool = False
+    asr_out: dict[str, Any] = field(default_factory=lambda: {"text": "", "segments": [], "meta": {}})
+    transcript_text: str = ""
+    diar_segments: list[dict[str, Any]] = field(default_factory=list)
+    single_speaker_mode: bool = False
+    speaker_segments: list[dict[str, Any]] = field(default_factory=list)
+    conversation: list[dict[str, Any]] = field(default_factory=list)
+    speaker_stats: dict[str, Any] = field(default_factory=dict)
+    conversation_stats: dict[str, Any] = field(default_factory=dict)
+    emotion_overview: dict[str, Any] = field(default_factory=dict)
+    topic: dict[str, Any] = field(default_factory=lambda: {"topic": "unknown", "confidence": 0.0})
+    summary_text: str = ""
+    conversation_with_intents: list[dict[str, Any]] = field(default_factory=list)
+    intents_summary: dict[str, Any] = field(default_factory=dict)
+    fact_checks: list[dict[str, Any]] = field(default_factory=list)
+    flags: list[dict[str, Any]] = field(default_factory=list)
+    insight_payload: dict[str, Any] | None = None
+
+    def warn(self, code: str) -> None:
+        if code not in self.meta["warnings"]:
+            self.meta["warnings"].append(code)
+
+    def timing(self, name: str, start_ms: int) -> None:
+        self.meta["timings_ms"][name] = _now_ms() - start_ms
+
+    def skip(self, name: str) -> None:
+        self.meta["skipped_steps"].append(name)
 
 
 class VoiceIQOrchestrator:
@@ -80,38 +135,41 @@ class VoiceIQOrchestrator:
             "status": "running",
         }
 
-        def warn(code: str):
-            if code not in meta["warnings"]:
-                meta["warnings"].append(code)
-
-        def timing(name: str, start_ms: int):
-            meta["timings_ms"][name] = _now_ms() - start_ms
+        st = _PipelineState(
+            job=job,
+            meta=meta,
+            job_id=job_id,
+            expected_speakers=expected_speakers,
+            max_speakers_cap=max_speakers_cap,
+            whisper_model=whisper_model,
+            language=language,
+        )
 
         # Find uploaded file saved by API as input/original.<ext>
         input_candidates = list(job.input_dir.glob("original.*"))
         if not input_candidates:
             meta["status"] = "failed"
-            warn("MISSING_INPUT_AUDIO")
+            st.warn("MISSING_INPUT_AUDIO")
             self.io.save_json(job, "meta.json", meta)
             return self._final_response(job, meta)
 
-        input_audio_path = input_candidates[0]
+        st.input_audio_path = input_candidates[0]
 
         # -----------------------
         # Step A: Normalize audio
         # -----------------------
         t0 = _now_ms()
-        normalized_wav = str(self.io.p(job, "artifacts/audio/normalized.wav"))
+        st.normalized_wav = str(self.io.p(job, "artifacts/audio/normalized.wav"))
         try:
-            normalize_to_wav(str(input_audio_path), normalized_wav, sr=16000)
+            normalize_to_wav(str(st.input_audio_path), st.normalized_wav, sr=16000)
             self.io.save_json(
                 job,
                 "artifacts/audio/normalize.status.json",
                 {
                     "service": "audio_normalize",
                     "status": "ok",
-                    "input": str(input_audio_path),
-                    "output": normalized_wav,
+                    "input": str(st.input_audio_path),
+                    "output": st.normalized_wav,
                 },
             )
         except AudioNormalizationTimeout as e:
@@ -119,7 +177,7 @@ class VoiceIQOrchestrator:
             # (caller's fault, retry not useful) vs. AUDIO_NORMALIZATION_FAILED
             # which maps to 400 (malformed file).
             meta["status"] = "failed"
-            warn("AUDIO_NORMALIZATION_TIMEOUT")
+            st.warn("AUDIO_NORMALIZATION_TIMEOUT")
             self.io.save_json(
                 job,
                 "artifacts/audio/normalize.status.json",
@@ -129,12 +187,12 @@ class VoiceIQOrchestrator:
                     "error": str(e),
                 },
             )
-            timing("audio_normalize", t0)
+            st.timing("audio_normalize", t0)
             self.io.save_json(job, "meta.json", meta)
             return self._final_response(job, meta)
         except Exception as e:
             meta["status"] = "failed"
-            warn("AUDIO_NORMALIZATION_FAILED")
+            st.warn("AUDIO_NORMALIZATION_FAILED")
             self.io.save_json(
                 job,
                 "artifacts/audio/normalize.status.json",
@@ -144,21 +202,19 @@ class VoiceIQOrchestrator:
                     "error": str(e),
                 },
             )
-            timing("audio_normalize", t0)
+            st.timing("audio_normalize", t0)
             self.io.save_json(job, "meta.json", meta)
             return self._final_response(job, meta)
-        timing("audio_normalize", t0)
+        st.timing("audio_normalize", t0)
 
         # -----------------------
         # Step B: Audio quality guardrails
         # -----------------------
         t0 = _now_ms()
-        aq = None
-        audio_quality_payload: dict[str, Any] = {}
         try:
-            aq = analyze_audio_quality(normalized_wav)
-            audio_quality_payload = aq.to_dict()
-            self.io.save_json(job, "artifacts/audio/audio_quality.json", audio_quality_payload)
+            st.aq = analyze_audio_quality(st.normalized_wav)
+            st.audio_quality_payload = st.aq.to_dict()
+            self.io.save_json(job, "artifacts/audio/audio_quality.json", st.audio_quality_payload)
             self.io.save_json(
                 job,
                 "artifacts/audio/audio_quality.status.json",
@@ -168,19 +224,19 @@ class VoiceIQOrchestrator:
                 },
             )
 
-            if aq.is_silent or aq.is_near_silent:
+            if st.aq.is_silent or st.aq.is_near_silent:
                 meta["status"] = "failed"
-                warn("AUDIO_SILENT_OR_NEAR_SILENT")
+                st.warn("AUDIO_SILENT_OR_NEAR_SILENT")
                 self.io.save_json(job, "meta.json", meta)
                 return self._final_response(job, meta)
 
-            if aq.low_snr:
-                warn("LOW_SNR_AUDIO")
-            if aq.very_low_snr:
-                warn("HEAVY_NOISE_AUDIO")
+            if st.aq.low_snr:
+                st.warn("LOW_SNR_AUDIO")
+            if st.aq.very_low_snr:
+                st.warn("HEAVY_NOISE_AUDIO")
 
         except Exception as e:
-            warn("AUDIO_QUALITY_FAILED")
+            st.warn("AUDIO_QUALITY_FAILED")
             self.io.save_json(
                 job,
                 "artifacts/audio/audio_quality.status.json",
@@ -190,23 +246,22 @@ class VoiceIQOrchestrator:
                     "error": str(e),
                 },
             )
-        timing("audio_quality", t0)
+        st.timing("audio_quality", t0)
 
-        low_snr_flag = bool(aq and (aq.low_snr or aq.very_low_snr))
+        st.low_snr_flag = bool(st.aq and (st.aq.low_snr or st.aq.very_low_snr))
 
         # -----------------------
         # Step C: ASR
         # -----------------------
         t0 = _now_ms()
-        asr_out: dict[str, Any] = {"text": "", "segments": [], "meta": {}}
         try:
-            asr = ASRService(model_name=whisper_model, language=language)
-            asr_out = asr.transcribe(normalized_wav)
+            asr = ASRService(model_name=st.whisper_model, language=st.language)
+            st.asr_out = asr.transcribe(st.normalized_wav)
 
-            text = (asr_out.get("text") or "").strip()
-            segments = asr_out.get("segments") or []
+            text = (st.asr_out.get("text") or "").strip()
+            segments = st.asr_out.get("segments") or []
 
-            self.io.save_json(job, "artifacts/asr/whisper.json", asr_out)
+            self.io.save_json(job, "artifacts/asr/whisper.json", st.asr_out)
             self.io.save_text(job, "artifacts/asr/transcript.txt", text)
             self.io.save_json(
                 job,
@@ -214,17 +269,17 @@ class VoiceIQOrchestrator:
                 {
                     "service": "asr",
                     "status": "ok",
-                    "model": whisper_model,
+                    "model": st.whisper_model,
                     "num_segments": len(segments),
                     "total_chars": len(text),
                 },
             )
 
             if not text:
-                warn("EMPTY_TRANSCRIPT")
+                st.warn("EMPTY_TRANSCRIPT")
 
         except Exception as e:
-            warn("ASR_FAILED")
+            st.warn("ASR_FAILED")
             self.io.save_json(
                 job,
                 "artifacts/asr/asr.status.json",
@@ -234,48 +289,47 @@ class VoiceIQOrchestrator:
                     "error": str(e),
                 },
             )
-        timing("asr", t0)
+        st.timing("asr", t0)
 
         # Load transcript for downstream steps
-        transcript_text = self.io.load_text(job, "artifacts/asr/transcript.txt", default="")
+        st.transcript_text = self.io.load_text(job, "artifacts/asr/transcript.txt", default="") or ""
 
         # -----------------------
         # Step D: Diarization (fail-soft)
         # -----------------------
         t0 = _now_ms()
-        diar_segments: list[dict[str, Any]] = []
         diar_warns: list[str] = []
         try:
             diar = DiarizationService()
 
             if hasattr(diar, "diarize_with_warnings"):
-                diar_segments, diar_warns = diar.diarize_with_warnings(
-                    normalized_wav,
-                    expected_speakers=expected_speakers,
-                    max_speakers_cap=max_speakers_cap,
-                    low_snr=low_snr_flag,
+                st.diar_segments, diar_warns = diar.diarize_with_warnings(
+                    st.normalized_wav,
+                    expected_speakers=st.expected_speakers,
+                    max_speakers_cap=st.max_speakers_cap,
+                    low_snr=st.low_snr_flag,
                 )
             else:
-                diar_segments = diar.diarize(normalized_wav)
+                st.diar_segments = diar.diarize(st.normalized_wav)
 
             for w in diar_warns:
-                warn(w)
+                st.warn(w)
 
-            self.io.save_json(job, "artifacts/diarization/diarization.json", diar_segments)
+            self.io.save_json(job, "artifacts/diarization/diarization.json", st.diar_segments)
             self.io.save_json(
                 job,
                 "artifacts/diarization/diar.status.json",
                 {
                     "service": "diarization",
                     "status": "ok",
-                    "num_segments": len(diar_segments),
-                    "num_speakers": len(set(d.get("speaker") for d in diar_segments if d.get("speaker"))),
+                    "num_segments": len(st.diar_segments),
+                    "num_speakers": len(set(d.get("speaker") for d in st.diar_segments if d.get("speaker"))),
                 },
             )
 
         except Exception as e:
-            warn("DIARIZATION_FAILED_FALLBACK")
-            diar_segments = []
+            st.warn("DIARIZATION_FAILED_FALLBACK")
+            st.diar_segments = []
             self.io.save_json(
                 job,
                 "artifacts/diarization/diar.status.json",
@@ -285,26 +339,24 @@ class VoiceIQOrchestrator:
                     "error": str(e),
                 },
             )
-        timing("diarization", t0)
+        st.timing("diarization", t0)
 
-        speaker_set = set([d.get("speaker") for d in diar_segments if d.get("speaker")])
-        single_speaker_mode = (not diar_segments) or (len(speaker_set) <= 1)
-        if single_speaker_mode:
-            warn("SINGLE_SPEAKER_MODE")
+        speaker_set = set([d.get("speaker") for d in st.diar_segments if d.get("speaker")])
+        st.single_speaker_mode = (not st.diar_segments) or (len(speaker_set) <= 1)
+        if st.single_speaker_mode:
+            st.warn("SINGLE_SPEAKER_MODE")
 
         # -----------------------
         # Step E: Alignment (requires ASR + diarization)
         # -----------------------
         t0 = _now_ms()
-        speaker_segments: list[dict[str, Any]] = []
-        conversation: list[dict[str, Any]] = []
         try:
             asr_saved = self.io.load_json(job, "artifacts/asr/whisper.json", default=None)
             diar_saved = self.io.load_json(job, "artifacts/diarization/diarization.json", default=None)
 
             if not asr_saved or not diar_saved:
-                meta["skipped_steps"].append("alignment")
-                warn("ALIGNMENT_SKIPPED_MISSING_INPUT")
+                st.skip("alignment")
+                st.warn("ALIGNMENT_SKIPPED_MISSING_INPUT")
             else:
                 kwargs = _safe_ctor_kwargs(
                     AlignmentService,
@@ -317,24 +369,24 @@ class VoiceIQOrchestrator:
                 aligner = AlignmentService(**kwargs)
 
                 aligned = aligner.align(asr_saved, diar_saved)
-                speaker_segments = aligned.get("speaker_segments", []) or []
-                conversation = aligner.build_conversation(asr_saved, diar_saved) or []
+                st.speaker_segments = aligned.get("speaker_segments", []) or []
+                st.conversation = aligner.build_conversation(asr_saved, diar_saved) or []
 
-                self.io.save_json(job, "artifacts/alignment/speaker_segments.json", speaker_segments)
-                self.io.save_json(job, "artifacts/alignment/conversation.json", conversation)
+                self.io.save_json(job, "artifacts/alignment/speaker_segments.json", st.speaker_segments)
+                self.io.save_json(job, "artifacts/alignment/conversation.json", st.conversation)
                 self.io.save_json(
                     job,
                     "artifacts/alignment/alignment.status.json",
                     {
                         "service": "alignment",
                         "status": "ok",
-                        "speaker_segments": len(speaker_segments),
-                        "conversation_turns": len(conversation),
+                        "speaker_segments": len(st.speaker_segments),
+                        "conversation_turns": len(st.conversation),
                     },
                 )
 
         except Exception as e:
-            warn("ALIGNMENT_FAILED")
+            st.warn("ALIGNMENT_FAILED")
             self.io.save_json(
                 job,
                 "artifacts/alignment/alignment.status.json",
@@ -344,23 +396,21 @@ class VoiceIQOrchestrator:
                     "error": str(e),
                 },
             )
-        timing("alignment", t0)
+        st.timing("alignment", t0)
 
         # -----------------------
         # Step F: Stats (safe)
         # -----------------------
         t0 = _now_ms()
-        speaker_stats: dict[str, Any] = {}
-        conversation_stats: dict[str, Any] = {}
         try:
-            speaker_stats = MetadataExtractor.compute_speaker_stats(speaker_segments or [])
-            conversation_stats = MetadataExtractor.compute_conversation_stats(
-                speaker_segments or [], diar_segments or []
+            st.speaker_stats = MetadataExtractor.compute_speaker_stats(st.speaker_segments or [])
+            st.conversation_stats = MetadataExtractor.compute_conversation_stats(
+                st.speaker_segments or [], st.diar_segments or []
             )
-            self.io.save_json(job, "artifacts/nlp/speaker_stats.json", speaker_stats)
-            self.io.save_json(job, "artifacts/nlp/conversation_stats.json", conversation_stats)
+            self.io.save_json(job, "artifacts/nlp/speaker_stats.json", st.speaker_stats)
+            self.io.save_json(job, "artifacts/nlp/conversation_stats.json", st.conversation_stats)
         except Exception as e:
-            warn("STATS_FAILED")
+            st.warn("STATS_FAILED")
             self.io.save_json(
                 job,
                 "artifacts/nlp/stats.status.json",
@@ -370,164 +420,156 @@ class VoiceIQOrchestrator:
                     "error": str(e),
                 },
             )
-        timing("stats", t0)
+        st.timing("stats", t0)
 
         # -----------------------
         # Step G: NLP enrichment (modular)
         # -----------------------
         t0 = _now_ms()
         try:
-            if speaker_segments:
-                out = SentimentService.analyze_speaker_segments(speaker_segments)
-                speaker_segments = out
-                self.io.save_json(job, "artifacts/nlp/sentiment_segments.json", speaker_segments)
+            if st.speaker_segments:
+                out = SentimentService.analyze_speaker_segments(st.speaker_segments)
+                st.speaker_segments = out
+                self.io.save_json(job, "artifacts/nlp/sentiment_segments.json", st.speaker_segments)
             else:
-                meta["skipped_steps"].append("sentiment")
-                warn("SENTIMENT_SKIPPED_NO_SPEAKER_SEGMENTS")
+                st.skip("sentiment")
+                st.warn("SENTIMENT_SKIPPED_NO_SPEAKER_SEGMENTS")
         except Exception as e:
-            warn("SENTIMENT_FAILED")
+            st.warn("SENTIMENT_FAILED")
             self.io.save_json(job, "artifacts/nlp/sentiment.status.json", {"status": "failed", "error": str(e)})
-        timing("sentiment", t0)
+        st.timing("sentiment", t0)
 
         t0 = _now_ms()
         try:
-            if speaker_segments:
-                out = KeywordService.extract_keywords_per_segment(speaker_segments)
-                speaker_segments = out
-                self.io.save_json(job, "artifacts/nlp/keywords_segments.json", speaker_segments)
+            if st.speaker_segments:
+                out = KeywordService.extract_keywords_per_segment(st.speaker_segments)
+                st.speaker_segments = out
+                self.io.save_json(job, "artifacts/nlp/keywords_segments.json", st.speaker_segments)
             else:
-                meta["skipped_steps"].append("keywords")
-                warn("KEYWORDS_SKIPPED_NO_SPEAKER_SEGMENTS")
+                st.skip("keywords")
+                st.warn("KEYWORDS_SKIPPED_NO_SPEAKER_SEGMENTS")
         except Exception as e:
-            warn("KEYWORDS_FAILED")
+            st.warn("KEYWORDS_FAILED")
             self.io.save_json(job, "artifacts/nlp/keywords.status.json", {"status": "failed", "error": str(e)})
-        timing("keywords", t0)
+        st.timing("keywords", t0)
 
         t0 = _now_ms()
         try:
-            if low_snr_flag:
-                meta["skipped_steps"].append("gender")
-                warn("GENDER_SKIPPED_LOW_SNR")
-            elif speaker_segments:
-                out = GenderService.add_gender_to_segments(speaker_segments, normalized_wav)
-                speaker_segments = out
-                self.io.save_json(job, "artifacts/nlp/gender_segments.json", speaker_segments)
+            if st.low_snr_flag:
+                st.skip("gender")
+                st.warn("GENDER_SKIPPED_LOW_SNR")
+            elif st.speaker_segments:
+                out = GenderService.add_gender_to_segments(st.speaker_segments, st.normalized_wav)
+                st.speaker_segments = out
+                self.io.save_json(job, "artifacts/nlp/gender_segments.json", st.speaker_segments)
             else:
-                meta["skipped_steps"].append("gender")
-                warn("GENDER_SKIPPED_NO_SPEAKER_SEGMENTS")
+                st.skip("gender")
+                st.warn("GENDER_SKIPPED_NO_SPEAKER_SEGMENTS")
         except Exception as e:
-            warn("GENDER_FAILED")
+            st.warn("GENDER_FAILED")
             self.io.save_json(job, "artifacts/nlp/gender.status.json", {"status": "failed", "error": str(e)})
-        timing("gender", t0)
+        st.timing("gender", t0)
 
         t0 = _now_ms()
-        emotion_overview: dict[str, Any] = {}
         try:
-            if low_snr_flag:
-                meta["skipped_steps"].append("emotion")
-                warn("EMOTION_SKIPPED_LOW_SNR")
-                emotion_overview = {}
-            elif speaker_segments:
-                out = EmotionService.analyze_speaker_segments(normalized_wav, speaker_segments)
-                speaker_segments = out
-                emotion_overview = EmotionService.summarize_emotions(speaker_segments)
-                self.io.save_json(job, "artifacts/nlp/emotion_segments.json", speaker_segments)
-                self.io.save_json(job, "artifacts/nlp/emotion_overview.json", emotion_overview)
+            if st.low_snr_flag:
+                st.skip("emotion")
+                st.warn("EMOTION_SKIPPED_LOW_SNR")
+                st.emotion_overview = {}
+            elif st.speaker_segments:
+                out = EmotionService.analyze_speaker_segments(st.normalized_wav, st.speaker_segments)
+                st.speaker_segments = out
+                st.emotion_overview = EmotionService.summarize_emotions(st.speaker_segments)
+                self.io.save_json(job, "artifacts/nlp/emotion_segments.json", st.speaker_segments)
+                self.io.save_json(job, "artifacts/nlp/emotion_overview.json", st.emotion_overview)
             else:
-                meta["skipped_steps"].append("emotion")
-                warn("EMOTION_SKIPPED_NO_SPEAKER_SEGMENTS")
-                emotion_overview = {}
+                st.skip("emotion")
+                st.warn("EMOTION_SKIPPED_NO_SPEAKER_SEGMENTS")
+                st.emotion_overview = {}
         except Exception as e:
-            warn("EMOTION_FAILED")
+            st.warn("EMOTION_FAILED")
             self.io.save_json(job, "artifacts/nlp/emotion.status.json", {"status": "failed", "error": str(e)})
-        timing("emotion", t0)
+        st.timing("emotion", t0)
 
         # Topic / Summary from transcript
         t0 = _now_ms()
-        topic: dict[str, Any] = {"topic": "unknown", "confidence": 0.0}
         try:
-            topic = TopicService.classify(transcript_text or "")
-            self.io.save_json(job, "artifacts/nlp/topic.json", topic)
+            st.topic = TopicService.classify(st.transcript_text or "")
+            self.io.save_json(job, "artifacts/nlp/topic.json", st.topic)
         except Exception as e:
-            warn("TOPIC_FAILED")
+            st.warn("TOPIC_FAILED")
             self.io.save_json(job, "artifacts/nlp/topic.json", {"topic": "unknown", "confidence": 0.0, "error": str(e)})
-        timing("topic", t0)
+        st.timing("topic", t0)
 
         t0 = _now_ms()
-        summary_text = ""
         try:
-            summary_text = SummaryService.generate_summary(transcript_text or "")
-            self.io.save_text(job, "artifacts/nlp/summary.txt", summary_text or "")
+            st.summary_text = SummaryService.generate_summary(st.transcript_text or "")
+            self.io.save_text(job, "artifacts/nlp/summary.txt", st.summary_text or "")
         except Exception as e:
-            warn("SUMMARY_FAILED")
+            st.warn("SUMMARY_FAILED")
             self.io.save_text(job, "artifacts/nlp/summary.txt", "")
             self.io.save_json(job, "artifacts/nlp/summary.status.json", {"status": "failed", "error": str(e)})
-        timing("summary", t0)
+        st.timing("summary", t0)
 
         # Intent / flags / factcheck (fail-soft)
         t0 = _now_ms()
-        conversation_with_intents: list[dict[str, Any]] = []
-        intents_summary: dict[str, Any] = {}
         try:
-            if conversation:
-                conversation_with_intents = IntentService.annotate_conversation(conversation)
-                intents_summary = IntentService.summarize_intents(conversation_with_intents)
+            if st.conversation:
+                st.conversation_with_intents = IntentService.annotate_conversation(st.conversation)
+                st.intents_summary = IntentService.summarize_intents(st.conversation_with_intents)
             else:
-                meta["skipped_steps"].append("intent")
-                warn("INTENT_SKIPPED_NO_CONVERSATION")
+                st.skip("intent")
+                st.warn("INTENT_SKIPPED_NO_CONVERSATION")
 
-            self.io.save_json(job, "artifacts/nlp/conversation_with_intents.json", conversation_with_intents)
-            self.io.save_json(job, "artifacts/nlp/intents_summary.json", intents_summary)
+            self.io.save_json(job, "artifacts/nlp/conversation_with_intents.json", st.conversation_with_intents)
+            self.io.save_json(job, "artifacts/nlp/intents_summary.json", st.intents_summary)
         except Exception as e:
-            warn("INTENT_FAILED")
+            st.warn("INTENT_FAILED")
             self.io.save_json(job, "artifacts/nlp/intents_summary.json", {})
             self.io.save_json(job, "artifacts/nlp/intent.status.json", {"status": "failed", "error": str(e)})
-        timing("intent", t0)
+        st.timing("intent", t0)
 
         t0 = _now_ms()
-        fact_checks: list[dict[str, Any]] = []
         try:
-            fact_checks = FactCheckService.fact_check(transcript_text or "")
-            self.io.save_json(job, "artifacts/nlp/fact_checks.json", fact_checks)
+            st.fact_checks = FactCheckService.fact_check(st.transcript_text or "")
+            self.io.save_json(job, "artifacts/nlp/fact_checks.json", st.fact_checks)
         except Exception as e:
-            warn("FACTCHECK_FAILED")
+            st.warn("FACTCHECK_FAILED")
             self.io.save_json(job, "artifacts/nlp/fact_checks.json", [])
             self.io.save_json(job, "artifacts/nlp/factcheck.status.json", {"status": "failed", "error": str(e)})
-        timing("factcheck", t0)
+        st.timing("factcheck", t0)
 
         t0 = _now_ms()
-        flags: list[dict[str, Any]] = []
         try:
-            if single_speaker_mode:
-                warn("FLAGS_LIMITED_SINGLE_SPEAKER")
-            flags = FlagService.generate_flags(conversation_with_intents) if conversation_with_intents else []
-            self.io.save_json(job, "artifacts/nlp/flags.json", flags)
+            if st.single_speaker_mode:
+                st.warn("FLAGS_LIMITED_SINGLE_SPEAKER")
+            st.flags = FlagService.generate_flags(st.conversation_with_intents) if st.conversation_with_intents else []
+            self.io.save_json(job, "artifacts/nlp/flags.json", st.flags)
         except Exception as e:
-            warn("FLAGS_FAILED")
+            st.warn("FLAGS_FAILED")
             self.io.save_json(job, "artifacts/nlp/flags.json", [])
             self.io.save_json(job, "artifacts/nlp/flags.status.json", {"status": "failed", "error": str(e)})
-        timing("flags", t0)
+        st.timing("flags", t0)
 
         # -----------------------
         # Step H: Insight Service
         # -----------------------
         t0 = _now_ms()
-        insight_payload: dict[str, Any] | None = None
         try:
-            if speaker_segments:
+            if st.speaker_segments:
                 session_input = VoiceIQInsightAdapter.from_orchestrator(
-                    session_id=job_id,
-                    asr_meta=asr_out.get("meta", {}) if isinstance(asr_out, dict) else {},
-                    speaker_segments=speaker_segments or [],
-                    speaker_stats=speaker_stats or {},
-                    conversation_stats=conversation_stats or {},
+                    session_id=st.job_id,
+                    asr_meta=st.asr_out.get("meta", {}) if isinstance(st.asr_out, dict) else {},
+                    speaker_segments=st.speaker_segments or [],
+                    speaker_stats=st.speaker_stats or {},
+                    conversation_stats=st.conversation_stats or {},
                     warnings=meta["warnings"],
                 )
 
                 insight_response = InsightService.generate(session_input)
-                insight_payload = insight_response.model_dump()
+                st.insight_payload = insight_response.model_dump()
 
-                self.io.save_json(job, "artifacts/insights/insight_result.json", insight_payload)
+                self.io.save_json(job, "artifacts/insights/insight_result.json", st.insight_payload)
                 self.io.save_json(
                     job,
                     "artifacts/insights/insight.status.json",
@@ -537,8 +579,8 @@ class VoiceIQOrchestrator:
                     },
                 )
             else:
-                meta["skipped_steps"].append("insights")
-                warn("INSIGHTS_SKIPPED_NO_SPEAKER_SEGMENTS")
+                st.skip("insights")
+                st.warn("INSIGHTS_SKIPPED_NO_SPEAKER_SEGMENTS")
                 self.io.save_json(job, "artifacts/insights/insight_result.json", {})
                 self.io.save_json(
                     job,
@@ -550,7 +592,7 @@ class VoiceIQOrchestrator:
                     },
                 )
         except Exception as e:
-            warn("INSIGHTS_FAILED")
+            st.warn("INSIGHTS_FAILED")
             self.io.save_json(job, "artifacts/insights/insight_result.json", {})
             self.io.save_json(
                 job,
@@ -561,7 +603,7 @@ class VoiceIQOrchestrator:
                     "error": str(e),
                 },
             )
-        timing("insights", t0)
+        st.timing("insights", t0)
 
         # -----------------------
         # Step I: PDF report
@@ -569,18 +611,18 @@ class VoiceIQOrchestrator:
         t0 = _now_ms()
         try:
             pdf_bytes = PDFService.generate_pdf_report(
-                transcript=transcript_text or "",
-                speaker_segments=speaker_segments or [],
-                summary=summary_text or "",
-                topic=(topic or {}).get("topic", ""),
-                conversation_stats=conversation_stats or {},
-                speaker_stats=speaker_stats or {},
-                emotion_overview=emotion_overview or {},
-                intents_summary=intents_summary or {},
-                flags=flags or [],
-                fact_checks=fact_checks or [],
+                transcript=st.transcript_text or "",
+                speaker_segments=st.speaker_segments or [],
+                summary=st.summary_text or "",
+                topic=(st.topic or {}).get("topic", ""),
+                conversation_stats=st.conversation_stats or {},
+                speaker_stats=st.speaker_stats or {},
+                emotion_overview=st.emotion_overview or {},
+                intents_summary=st.intents_summary or {},
+                flags=st.flags or [],
+                fact_checks=st.fact_checks or [],
                 warnings=meta["warnings"],
-                audio_quality=audio_quality_payload or {},
+                audio_quality=st.audio_quality_payload or {},
             )
 
             self.io.save_bytes(job, "artifacts/report/report.pdf", pdf_bytes)
@@ -589,11 +631,11 @@ class VoiceIQOrchestrator:
 
             self.io.save_json(job, "artifacts/report/report.status.json", {"service": "pdf", "status": "ok"})
         except Exception as e:
-            warn("PDF_FAILED")
+            st.warn("PDF_FAILED")
             self.io.save_json(
                 job, "artifacts/report/report.status.json", {"service": "pdf", "status": "failed", "error": str(e)}
             )
-        timing("pdf", t0)
+        st.timing("pdf", t0)
 
         meta["status"] = "ok"
         self.io.save_json(job, "meta.json", meta)
