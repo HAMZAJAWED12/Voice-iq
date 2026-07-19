@@ -23,6 +23,10 @@ soundfile==0.12.1
 
 pyannote.audio==3.3.2
 fpdf==1.7.2
+# Direct import in app/services/keyword_service.py. Satisfied transitively
+# today (sentence-transformers depends on it), declared explicitly so the
+# runtime stack does not break if that transitive edge ever goes away.
+scikit-learn
 
 pytest==8.3.3
 pytest-asyncio==0.24.0
