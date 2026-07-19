@@ -106,8 +106,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # On failure, surface the tail of the pytest output as a GitHub error
+      # annotation. Actions logs require sign-in even on public repos, but
+      # annotations are readable via the public REST API — this keeps the
+      # failure diagnosable without repo-admin access.
       - name: Run orchestrator harness
         run: |
-          pytest -v app/insights/tests/test_orchestrator.py
+          set +e
+          pytest -v app/insights/tests/test_orchestrator.py > harness.log 2>&1
+          code=$?
+          tail -120 harness.log
+          if [ $code -ne 0 ]; then
+            echo "::error::harness exit=$code :: $(tail -c 2500 harness.log | tr '\n' '~')"
+          fi
+          exit $code
         env:
           PYTHONPATH: .
