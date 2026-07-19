@@ -87,7 +87,7 @@ voiceiq-AI/
 | Tier 3 | Waves A/B/D: cleanups, schema fixes, mypy hard-gate | ✅ Done |
 | Sprint 6 | Agent Brain (`app/agent_brain/`): 5 rule-based agents (Task/FollowUp/Email/Escalation/FactCheckReview), confidence refine, difflib dedup, ranker, runner w/ per-agent fault isolation, internal API, pipeline adapter, HMAC Java callback; 103 tests, 100% | ✅ Done |
 
-**Currently open:** Tier 3 Wave E (see next-task candidates) + Agent Brain Phase 2 (NLP/model extraction; see the handoff doc §13).
+**Currently open:** Tier 3 Wave E remainder (E3 alignment O(n²), deferred) + Agent Brain Phase 2 (NLP/model extraction; see the handoff doc §13). Wave E's E1/E1.b/E2/E4/E5 are all done.
 
 ## Engineering standards (STRICT)
 
@@ -198,12 +198,10 @@ These need attention but are not blocking new work:
 
 - ✅ **Consolidate `_clamp()` (E1 / E1.b).** Done — single `core/_math.py:clamp`; `scoring_engine`, `signal_aggregation`, `inconsistency_engine`, and `factcheck/scorer` all repointed.
 - ✅ **MIME / magic-byte upload check (E4).** Done — `app/utils/audio_sniff.py` rejects non-audio uploads with 415; extension check kept as first gate.
-- **E2 Phase 1 — harness DONE ✅; decomposition (Phase 2) now UNBLOCKED.** `app/insights/tests/test_orchestrator.py` is the behavioral safety net: **51 tests, `orchestrator.py` at 100% coverage**, proving current behavior with zero production edits. It uses real `JobIO(base_dir=tmp_path)` (the disk-driven `_final_response` demands it), mocks the 11 side-effect points (7 heavy ML services + 2 heavy audio utils + network FactCheckService + byte-producing PDFService) with `autospec=True`, and runs the 6 cheap pure-python services real. Two crown-jewel invariants pin the fault contract Phase 2 must preserve:
-  - `test_exactly_four_hard_fail_gates` — only `MISSING_INPUT_AUDIO`, `AUDIO_NORMALIZATION_TIMEOUT`, `AUDIO_NORMALIZATION_FAILED`, `AUDIO_SILENT_OR_NEAR_SILENT` produce `status="failed"` + early return;
-  - `test_late_stage_exception_never_flips_status` — every other stage failure is fail-soft (`status="ok"` + a `*_FAILED`/`*_SKIPPED_*` warning).
-  Stage order is locked via the insertion-ordered `timings_ms` keys. (Warning-literal note: the real diarization fallback code is `DIARIZATION_FAILED_FALLBACK`, not `DIARIZATION_FALLBACK`.)
-
-  **Phase 2 (the actual refactor):** decompose `run()` into named stages. Per-stage timings are ALREADY captured in `meta["timings_ms"]` — refactor changes shape, not data. Refactor value is maintainability of the monolith, not new telemetry. Run the harness after each extraction; any red = behavior drift.
+- ✅ **E2 — orchestrator decomposition COMPLETE (Phase 1 + Phase 2).**
+  - *Phase 1* built the behavioral safety net `app/insights/tests/test_orchestrator.py`: **51 tests, `orchestrator.py` 100% covered**, real `JobIO(base_dir=tmp_path)`, 12 side-effect points mocked `autospec=True` (7 heavy ML services + 2 audio utils + network FactCheckService + byte-producing PDFService + KeywordService), 5 cheap services real. Two crown-jewel invariants pin the fault contract: `test_exactly_four_hard_fail_gates` (only `MISSING_INPUT_AUDIO` / `AUDIO_NORMALIZATION_TIMEOUT` / `AUDIO_NORMALIZATION_FAILED` / `AUDIO_SILENT_OR_NEAR_SILENT` hard-fail) and `test_late_stage_exception_never_flips_status` (every other stage is fail-soft). Stage order locked via the insertion-ordered `timings_ms` keys.
+  - *Phase 2* decomposed `run()` (~530 LOC) into a **75-line stage sequence** of `_run_<stage>` methods. Shared state is one mutable `_PipelineState` dataclass (23 fields); the four early-return gates raise a private `_HardFail` that `run()` catches once. The harness ran green 51/51 after every single extraction — refactor changed shape, not behavior. `orchestrator.py` is 100% covered; **the harness is now a regression net for future edits.**
+  - Extending this pattern to new stages: add a `_run_<stage>` method + a `_PipelineState` field, call it from `run()`, and add a stage-class in the harness. Making the top-level ML imports lazy (so the harness rejoins the light CI job) is the remaining follow-up.
 
 - **E3 — O(n²) hot paths (profiled, deferred).** `alignment_service` has genuine quadratics but they sit below the optimization bar at current scale — see "Known issues / tech debt" #4 for the profile data, fixture, and the two-pointer/bisect recipe to apply when audio grows.
 
