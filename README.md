@@ -77,7 +77,7 @@ pytest app/insights/tests/ app/agent_brain/tests/
 ```
 app/
 ├── main.py / insight_main.py   # full vs lightweight entrypoints
-├── pipeline/                   # orchestrator (7 disk-backed stages, per-stage timings)
+├── pipeline/                   # orchestrator — run() decomposed into named _run_<stage> methods over a _PipelineState; 4 hard-fail gates, per-stage timings
 ├── services/                   # ASR, diarization, alignment, sentiment, topics, ...
 ├── insights/                   # 9 insight engines + models + API + SQLite repository
 ├── agent_brain/                # 5 rule-based agents + extraction + HMAC callback client
