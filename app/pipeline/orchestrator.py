@@ -398,60 +398,12 @@ class VoiceIQOrchestrator:
             )
         st.timing("alignment", t0)
 
-        # -----------------------
         # Step F: Stats (safe)
-        # -----------------------
-        t0 = _now_ms()
-        try:
-            st.speaker_stats = MetadataExtractor.compute_speaker_stats(st.speaker_segments or [])
-            st.conversation_stats = MetadataExtractor.compute_conversation_stats(
-                st.speaker_segments or [], st.diar_segments or []
-            )
-            self.io.save_json(job, "artifacts/nlp/speaker_stats.json", st.speaker_stats)
-            self.io.save_json(job, "artifacts/nlp/conversation_stats.json", st.conversation_stats)
-        except Exception as e:
-            st.warn("STATS_FAILED")
-            self.io.save_json(
-                job,
-                "artifacts/nlp/stats.status.json",
-                {
-                    "service": "stats",
-                    "status": "failed",
-                    "error": str(e),
-                },
-            )
-        st.timing("stats", t0)
+        self._run_stats(st)
 
-        # -----------------------
         # Step G: NLP enrichment (modular)
-        # -----------------------
-        t0 = _now_ms()
-        try:
-            if st.speaker_segments:
-                out = SentimentService.analyze_speaker_segments(st.speaker_segments)
-                st.speaker_segments = out
-                self.io.save_json(job, "artifacts/nlp/sentiment_segments.json", st.speaker_segments)
-            else:
-                st.skip("sentiment")
-                st.warn("SENTIMENT_SKIPPED_NO_SPEAKER_SEGMENTS")
-        except Exception as e:
-            st.warn("SENTIMENT_FAILED")
-            self.io.save_json(job, "artifacts/nlp/sentiment.status.json", {"status": "failed", "error": str(e)})
-        st.timing("sentiment", t0)
-
-        t0 = _now_ms()
-        try:
-            if st.speaker_segments:
-                out = KeywordService.extract_keywords_per_segment(st.speaker_segments)
-                st.speaker_segments = out
-                self.io.save_json(job, "artifacts/nlp/keywords_segments.json", st.speaker_segments)
-            else:
-                st.skip("keywords")
-                st.warn("KEYWORDS_SKIPPED_NO_SPEAKER_SEGMENTS")
-        except Exception as e:
-            st.warn("KEYWORDS_FAILED")
-            self.io.save_json(job, "artifacts/nlp/keywords.status.json", {"status": "failed", "error": str(e)})
-        st.timing("keywords", t0)
+        self._run_sentiment(st)
+        self._run_keywords(st)
 
         t0 = _now_ms()
         try:
@@ -640,6 +592,67 @@ class VoiceIQOrchestrator:
         meta["status"] = "ok"
         self.io.save_json(job, "meta.json", meta)
         return self._final_response(job, meta)
+
+    # ------------------------------------------------------------------
+    # Stages
+    #
+    # One method per pipeline step, in production order. Each stage reads
+    # what it needs from _PipelineState, writes its artifacts to disk, and
+    # records its own timing. All are fail-soft (warn + continue) except
+    # the four hard-fail gates, which raise _HardFail.
+    # ------------------------------------------------------------------
+
+    def _run_stats(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            st.speaker_stats = MetadataExtractor.compute_speaker_stats(st.speaker_segments or [])
+            st.conversation_stats = MetadataExtractor.compute_conversation_stats(
+                st.speaker_segments or [], st.diar_segments or []
+            )
+            self.io.save_json(st.job, "artifacts/nlp/speaker_stats.json", st.speaker_stats)
+            self.io.save_json(st.job, "artifacts/nlp/conversation_stats.json", st.conversation_stats)
+        except Exception as e:
+            st.warn("STATS_FAILED")
+            self.io.save_json(
+                st.job,
+                "artifacts/nlp/stats.status.json",
+                {
+                    "service": "stats",
+                    "status": "failed",
+                    "error": str(e),
+                },
+            )
+        st.timing("stats", t0)
+
+    def _run_sentiment(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            if st.speaker_segments:
+                out = SentimentService.analyze_speaker_segments(st.speaker_segments)
+                st.speaker_segments = out
+                self.io.save_json(st.job, "artifacts/nlp/sentiment_segments.json", st.speaker_segments)
+            else:
+                st.skip("sentiment")
+                st.warn("SENTIMENT_SKIPPED_NO_SPEAKER_SEGMENTS")
+        except Exception as e:
+            st.warn("SENTIMENT_FAILED")
+            self.io.save_json(st.job, "artifacts/nlp/sentiment.status.json", {"status": "failed", "error": str(e)})
+        st.timing("sentiment", t0)
+
+    def _run_keywords(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            if st.speaker_segments:
+                out = KeywordService.extract_keywords_per_segment(st.speaker_segments)
+                st.speaker_segments = out
+                self.io.save_json(st.job, "artifacts/nlp/keywords_segments.json", st.speaker_segments)
+            else:
+                st.skip("keywords")
+                st.warn("KEYWORDS_SKIPPED_NO_SPEAKER_SEGMENTS")
+        except Exception as e:
+            st.warn("KEYWORDS_FAILED")
+            self.io.save_json(st.job, "artifacts/nlp/keywords.status.json", {"status": "failed", "error": str(e)})
+        st.timing("keywords", t0)
 
     def _final_response(self, job: JobPaths, meta: dict[str, Any]) -> dict[str, Any]:
         transcript = self.io.load_text(job, "artifacts/asr/transcript.txt", default="")
