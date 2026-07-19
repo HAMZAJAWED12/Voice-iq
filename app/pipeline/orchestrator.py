@@ -416,91 +416,11 @@ class VoiceIQOrchestrator:
         self._run_factcheck(st)
         self._run_flags(st)
 
-        # -----------------------
         # Step H: Insight Service
-        # -----------------------
-        t0 = _now_ms()
-        try:
-            if st.speaker_segments:
-                session_input = VoiceIQInsightAdapter.from_orchestrator(
-                    session_id=st.job_id,
-                    asr_meta=st.asr_out.get("meta", {}) if isinstance(st.asr_out, dict) else {},
-                    speaker_segments=st.speaker_segments or [],
-                    speaker_stats=st.speaker_stats or {},
-                    conversation_stats=st.conversation_stats or {},
-                    warnings=meta["warnings"],
-                )
+        self._run_insights(st)
 
-                insight_response = InsightService.generate(session_input)
-                st.insight_payload = insight_response.model_dump()
-
-                self.io.save_json(job, "artifacts/insights/insight_result.json", st.insight_payload)
-                self.io.save_json(
-                    job,
-                    "artifacts/insights/insight.status.json",
-                    {
-                        "service": "insights",
-                        "status": "ok",
-                    },
-                )
-            else:
-                st.skip("insights")
-                st.warn("INSIGHTS_SKIPPED_NO_SPEAKER_SEGMENTS")
-                self.io.save_json(job, "artifacts/insights/insight_result.json", {})
-                self.io.save_json(
-                    job,
-                    "artifacts/insights/insight.status.json",
-                    {
-                        "service": "insights",
-                        "status": "skipped",
-                        "reason": "no_speaker_segments",
-                    },
-                )
-        except Exception as e:
-            st.warn("INSIGHTS_FAILED")
-            self.io.save_json(job, "artifacts/insights/insight_result.json", {})
-            self.io.save_json(
-                job,
-                "artifacts/insights/insight.status.json",
-                {
-                    "service": "insights",
-                    "status": "failed",
-                    "error": str(e),
-                },
-            )
-        st.timing("insights", t0)
-
-        # -----------------------
         # Step I: PDF report
-        # -----------------------
-        t0 = _now_ms()
-        try:
-            pdf_bytes = PDFService.generate_pdf_report(
-                transcript=st.transcript_text or "",
-                speaker_segments=st.speaker_segments or [],
-                summary=st.summary_text or "",
-                topic=(st.topic or {}).get("topic", ""),
-                conversation_stats=st.conversation_stats or {},
-                speaker_stats=st.speaker_stats or {},
-                emotion_overview=st.emotion_overview or {},
-                intents_summary=st.intents_summary or {},
-                flags=st.flags or [],
-                fact_checks=st.fact_checks or [],
-                warnings=meta["warnings"],
-                audio_quality=st.audio_quality_payload or {},
-            )
-
-            self.io.save_bytes(job, "artifacts/report/report.pdf", pdf_bytes)
-            pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
-            self.io.save_text(job, "artifacts/report/report_base64.txt", pdf_b64)
-
-            self.io.save_json(job, "artifacts/report/report.status.json", {"service": "pdf", "status": "ok"})
-        except Exception as e:
-            st.warn("PDF_FAILED")
-            self.io.save_json(
-                job, "artifacts/report/report.status.json", {"service": "pdf", "status": "failed", "error": str(e)}
-            )
-        st.timing("pdf", t0)
+        self._run_pdf(st)
 
         meta["status"] = "ok"
         self.io.save_json(job, "meta.json", meta)
@@ -671,6 +591,88 @@ class VoiceIQOrchestrator:
             self.io.save_json(st.job, "artifacts/nlp/flags.json", [])
             self.io.save_json(st.job, "artifacts/nlp/flags.status.json", {"status": "failed", "error": str(e)})
         st.timing("flags", t0)
+
+    def _run_insights(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            if st.speaker_segments:
+                session_input = VoiceIQInsightAdapter.from_orchestrator(
+                    session_id=st.job_id,
+                    asr_meta=st.asr_out.get("meta", {}) if isinstance(st.asr_out, dict) else {},
+                    speaker_segments=st.speaker_segments or [],
+                    speaker_stats=st.speaker_stats or {},
+                    conversation_stats=st.conversation_stats or {},
+                    warnings=st.meta["warnings"],
+                )
+
+                insight_response = InsightService.generate(session_input)
+                st.insight_payload = insight_response.model_dump()
+
+                self.io.save_json(st.job, "artifacts/insights/insight_result.json", st.insight_payload)
+                self.io.save_json(
+                    st.job,
+                    "artifacts/insights/insight.status.json",
+                    {
+                        "service": "insights",
+                        "status": "ok",
+                    },
+                )
+            else:
+                st.skip("insights")
+                st.warn("INSIGHTS_SKIPPED_NO_SPEAKER_SEGMENTS")
+                self.io.save_json(st.job, "artifacts/insights/insight_result.json", {})
+                self.io.save_json(
+                    st.job,
+                    "artifacts/insights/insight.status.json",
+                    {
+                        "service": "insights",
+                        "status": "skipped",
+                        "reason": "no_speaker_segments",
+                    },
+                )
+        except Exception as e:
+            st.warn("INSIGHTS_FAILED")
+            self.io.save_json(st.job, "artifacts/insights/insight_result.json", {})
+            self.io.save_json(
+                st.job,
+                "artifacts/insights/insight.status.json",
+                {
+                    "service": "insights",
+                    "status": "failed",
+                    "error": str(e),
+                },
+            )
+        st.timing("insights", t0)
+
+    def _run_pdf(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            pdf_bytes = PDFService.generate_pdf_report(
+                transcript=st.transcript_text or "",
+                speaker_segments=st.speaker_segments or [],
+                summary=st.summary_text or "",
+                topic=(st.topic or {}).get("topic", ""),
+                conversation_stats=st.conversation_stats or {},
+                speaker_stats=st.speaker_stats or {},
+                emotion_overview=st.emotion_overview or {},
+                intents_summary=st.intents_summary or {},
+                flags=st.flags or [],
+                fact_checks=st.fact_checks or [],
+                warnings=st.meta["warnings"],
+                audio_quality=st.audio_quality_payload or {},
+            )
+
+            self.io.save_bytes(st.job, "artifacts/report/report.pdf", pdf_bytes)
+            pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
+            self.io.save_text(st.job, "artifacts/report/report_base64.txt", pdf_b64)
+
+            self.io.save_json(st.job, "artifacts/report/report.status.json", {"service": "pdf", "status": "ok"})
+        except Exception as e:
+            st.warn("PDF_FAILED")
+            self.io.save_json(
+                st.job, "artifacts/report/report.status.json", {"service": "pdf", "status": "failed", "error": str(e)}
+            )
+        st.timing("pdf", t0)
 
     def _final_response(self, job: JobPaths, meta: dict[str, Any]) -> dict[str, Any]:
         transcript = self.io.load_text(job, "artifacts/asr/transcript.txt", default="")
