@@ -250,153 +250,14 @@ class VoiceIQOrchestrator:
 
         st.low_snr_flag = bool(st.aq and (st.aq.low_snr or st.aq.very_low_snr))
 
-        # -----------------------
         # Step C: ASR
-        # -----------------------
-        t0 = _now_ms()
-        try:
-            asr = ASRService(model_name=st.whisper_model, language=st.language)
-            st.asr_out = asr.transcribe(st.normalized_wav)
+        self._run_asr(st)
 
-            text = (st.asr_out.get("text") or "").strip()
-            segments = st.asr_out.get("segments") or []
-
-            self.io.save_json(job, "artifacts/asr/whisper.json", st.asr_out)
-            self.io.save_text(job, "artifacts/asr/transcript.txt", text)
-            self.io.save_json(
-                job,
-                "artifacts/asr/asr.status.json",
-                {
-                    "service": "asr",
-                    "status": "ok",
-                    "model": st.whisper_model,
-                    "num_segments": len(segments),
-                    "total_chars": len(text),
-                },
-            )
-
-            if not text:
-                st.warn("EMPTY_TRANSCRIPT")
-
-        except Exception as e:
-            st.warn("ASR_FAILED")
-            self.io.save_json(
-                job,
-                "artifacts/asr/asr.status.json",
-                {
-                    "service": "asr",
-                    "status": "failed",
-                    "error": str(e),
-                },
-            )
-        st.timing("asr", t0)
-
-        # Load transcript for downstream steps
-        st.transcript_text = self.io.load_text(job, "artifacts/asr/transcript.txt", default="") or ""
-
-        # -----------------------
         # Step D: Diarization (fail-soft)
-        # -----------------------
-        t0 = _now_ms()
-        diar_warns: list[str] = []
-        try:
-            diar = DiarizationService()
+        self._run_diarization(st)
 
-            if hasattr(diar, "diarize_with_warnings"):
-                st.diar_segments, diar_warns = diar.diarize_with_warnings(
-                    st.normalized_wav,
-                    expected_speakers=st.expected_speakers,
-                    max_speakers_cap=st.max_speakers_cap,
-                    low_snr=st.low_snr_flag,
-                )
-            else:
-                st.diar_segments = diar.diarize(st.normalized_wav)
-
-            for w in diar_warns:
-                st.warn(w)
-
-            self.io.save_json(job, "artifacts/diarization/diarization.json", st.diar_segments)
-            self.io.save_json(
-                job,
-                "artifacts/diarization/diar.status.json",
-                {
-                    "service": "diarization",
-                    "status": "ok",
-                    "num_segments": len(st.diar_segments),
-                    "num_speakers": len(set(d.get("speaker") for d in st.diar_segments if d.get("speaker"))),
-                },
-            )
-
-        except Exception as e:
-            st.warn("DIARIZATION_FAILED_FALLBACK")
-            st.diar_segments = []
-            self.io.save_json(
-                job,
-                "artifacts/diarization/diar.status.json",
-                {
-                    "service": "diarization",
-                    "status": "failed",
-                    "error": str(e),
-                },
-            )
-        st.timing("diarization", t0)
-
-        speaker_set = set([d.get("speaker") for d in st.diar_segments if d.get("speaker")])
-        st.single_speaker_mode = (not st.diar_segments) or (len(speaker_set) <= 1)
-        if st.single_speaker_mode:
-            st.warn("SINGLE_SPEAKER_MODE")
-
-        # -----------------------
         # Step E: Alignment (requires ASR + diarization)
-        # -----------------------
-        t0 = _now_ms()
-        try:
-            asr_saved = self.io.load_json(job, "artifacts/asr/whisper.json", default=None)
-            diar_saved = self.io.load_json(job, "artifacts/diarization/diarization.json", default=None)
-
-            if not asr_saved or not diar_saved:
-                st.skip("alignment")
-                st.warn("ALIGNMENT_SKIPPED_MISSING_INPUT")
-            else:
-                kwargs = _safe_ctor_kwargs(
-                    AlignmentService,
-                    {
-                        "max_gap_merge": 0.75,
-                        "overlap_policy": "mark_overlap",
-                        "unknown_label": "SPEAKER_UNKNOWN",
-                    },
-                )
-                aligner = AlignmentService(**kwargs)
-
-                aligned = aligner.align(asr_saved, diar_saved)
-                st.speaker_segments = aligned.get("speaker_segments", []) or []
-                st.conversation = aligner.build_conversation(asr_saved, diar_saved) or []
-
-                self.io.save_json(job, "artifacts/alignment/speaker_segments.json", st.speaker_segments)
-                self.io.save_json(job, "artifacts/alignment/conversation.json", st.conversation)
-                self.io.save_json(
-                    job,
-                    "artifacts/alignment/alignment.status.json",
-                    {
-                        "service": "alignment",
-                        "status": "ok",
-                        "speaker_segments": len(st.speaker_segments),
-                        "conversation_turns": len(st.conversation),
-                    },
-                )
-
-        except Exception as e:
-            st.warn("ALIGNMENT_FAILED")
-            self.io.save_json(
-                job,
-                "artifacts/alignment/alignment.status.json",
-                {
-                    "service": "alignment",
-                    "status": "failed",
-                    "error": str(e),
-                },
-            )
-        st.timing("alignment", t0)
+        self._run_alignment(st)
 
         # Step F: Stats (safe)
         self._run_stats(st)
@@ -434,6 +295,148 @@ class VoiceIQOrchestrator:
     # records its own timing. All are fail-soft (warn + continue) except
     # the four hard-fail gates, which raise _HardFail.
     # ------------------------------------------------------------------
+
+    def _run_asr(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            asr = ASRService(model_name=st.whisper_model, language=st.language)
+            st.asr_out = asr.transcribe(st.normalized_wav)
+
+            text = (st.asr_out.get("text") or "").strip()
+            segments = st.asr_out.get("segments") or []
+
+            self.io.save_json(st.job, "artifacts/asr/whisper.json", st.asr_out)
+            self.io.save_text(st.job, "artifacts/asr/transcript.txt", text)
+            self.io.save_json(
+                st.job,
+                "artifacts/asr/asr.status.json",
+                {
+                    "service": "asr",
+                    "status": "ok",
+                    "model": st.whisper_model,
+                    "num_segments": len(segments),
+                    "total_chars": len(text),
+                },
+            )
+
+            if not text:
+                st.warn("EMPTY_TRANSCRIPT")
+
+        except Exception as e:
+            st.warn("ASR_FAILED")
+            self.io.save_json(
+                st.job,
+                "artifacts/asr/asr.status.json",
+                {
+                    "service": "asr",
+                    "status": "failed",
+                    "error": str(e),
+                },
+            )
+        st.timing("asr", t0)
+
+        # Load transcript for downstream steps
+        st.transcript_text = self.io.load_text(st.job, "artifacts/asr/transcript.txt", default="") or ""
+
+    def _run_diarization(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        diar_warns: list[str] = []
+        try:
+            diar = DiarizationService()
+
+            if hasattr(diar, "diarize_with_warnings"):
+                st.diar_segments, diar_warns = diar.diarize_with_warnings(
+                    st.normalized_wav,
+                    expected_speakers=st.expected_speakers,
+                    max_speakers_cap=st.max_speakers_cap,
+                    low_snr=st.low_snr_flag,
+                )
+            else:
+                st.diar_segments = diar.diarize(st.normalized_wav)
+
+            for w in diar_warns:
+                st.warn(w)
+
+            self.io.save_json(st.job, "artifacts/diarization/diarization.json", st.diar_segments)
+            self.io.save_json(
+                st.job,
+                "artifacts/diarization/diar.status.json",
+                {
+                    "service": "diarization",
+                    "status": "ok",
+                    "num_segments": len(st.diar_segments),
+                    "num_speakers": len(set(d.get("speaker") for d in st.diar_segments if d.get("speaker"))),
+                },
+            )
+
+        except Exception as e:
+            st.warn("DIARIZATION_FAILED_FALLBACK")
+            st.diar_segments = []
+            self.io.save_json(
+                st.job,
+                "artifacts/diarization/diar.status.json",
+                {
+                    "service": "diarization",
+                    "status": "failed",
+                    "error": str(e),
+                },
+            )
+        st.timing("diarization", t0)
+
+        speaker_set = set([d.get("speaker") for d in st.diar_segments if d.get("speaker")])
+        st.single_speaker_mode = (not st.diar_segments) or (len(speaker_set) <= 1)
+        if st.single_speaker_mode:
+            st.warn("SINGLE_SPEAKER_MODE")
+
+    def _run_alignment(self, st: _PipelineState) -> None:
+        t0 = _now_ms()
+        try:
+            asr_saved = self.io.load_json(st.job, "artifacts/asr/whisper.json", default=None)
+            diar_saved = self.io.load_json(st.job, "artifacts/diarization/diarization.json", default=None)
+
+            if not asr_saved or not diar_saved:
+                st.skip("alignment")
+                st.warn("ALIGNMENT_SKIPPED_MISSING_INPUT")
+            else:
+                kwargs = _safe_ctor_kwargs(
+                    AlignmentService,
+                    {
+                        "max_gap_merge": 0.75,
+                        "overlap_policy": "mark_overlap",
+                        "unknown_label": "SPEAKER_UNKNOWN",
+                    },
+                )
+                aligner = AlignmentService(**kwargs)
+
+                aligned = aligner.align(asr_saved, diar_saved)
+                st.speaker_segments = aligned.get("speaker_segments", []) or []
+                st.conversation = aligner.build_conversation(asr_saved, diar_saved) or []
+
+                self.io.save_json(st.job, "artifacts/alignment/speaker_segments.json", st.speaker_segments)
+                self.io.save_json(st.job, "artifacts/alignment/conversation.json", st.conversation)
+                self.io.save_json(
+                    st.job,
+                    "artifacts/alignment/alignment.status.json",
+                    {
+                        "service": "alignment",
+                        "status": "ok",
+                        "speaker_segments": len(st.speaker_segments),
+                        "conversation_turns": len(st.conversation),
+                    },
+                )
+
+        except Exception as e:
+            st.warn("ALIGNMENT_FAILED")
+            self.io.save_json(
+                st.job,
+                "artifacts/alignment/alignment.status.json",
+                {
+                    "service": "alignment",
+                    "status": "failed",
+                    "error": str(e),
+                },
+            )
+        st.timing("alignment", t0)
 
     def _run_stats(self, st: _PipelineState) -> None:
         t0 = _now_ms()
