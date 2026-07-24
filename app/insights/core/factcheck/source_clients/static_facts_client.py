@@ -17,6 +17,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from typing import ClassVar
+from urllib.parse import quote
 
 from app.insights.core.factcheck.source_clients.base_client import (
     BaseSourceClient,
@@ -84,7 +85,10 @@ class StaticFactsClient(BaseSourceClient):
 
         # URL-friendly title; spaces → underscores. The REST endpoint is
         # case-insensitive on the first letter but not on subsequent words.
-        title = country.strip().replace(" ", "_")
+        # Percent-encode the (transcript-derived) country so a stray ?, #, /
+        # or space can't alter the request path — safe="" encodes everything
+        # except the unreserved set (which keeps the underscore intact).
+        title = quote(country.strip().replace(" ", "_"), safe="")
         url = f"{self.BASE_URL}{title}"
 
         payload = self._get_json(url)

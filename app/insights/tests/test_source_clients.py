@@ -267,6 +267,49 @@ def test_static_facts_matches_helper_is_case_and_accent_insensitive():
     assert not StaticFactsClient.matches("Paris", "London")
 
 
+def test_static_facts_percent_encodes_country_no_query_injection():
+    # S6: the (transcript-derived) country is percent-encoded into the path.
+    # A stray '?' must not turn into a real query string on wikipedia.org.
+    seen: dict[str, httpx.URL] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = request.url
+        return httpx.Response(200, json={"title": "x", "extract": "Its capital is Y."})
+
+    client = StaticFactsClient(client=_mock_client(handler))
+    claim = _claim(
+        claim_type="STATIC_FACT",
+        raw_value_text="Y",
+        subject={"country": "France?action=raw"},
+    )
+    client.fetch(claim)
+
+    url = seen["url"]
+    assert url.query == b""  # the '?' stayed in the path, never a query
+    assert "%3F" in str(url)  # it was percent-encoded
+    assert str(url).startswith("https://en.wikipedia.org/api/rest_v1/page/summary/")
+
+
+def test_static_facts_multiword_country_uses_underscores():
+    seen: dict[str, httpx.URL] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = request.url
+        return httpx.Response(200, json={"title": "x", "extract": "Its capital is Washington."})
+
+    client = StaticFactsClient(client=_mock_client(handler))
+    claim = _claim(
+        claim_type="STATIC_FACT",
+        raw_value_text="Washington",
+        subject={"country": "United States"},
+    )
+    client.fetch(claim)
+
+    # Underscore is unreserved -> preserved; no raw space in the URL.
+    assert seen["url"].path.endswith("/United_States")
+    assert " " not in str(seen["url"])
+
+
 @pytest.mark.parametrize(
     "extract,expected_capital",
     [
