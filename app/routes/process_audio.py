@@ -1,5 +1,4 @@
 # app/routes/process_audio.py
-import os
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -15,6 +14,7 @@ from app.security import enforce_content_length, verify_api_key
 from app.utils.audio_sniff import is_recognized_audio
 from app.utils.job_io import JobIO
 from app.utils.logger import logger
+from app.utils.upload import resolve_audio_ext
 
 # Hard cap for /v1/process-audio uploads (multipart). Constructed once at
 # import time from settings; restart the process to pick up a new value.
@@ -93,14 +93,16 @@ async def process_audio(
     request_id = str(uuid.uuid4())
     logger.info(f"[{request_id}] Received: {file.filename}")
 
-    # First gate: cheap filename-extension allowlist.
-    if not file.filename.lower().endswith((".mp3", ".wav", ".m4a", ".flac")):
-        raise HTTPException(status_code=400, detail="Unsupported file format")
+    # First gate: cheap filename-extension allowlist. Also guards a missing
+    # filename (multipart part with no name) — previously an unhandled 500.
+    try:
+        ext = resolve_audio_ext(file.filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     io = JobIO()
     job = io.init_job(request_id)
 
-    ext = os.path.splitext(file.filename)[1].lower() or ".mp3"
     input_path = io.p(job, f"input/original{ext}")
 
     # Stream the upload to disk in 1 MB chunks. We do not trust the
