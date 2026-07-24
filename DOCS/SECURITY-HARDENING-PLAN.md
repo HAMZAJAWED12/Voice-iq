@@ -20,7 +20,7 @@ tests, 100%) stays green throughout.
 | ID | Severity | Title | Type |
 |----|----------|-------|------|
 | S1 | Medium | No rate limiting on any endpoint | DoS / quota-exhaustion |
-| S2 | Medium | No job-artifact retention (disk growth + PII persistence) | DoS / privacy |
+| S2 | Medium | ✅ No job-artifact retention (disk growth + PII persistence) — done `3c3adb2` | DoS / privacy |
 | S3 | Medium | Fact-check exfiltrates transcript fragments to 3rd parties, silently | data governance |
 | S4 | Low | ✅ Raw exception detail leaked to client (500) — done `f7ecd55` | info disclosure |
 | S5 | Low | ✅ `file.filename is None` → unhandled 500 — done `525316d` | robustness |
@@ -28,7 +28,12 @@ tests, 100%) stays green throughout.
 | S7 | Low | HMAC callback replayable; `callback_url` scheme unchecked | integrity |
 | S8 | Low | `/docs` + `/openapi.json` public in production | info disclosure |
 
-**Progress:** Wave **S-A complete** (S4, S5, S6). Next: S-B (retention).
+**Progress:** Waves **S-A + S-B complete** (S4, S5, S6, S2). Next: S-C (rate limiting) — needs the (a)/(b) dep decision.
+
+**Retention policy (S2).** Per-request job artifacts under `data/jobs/<uuid>/`
+are purged after `job_retention_hours` (default **24h**; env
+`VOICEIQ_JOB_RETENTION_HOURS`; `0` disables). Swept on startup and, on a
+long-running server, opportunistically at request time (throttled ≤ once/hour).
 
 Severity = likelihood × impact in this deployment (internal service, API-key
 gated). None are remote-unauth RCE-class; the Mediums are the ones that block
