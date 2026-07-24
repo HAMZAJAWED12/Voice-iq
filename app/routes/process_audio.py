@@ -136,7 +136,10 @@ async def process_audio(
         raise
     except Exception as e:
         input_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=500, detail=f"Failed to save upload: {e}") from e
+        # Log the real cause server-side; do NOT echo the exception (it can
+        # carry filesystem paths / internals) back to the client.
+        logger.exception("[%s] Failed to save upload", request_id)
+        raise HTTPException(status_code=500, detail="Failed to save the uploaded file.") from e
 
     if bad_content:
         input_path.unlink(missing_ok=True)
