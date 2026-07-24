@@ -22,11 +22,13 @@ tests, 100%) stays green throughout.
 | S1 | Medium | No rate limiting on any endpoint | DoS / quota-exhaustion |
 | S2 | Medium | No job-artifact retention (disk growth + PII persistence) | DoS / privacy |
 | S3 | Medium | Fact-check exfiltrates transcript fragments to 3rd parties, silently | data governance |
-| S4 | Low | Raw exception detail leaked to client (500) | info disclosure |
-| S5 | Low | `file.filename is None` → unhandled 500 | robustness |
-| S6 | Low | Unencoded value in Wikipedia URL path | request integrity |
+| S4 | Low | ✅ Raw exception detail leaked to client (500) — done `f7ecd55` | info disclosure |
+| S5 | Low | ✅ `file.filename is None` → unhandled 500 — done `525316d` | robustness |
+| S6 | Low | ✅ Unencoded value in Wikipedia URL path — done `7b0c313` | request integrity |
 | S7 | Low | HMAC callback replayable; `callback_url` scheme unchecked | integrity |
 | S8 | Low | `/docs` + `/openapi.json` public in production | info disclosure |
+
+**Progress:** Wave **S-A complete** (S4, S5, S6). Next: S-B (retention).
 
 Severity = likelihood × impact in this deployment (internal service, API-key
 gated). None are remote-unauth RCE-class; the Mediums are the ones that block
