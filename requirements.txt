@@ -6,6 +6,7 @@ spacy
 
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
+slowapi>=0.1.9
 python-multipart==0.0.17
 pydantic==2.12.4
 pydantic-settings>=2.6.0

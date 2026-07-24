@@ -12,6 +12,7 @@ from app.insights.models.factcheck_models import MAX_TRANSCRIPT_CHARS
 from app.insights.repository import factcheck_repository
 from app.pipeline.orchestrator import VoiceIQOrchestrator
 from app.security import enforce_content_length, verify_api_key
+from app.security.rate_limit import process_audio_rate_limit
 from app.utils.audio_sniff import is_recognized_audio
 from app.utils.job_io import JobIO
 from app.utils.logger import logger
@@ -107,7 +108,7 @@ def _auto_run_factcheck(request_id: str, result: dict) -> None:
         }
 
 
-@router.post("/process-audio")
+@router.post("/process-audio", dependencies=[Depends(process_audio_rate_limit)])
 async def process_audio(
     file: UploadFile = File(...),
     expected_speakers: int | None = Query(default=None, description="Optional hint (2 for calls, 3-6 for meetings)"),

@@ -32,6 +32,7 @@ from app.insights.repository import (
     get_factcheck_repository,
 )
 from app.security import enforce_content_length, verify_api_key
+from app.security.rate_limit import factcheck_rate_limit
 from app.utils.logger import logger
 
 # Hard cap for /v1/fact-check POST bodies. Constructed once at import time
@@ -86,6 +87,7 @@ def get_factcheck_engine() -> FactCheckEngine:
         "and returns the structured response."
     ),
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(factcheck_rate_limit)],
 )
 def run_fact_check(
     payload: FactCheckRequest,

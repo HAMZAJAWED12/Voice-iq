@@ -132,6 +132,28 @@ class InsightSettings(BaseSettings):
         ),
     )
 
+    # --- Rate limiting --------------------------------------------------- #
+    rate_limit_enabled: bool = Field(
+        default=True,
+        description=(
+            "Master switch for per-endpoint rate limiting. Buckets are keyed "
+            "on the X-API-Key (falling back to client IP), so one caller "
+            "cannot exhaust another's budget. Set false to disable entirely."
+        ),
+    )
+    rate_limit_process_audio: str = Field(
+        default="30/minute",
+        description=(
+            "Rate limit for POST /v1/process-audio (heavy ML + disk). " "slowapi format, e.g. '30/minute', '5/second'."
+        ),
+    )
+    rate_limit_factcheck: str = Field(
+        default="60/minute",
+        description=(
+            "Rate limit for POST /v1/fact-check (fans out to external APIs). " "slowapi format, e.g. '60/minute'."
+        ),
+    )
+
     # --- Authentication -------------------------------------------------- #
     # `NoDecode` tells pydantic-settings to skip its default JSON-decode
     # pass on this field so a value like `key1,key2` from `.env` reaches
