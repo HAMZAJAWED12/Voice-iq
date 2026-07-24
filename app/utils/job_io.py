@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -122,3 +123,41 @@ class JobIO:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dest)
         return dest
+
+    def purge_expired(self, max_age_hours: float) -> int:
+        """Delete job directories older than ``max_age_hours``.
+
+        Bounds disk growth and caps how long per-request PII (raw audio,
+        transcript, PDF) lives on disk. A directory's age is taken from its
+        ``meta.json`` mtime when present, else the directory's own mtime —
+        ``meta.json`` is written last on both the success and hard-fail
+        paths, so it is the best "job finished" marker.
+
+        Fail-soft: a directory that can't be stat'd or removed is logged and
+        skipped, never raised — retention must not break the caller.
+
+        Args:
+            max_age_hours: age threshold in hours; ``<= 0`` disables (no-op).
+
+        Returns:
+            The number of directories removed.
+        """
+        if max_age_hours <= 0 or not self.base_dir.exists():
+            return 0
+
+        cutoff = time.time() - max_age_hours * 3600.0
+        removed = 0
+        for job_dir in self.base_dir.iterdir():
+            if not job_dir.is_dir():
+                continue
+            try:
+                meta = job_dir / "meta.json"
+                mtime = meta.stat().st_mtime if meta.exists() else job_dir.stat().st_mtime
+                if mtime < cutoff:
+                    shutil.rmtree(job_dir, ignore_errors=True)
+                    removed += 1
+            except OSError as e:
+                logger.warning("purge_expired: skipped %s (%s)", job_dir, e)
+        if removed:
+            logger.info("purge_expired: removed %d expired job dir(s)", removed)
+        return removed

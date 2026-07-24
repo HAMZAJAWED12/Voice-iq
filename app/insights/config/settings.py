@@ -120,6 +120,17 @@ class InsightSettings(BaseSettings):
             "warning code."
         ),
     )
+    job_retention_hours: float = Field(
+        default=24.0,
+        ge=0.0,
+        description=(
+            "Age (hours) after which per-request job artifact directories "
+            "under data/jobs/ (raw audio, transcript, PDF, insights) are "
+            "purged. Bounds disk growth and caps how long call PII persists "
+            "on disk. Swept on startup and opportunistically at request time. "
+            "Set to 0 to disable purging (retain everything)."
+        ),
+    )
 
     # --- Authentication -------------------------------------------------- #
     # `NoDecode` tells pydantic-settings to skip its default JSON-decode

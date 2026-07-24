@@ -30,6 +30,7 @@ from fastapi import FastAPI
 from app.insights.api import router as insight_router
 from app.insights.config.settings import get_settings
 from app.insights.repository.db import init_db
+from app.utils.job_io import JobIO
 
 load_dotenv()
 
@@ -39,6 +40,9 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db(settings)
+    # No-op unless job dirs exist (this image doesn't process audio), but
+    # kept for parity with app.main when both share a data/ volume.
+    JobIO().purge_expired(settings.job_retention_hours)
     yield
 
 

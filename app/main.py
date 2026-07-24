@@ -15,6 +15,7 @@ from app.insights.api import router as insight_router
 from app.insights.config.settings import get_settings
 from app.insights.repository.db import init_db
 from app.routes.process_audio import router as process_router
+from app.utils.job_io import JobIO
 from app.utils.logger import setup_logging
 
 load_dotenv()
@@ -29,6 +30,8 @@ async def lifespan(app: FastAPI):
     # init_db() respects VOICEIQ_DATABASE_AUTO_CREATE=false for environments
     # where migrations are managed externally.
     init_db(settings)
+    # Sweep stale job artifacts left by prior runs (bounds disk + PII TTL).
+    JobIO().purge_expired(settings.job_retention_hours)
     yield
 
 

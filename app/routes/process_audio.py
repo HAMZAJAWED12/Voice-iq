@@ -1,4 +1,5 @@
 # app/routes/process_audio.py
+import time
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -22,6 +23,27 @@ from app.utils.upload import resolve_audio_ext
 # write so a lying Content-Length cannot bypass it.
 MAX_UPLOAD_BYTES = get_settings().api_max_upload_mb * 1024 * 1024
 _enforce_upload_size = enforce_content_length(MAX_UPLOAD_BYTES)
+
+# Opportunistic retention sweep. The lifespan hook sweeps on startup; this
+# throttled call also sweeps on a long-running server that rarely restarts,
+# at most once per interval so it never adds latency to the hot path.
+_JOB_RETENTION_HOURS = get_settings().job_retention_hours
+_PURGE_INTERVAL_SEC = 3600.0
+_next_purge_at = 0.0
+
+
+def _maybe_purge(io: JobIO) -> None:
+    """Sweep expired job dirs at most once per _PURGE_INTERVAL_SEC. Fail-soft."""
+    global _next_purge_at
+    now = time.monotonic()
+    if now < _next_purge_at:
+        return
+    _next_purge_at = now + _PURGE_INTERVAL_SEC
+    try:
+        io.purge_expired(_JOB_RETENTION_HOURS)
+    except Exception:  # pragma: no cover - retention must never break a request
+        logger.exception("opportunistic job purge failed")
+
 
 # Every route on this router requires a valid X-API-Key header (see
 # app.security.api_key.verify_api_key for the dev/prod behaviour matrix)
@@ -101,6 +123,7 @@ async def process_audio(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     io = JobIO()
+    _maybe_purge(io)
     job = io.init_job(request_id)
 
     input_path = io.p(job, f"input/original{ext}")
