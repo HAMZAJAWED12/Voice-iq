@@ -19,7 +19,7 @@ tests, 100%) stays green throughout.
 
 | ID | Severity | Title | Type |
 |----|----------|-------|------|
-| S1 | Medium | No rate limiting on any endpoint | DoS / quota-exhaustion |
+| S1 | Medium | ✅ No rate limiting on any endpoint — done `93f73b1` | DoS / quota-exhaustion |
 | S2 | Medium | ✅ No job-artifact retention (disk growth + PII persistence) — done `3c3adb2` | DoS / privacy |
 | S3 | Medium | Fact-check exfiltrates transcript fragments to 3rd parties, silently | data governance |
 | S4 | Low | ✅ Raw exception detail leaked to client (500) — done `f7ecd55` | info disclosure |
@@ -28,7 +28,16 @@ tests, 100%) stays green throughout.
 | S7 | Low | HMAC callback replayable; `callback_url` scheme unchecked | integrity |
 | S8 | Low | `/docs` + `/openapi.json` public in production | info disclosure |
 
-**Progress:** Waves **S-A + S-B complete** (S4, S5, S6, S2). Next: S-C (rate limiting) — needs the (a)/(b) dep decision.
+**Progress:** Waves **S-A + S-B + S-C complete** (S4, S5, S6, S2, S1). Next: S-D (fact-check data governance) — needs the opt-in/opt-out decision.
+
+**Rate limiting (S1) — decision taken: (a) slowapi.** Implemented as FastAPI
+route dependencies over slowapi's engine (the `limits` library), *not* the
+`@limiter.limit` decorator — the decorator wraps the endpoint and, with this
+package's `from __future__ import annotations`, made FastAPI mis-read Pydantic
+body models as query params. Defaults: process-audio `30/minute`, fact-check
+`60/minute`; keyed on X-API-Key (IP fallback); `VOICEIQ_RATE_LIMIT_ENABLED`
+master switch. In-memory storage (per process) — a multi-worker deploy needing
+shared counters swaps in Redis.
 
 **Retention policy (S2).** Per-request job artifacts under `data/jobs/<uuid>/`
 are purged after `job_retention_hours` (default **24h**; env
