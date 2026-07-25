@@ -249,6 +249,43 @@ def test_best_asr_empty_list() -> None:
     assert AlignmentService._best_asr_for_window({"start": 0.0, "end": 1.0}, []) is None
 
 
+# --- N3b: the bisect fast path must equal the full scan -------------------- #
+
+
+@pytest.mark.parametrize("seed", list(range(15)))
+def test_best_asr_bounded_scan_equals_full_scan(seed: int) -> None:
+    """Differential test: passing `_starts` (bisect path) must return the
+    exact same segment as the unbounded scan, for every window."""
+    rng = random.Random(seed)
+    asr, t = [], 0.0
+    for i in range(30):
+        dur = rng.uniform(0.3, 2.0)
+        asr.append({"start": t, "end": t + dur, "text": f"s{i}"})
+        t += dur + rng.uniform(0.0, 0.5)
+    starts = [a["start"] for a in asr]
+
+    for _ in range(40):
+        w_start = rng.uniform(-1.0, t + 1.0)
+        window = {"start": w_start, "end": w_start + rng.uniform(0.0, 3.0)}
+        full = AlignmentService._best_asr_for_window(window, asr)
+        bounded = AlignmentService._best_asr_for_window(window, asr, _starts=starts)
+        assert full is bounded  # identity, not just equality
+
+
+def test_align_falls_back_when_asr_unsorted() -> None:
+    """Unsorted ASR disables the bisect path; output must still be correct."""
+    unsorted_asr = {
+        "segments": [
+            {"start": 2.0, "end": 4.0, "text": "second here"},
+            {"start": 0.0, "end": 2.0, "text": "first here"},
+        ]
+    }
+    out = _svc().align(unsorted_asr, _diar([(0.0, 2.0, "S0"), (2.0, 4.0, "S1")]))["speaker_segments"]
+    assert [s["speaker"] for s in out] == ["S0", "S1"]
+    for s in out:
+        assert 0.0 <= s["confidence"] <= 1.0
+
+
 # --------------------------------------------------------------------------- #
 # _merge_blocks                                                               #
 # --------------------------------------------------------------------------- #

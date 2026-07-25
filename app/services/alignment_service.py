@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import math
+from bisect import bisect_left
+from collections.abc import Iterable
 from typing import Any
 
 from app.utils.logger import logger
@@ -59,15 +61,37 @@ class AlignmentService:
         return max(0.0, min(a_end, b_end) - max(a_start, b_start))
 
     @classmethod
-    def _best_asr_for_window(cls, window: dict, asr: list[dict]) -> dict | None:
-        """Find which ASR segment overlaps the window the most."""
+    def _best_asr_for_window(
+        cls,
+        window: dict,
+        asr: list[dict],
+        *,
+        _starts: list[float] | None = None,
+    ) -> dict | None:
+        """Find which ASR segment overlaps the window the most.
+
+        When ``_starts`` (the ascending list of ``asr[i]["start"]``) is
+        supplied, the scan is bounded with ``bisect`` to the segments that
+        can possibly overlap, turning the per-window cost from O(A) into
+        O(log A + k). Segments beyond that bound have zero overlap and could
+        never win, since the comparison below is a strict ``>`` against an
+        initial best of 0.0 — so the bounded scan returns exactly what the
+        full scan returns, including the first-wins tie-break.
+        """
         best = None
         best_overlap = 0.0
 
         s_start = float(window["start"])
         s_end = float(window["end"])
 
-        for a in asr:
+        if _starts is None:
+            candidates: Iterable[dict] = asr
+        else:
+            # Segments starting at/after the window end cannot overlap it.
+            hi = bisect_left(_starts, s_end)
+            candidates = asr[:hi]
+
+        for a in candidates:
             a_start, a_end = float(a["start"]), float(a["end"])
             ov = cls._overlap(s_start, s_end, a_start, a_end)
             if ov > best_overlap:
@@ -211,11 +235,30 @@ class AlignmentService:
         word_segments = sorted(word_segments, key=lambda x: x["start"])
         diarization = sorted(diarization, key=lambda x: x["start"])
 
+        # Bounded scan instead of re-filtering every word per window.
+        #
+        # `lo` is a monotonic left bound: once a word ends at/before the
+        # current d_start it can never match this window *or any later one*,
+        # because diarization is sorted so d_start only increases. `hi` is a
+        # bisect on word starts — words starting at/after d_end are excluded.
+        # The original predicate is still applied inside [lo, hi), so the
+        # emitted words are identical; only the range scanned shrinks.
+        #
+        # Deliberately NOT a consuming two-pointer: diarization windows may
+        # overlap each other, and a word inside two windows must be emitted
+        # for both speakers (see test_align_words_windows_may_overlap_*).
+        word_starts = [float(w["start"]) for w in word_segments]
+        lo = 0
+
         for d in diarization:
             d_start, d_end = float(d["start"]), float(d["end"])
             speaker = d.get("speaker", "UNKNOWN")
 
-            words = [w for w in word_segments if not (w["end"] <= d_start or w["start"] >= d_end)]
+            while lo < len(word_segments) and float(word_segments[lo]["end"]) <= d_start:
+                lo += 1
+            hi = bisect_left(word_starts, d_end)
+
+            words = [w for w in word_segments[lo:hi] if not (float(w["end"]) <= d_start or float(w["start"]) >= d_end)]
             if not words:
                 continue
 
@@ -315,9 +358,18 @@ class AlignmentService:
         raw = self._align_words_to_diarization(words, diar)
         merged = self._merge_blocks(raw)
 
+        # Precompute ASR starts so _best_asr_for_window can bisect instead of
+        # rescanning every segment per window. Only valid when `asr` is
+        # already ascending by start (whisper emits it that way); if it is
+        # not, fall back to the full scan so the result — including the
+        # first-wins tie-break — is unchanged.
+        asr_starts = [float(a["start"]) for a in asr]
+        is_ascending = all(a <= b for a, b in zip(asr_starts, asr_starts[1:], strict=False))
+        sorted_starts = asr_starts if is_ascending else None
+
         # Attach ASR confidence + placeholders
         for seg in merged:
-            best = self._best_asr_for_window({"start": seg["start"], "end": seg["end"]}, asr)
+            best = self._best_asr_for_window({"start": seg["start"], "end": seg["end"]}, asr, _starts=sorted_starts)
             seg["confidence"] = self._confidence_from_whisper(best) if best else 0.5
             seg.setdefault("diarization_confidence", 1.0)
             seg.setdefault("overlap", False)
