@@ -9,7 +9,7 @@ before starting, the naive version of each is wrong.
 | ID | Item | Feasible here? | Risk |
 |----|------|----------------|------|
 | N1 | Java callback v2 validation | ✅ **spec shipped** `2bf9b76` — Java team owns the code | none (doc) |
-| N2 | Lazy ML imports → harness rejoins light CI | ⏳ **not started** — pre-work below | **medium** (breaks harness patch targets) |
+| N2 | Lazy ML imports → harness rejoins light CI | ✅ **done** — `9e57cb4` (code) + `4df98c6` (CI 4 jobs → 2) | was medium |
 | N3 | E3 alignment `O(n²)` → two-pointer/bisect | ✅ **done** — `5c43f45` (tests) + `1f79131` (perf, ~5×) | was high; net in place |
 | N4a | dateparser date resolution | ⏳ **not started** | medium |
 | N4b | multilingual ur/ar + model extraction | ⛔ **deferred** — own sprint | high |
@@ -90,6 +90,15 @@ all 541.
 
 **Risk control.** Steps 1–2 are one commit (harness must never be red). Step
 3 is a separate commit so a CI-config problem is revertible on its own.
+
+**OUTCOME (done).** 8 imports moved (not 9 — `EmotionService` guards its own
+torch import). Rather than lose `autospec`, patching became **adaptive**:
+autospec against the real module where importable, `sys.modules` stub
+injection where not — same assertions, strongest guarantee per environment.
+`fpdf` moved to `requirements-insight.txt` (the light stack now imports the
+orchestrator, which pulls `PDFService`). Verified in a venv built from the
+light requirements alone: harness 51/51 in 8.25 s, full suite 628 + 1 skip in
+15.7 s. CI: 4 jobs → 2, heavy job retired.
 
 **Pre-work done — only 9 of the 12 imports are actually heavy.** Verified by
 reading each service's top-level imports:
