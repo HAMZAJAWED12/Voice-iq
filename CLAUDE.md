@@ -146,23 +146,26 @@ pytest -v app/insights/tests/
 
 CI runs the same command on every push to `main` via `.github/workflows/test.yml`, against the lightweight `requirements-insight.txt` stack only — not the heavy ML deps.
 
-### Test counts differ by context — this is expected, not a bug
+### One test lane (since N2) — the counts reconcile
 
 | Where | Command | Count |
 |---|---|---|
-| Local | `pytest app/insights/tests/ app/agent_brain/tests/` | **503** |
-| CI `test` job (light, 3.10 + 3.11) | same, `--ignore` the orchestrator harness | **452** |
-| CI `orchestrator-harness` job (heavy) | `pytest app/insights/tests/test_orchestrator.py` | **51** |
+| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **631** |
+| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **628 + 1 skip** |
 
-452 + 51 = 503. The split exists because `test_orchestrator.py` imports `app.pipeline.orchestrator`, which imports the **full ML stack at module top level** (whisper, torch, transformers, librosa, soundfile — none of them lazy). It therefore cannot run on `requirements-insight.txt`, and gets its own job per the "heavy deps get their own job" rule below. Making those orchestrator imports lazy (a Phase 2 candidate) would let the harness rejoin the light job and retire the heavy one.
+628 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip("torch")`, reported as a single skip) = 631. Nothing is lost in CI.
+
+`orchestrator.py` imports its eight ML-backed services **inside** the `_run_<stage>` methods, so importing it pulls nothing heavy and `test_orchestrator.py` runs on `requirements-insight.txt`. The separate ~8–12 minute `orchestrator-harness` job is retired. Verified in a venv built from the light requirements alone: harness 51/51 in ~8 s, full suite ~16 s.
+
+**Keep new heavy imports out of `orchestrator.py`'s module scope** — put them in the stage method that uses them, or the light lane breaks again. Four services that only *look* heavy are deliberately module-scope: `FactCheckService` (httpx), `PDFService` (fpdf), `normalize_to_wav` (subprocess), and `EmotionService`, which guards its torch import in its own try/except.
 
 **Harness services must be mocked, not run real, when they touch model artifacts.** `KeywordService` looks pure-python but calls `spacy.load("en_core_web_sm")` and builds a `SentenceTransformer`. The spaCy model is a separate `python -m spacy download` artifact declared in no requirements file — present on a dev machine, absent in CI. That divergence passed locally and failed CI with `KEYWORDS_FAILED`. Rule: a service is **heavy** if it imports an ML lib **or** loads a model artifact; heavy ⇒ mocked. Never fix this class of failure by installing the model in CI — a safety net must not depend on model artifacts or a network fetch.
 
 ## CI pipeline notes
 
-`.github/workflows/test.yml` deliberately installs only `requirements-insight.txt` (FastAPI, Pydantic, SQLAlchemy, pytest, httpx) — not `requirements.txt`. The heavy ML deps (torch, whisper, pyannote, transformers) would push CI runtime from ~30 seconds to 8–12 minutes and burn free Actions minutes. Insight tests don't need them. If you ever add tests that require the heavy stack, create a *separate* workflow file or job — don't bolt it onto this one. The `orchestrator-harness` job is exactly that exception.
+`.github/workflows/test.yml` deliberately installs only `requirements-insight.txt` (FastAPI, Pydantic, SQLAlchemy, pytest, httpx) — not `requirements.txt`. The heavy ML deps (torch, whisper, pyannote, transformers) would push CI runtime from ~30 seconds to 8–12 minutes and burn free Actions minutes. Insight tests don't need them. If you ever add tests that genuinely require the heavy stack, create a *separate* workflow file or job — don't bolt it onto this one. (There is no such job today: N2 made the orchestrator's ML imports lazy, so the harness rejoined this lane and the old `orchestrator-harness` job was retired.)
 
-**Diagnosing a CI failure without log access.** GitHub now requires sign-in to read Actions logs even on public repos, and `GET /actions/jobs/{id}/logs` returns `403 Must have admin rights`. Annotations, however, *are* readable unauthenticated. The `orchestrator-harness` job therefore pipes pytest output to a file and, on failure, emits the tail as a `::error::` annotation. Read it with:
+**Diagnosing a CI failure without log access.** GitHub now requires sign-in to read Actions logs even on public repos, and `GET /actions/jobs/{id}/logs` returns `403 Must have admin rights`. Annotations, however, *are* readable unauthenticated. The `test` job therefore pipes pytest output to a file and, on failure, emits the tail as a `::error::` annotation. Read it with:
 
 ```bash
 curl -s https://api.github.com/repos/HAMZAJAWED12/Voice-iq/actions/runs/<RUN_ID>/jobs
