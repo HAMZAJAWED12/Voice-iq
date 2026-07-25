@@ -11,7 +11,7 @@ before starting, the naive version of each is wrong.
 | N1 | Java callback v2 validation | ✅ **spec shipped** `2bf9b76` — Java team owns the code | none (doc) |
 | N2 | Lazy ML imports → harness rejoins light CI | ✅ **done** — `9e57cb4` (code) + `4df98c6` (CI 4 jobs → 2) | was medium |
 | N3 | E3 alignment `O(n²)` → two-pointer/bisect | ✅ **done** — `5c43f45` (tests) + `1f79131` (perf, ~5×) | was high; net in place |
-| N4a | dateparser date resolution | ⏳ **not started** | medium |
+| N4a | date resolution (stdlib, **not** dateparser) | ✅ **done** — `99dfc96` | medium |
 | N4b | multilingual ur/ar + model extraction | ⛔ **deferred** — own sprint | high |
 
 ---
@@ -173,6 +173,14 @@ backward compatible. Needs an explicit "now" reference for determinism
 *Acceptance:* "next Monday" + a fixed reference date → correct ISO date;
 unparseable phrases → `None`, phrase preserved; extractor is deterministic
 under a frozen clock.
+
+**OUTCOME (done) — shipped WITHOUT dateparser.** The extractor emits a closed
+~20-shape grammar that the stdlib resolves exactly; dateparser earns its
+weight on open-ended multilingual text (N4b), and would have added
+tzlocal/regex/dateutil/pytz to the lane N2 just trimmed. `datetime_resolver`
+is pure (explicit `now`), `BaseAgent._now()` is the single overridable clock
+seam, and `Entities.deadline_date` / `deadlineDate` is additive so Java
+consumers are unaffected. 62 tests, module 100%.
 
 **N4b — multilingual ur/ar + model-based extraction (own sprint, deferred).**
 spaCy/Stanza pipelines, non-Latin script handling, per-language models.
