@@ -33,6 +33,14 @@ def test_router_is_mounted_on_app_main() -> None:
     assert _PATH in paths, "Agent Brain router is not mounted on app.main"
 
 
+def test_router_is_mounted_on_insight_main() -> None:
+    """The lightweight image serves it too — Agent Brain has no ML deps."""
+    import app.insight_main as insight_main
+
+    paths = {getattr(r, "path", None) for r in insight_main.app.routes}
+    assert _PATH in paths, "Agent Brain router is not mounted on app.insight_main"
+
+
 def _client() -> TestClient:
     app = FastAPI()
     app.include_router(agent_router)
