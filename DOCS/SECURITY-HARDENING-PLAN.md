@@ -25,12 +25,18 @@ tests, 100%) stays green throughout.
 | S4 | Low | ✅ Raw exception detail leaked to client (500) — done `f7ecd55` | info disclosure |
 | S5 | Low | ✅ `file.filename is None` → unhandled 500 — done `525316d` | robustness |
 | S6 | Low | ✅ Unencoded value in Wikipedia URL path — done `7b0c313` | request integrity |
-| S7 | Low | HMAC callback replayable; `callback_url` scheme unchecked | integrity |
-| S8 | Low | `/docs` + `/openapi.json` public in production | info disclosure |
+| S7 | Low | ✅ HMAC callback replayable; `callback_url` scheme unchecked — done `a54944b` | integrity |
+| S8 | Low | ✅ `/docs` + `/openapi.json` public in production — done `c7c34db` | info disclosure |
 
-**Progress:** Waves **S-A + S-B + S-C + S-D complete** (S4, S5, S6, S2, S1, S3).
-All three Mediums closed. Next: S-E (S7 HMAC replay — needs Java-side
-coordination; S8 docs gating in production).
+**Progress: Tier S COMPLETE — all 8 items closed** (waves S-A … S-E).
+
+**Open follow-up owned by another team:** the Java Action Layer should switch
+callback validation from `X-VoiceIQ-Signature` (v1, body-only) to
+`X-VoiceIQ-Signature-V2` (timestamp-bound), checking clock skew and
+de-duplicating on the trace id. Both headers ship today; once Java migrates,
+v1 can be removed from `java_callback_client.py`. Until then v1 remains
+authoritative and **replay protection is not yet effective end-to-end** —
+Python emits the material, Java must enforce it.
 
 **Fact-check governance (S3) — decision taken: (a) opt-in.**
 `/v1/process-audio` no longer fact-checks by default; pass `?fact_check=true`

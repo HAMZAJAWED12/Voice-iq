@@ -86,6 +86,7 @@ voiceiq-AI/
 | Tier 2 | Test-coverage closure: 6 insight-core engines to 100%; CI ruff + gitleaks + mypy + 3.10/3.11 matrix | ✅ Done |
 | Tier 3 | Waves A/B/D: cleanups, schema fixes, mypy hard-gate | ✅ Done |
 | Sprint 6 | Agent Brain (`app/agent_brain/`): 5 rule-based agents (Task/FollowUp/Email/Escalation/FactCheckReview), confidence refine, difflib dedup, ranker, runner w/ per-agent fault isolation, internal API, pipeline adapter, HMAC Java callback; 103 tests, 100% | ✅ Done |
+| Tier S | Security hardening (8 items): rate limiting, job-artifact TTL, opt-in fact-check + `DOCS/DATA-FLOW.md`, error-detail leak, filename guard, URL encoding, callback replay/TLS, prod docs gating. See `DOCS/SECURITY-HARDENING-PLAN.md` | ✅ Done |
 
 **Currently open:** Tier 3 Wave E remainder (E3 alignment O(n²), deferred) + Agent Brain Phase 2 (NLP/model extraction; see the handoff doc §13). Wave E's E1/E1.b/E2/E4/E5 are all done.
 
@@ -191,6 +192,7 @@ These need attention but are not blocking new work:
 - **Interpreter trap:** a bare `python`/`pytest` on PATH may resolve to a different interpreter (e.g. `D:\Downloads\python`) that is **missing the project deps** (`pydantic_settings`, etc.) — collection then dies with confusing `ModuleNotFoundError`s. Always run via the venv: `.venv\Scripts\python.exe -m pytest ...` / `.venv\Scripts\python.exe -m mypy ...`. `where python` surfaces the trap.
 - **Git editor:** Set to `notepad` to avoid vim swap-file disasters: `git config --global core.editor notepad`.
 - **Never** run `git add .` without checking `git status` first — it has previously staged the entire `.venv` (10,000+ files).
+- **Security config knobs (Tier S).** All `VOICEIQ_`-prefixed env vars: `JOB_RETENTION_HOURS` (default 24, `0` disables the job-artifact purge), `RATE_LIMIT_ENABLED` / `RATE_LIMIT_PROCESS_AUDIO` (`30/minute`) / `RATE_LIMIT_FACTCHECK` (`60/minute`), `FACTCHECK_AUTO_ENRICH` (default **false** — `/v1/process-audio` no longer fact-checks unless asked; pass `?fact_check=true` per request). Setting `ENVIRONMENT=production` additionally hides `/docs`, `/redoc`, `/openapi.json` and makes missing `VOICEIQ_API_KEYS` fail closed with 503.
 
 ## Next-task candidates (pick one when ready)
 
