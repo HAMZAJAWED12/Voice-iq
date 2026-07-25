@@ -29,6 +29,13 @@ class Entities(CamelModel):
 
     assignee: str | None = None
     deadline_text: str | None = None
+    #: ISO-8601 resolution of `deadline_text` when it could be resolved
+    #: unambiguously — "2026-07-27", or "2026-07-27T14:00:00" when a time was
+    #: also spoken. None when the phrase was absent or ambiguous.
+    #:
+    #: Additive (N4a): `deadline_text` keeps the verbatim phrase, so existing
+    #: consumers are unaffected. Serialises as `deadlineDate`.
+    deadline_date: str | None = None
     customer_name: str | None = None
     topic: str | None = None
 

@@ -6,6 +6,7 @@ import re
 
 from app.agent_brain.core.base_agent import BaseAgent
 from app.agent_brain.extraction.datetime_extractor import extract_date_phrase, extract_time_phrase
+from app.agent_brain.extraction.datetime_resolver import resolve_deadline_iso
 from app.agent_brain.extraction.signals import find_signals
 from app.agent_brain.models.agent_context import AgentContext
 from app.agent_brain.models.recommendation import Recommendation
@@ -51,6 +52,7 @@ class FollowUpAgent(BaseAgent):
             date_text = extract_date_phrase(text)
             time_text = extract_time_phrase(text)
             duration = self._duration_minutes(text)
+            scheduled_iso = resolve_deadline_iso(date_text, time_text, now=self._now())
 
             when = " ".join(part for part in (date_text, f"at {time_text}" if time_text else None) if part)
             description = "The conversation indicates a follow-up call" + (f" {when}." if when else ".")
@@ -59,6 +61,9 @@ class FollowUpAgent(BaseAgent):
                 "meetingTitle": "Follow-up Discussion",
                 "dateText": date_text,
                 "timeText": time_text,
+                # Additive (N4a): ISO resolution of dateText (+ timeText when
+                # both resolve). None when the phrase was absent or ambiguous.
+                "scheduledFor": scheduled_iso,
                 "durationMinutes": duration,
             }
 

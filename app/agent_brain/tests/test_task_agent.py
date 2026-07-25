@@ -63,3 +63,44 @@ def test_task_priority_escalates_on_urgency() -> None:
 def test_title_falls_back_when_clause_strips_empty() -> None:
     # Stripping the leading subject+modal leaves nothing -> generic title.
     assert TaskAgent._title("will ", has_assignee=True) == "Follow-up task"
+
+
+# --------------------------------------------------------------------------- #
+# N4a: resolved deadline alongside the verbatim phrase                        #
+# --------------------------------------------------------------------------- #
+
+
+def test_deadline_is_resolved_to_iso_date() -> None:
+    """The phrase is preserved AND resolved. Clock frozen via the _now seam."""
+    from datetime import date
+
+    class _FrozenTaskAgent(TaskAgent):
+        @staticmethod
+        def _now() -> date:
+            return date(2026, 7, 22)  # a Wednesday
+
+    recs = _FrozenTaskAgent().detect(_ctx("Ali will prepare the report by Friday."))
+    entities = recs[0].entities
+
+    assert entities.deadline_text == "by Friday"  # unchanged, backward compatible
+    assert entities.deadline_date == "2026-07-24"  # the upcoming Friday
+
+
+def test_deadline_date_is_none_when_no_phrase() -> None:
+    recs = TaskAgent().detect(_ctx("Ali will prepare the report."))
+    assert recs[0].entities.deadline_text is None
+    assert recs[0].entities.deadline_date is None
+
+
+def test_deadline_date_serialises_as_camel_case() -> None:
+    from datetime import date
+
+    class _FrozenTaskAgent(TaskAgent):
+        @staticmethod
+        def _now() -> date:
+            return date(2026, 7, 22)
+
+    rec = _FrozenTaskAgent().detect(_ctx("Ali will send the deck by Monday."))[0]
+    payload = rec.model_dump(by_alias=True)
+    assert payload["entities"]["deadlineDate"] == "2026-07-27"
+    assert payload["entities"]["deadlineText"] == "by Monday"

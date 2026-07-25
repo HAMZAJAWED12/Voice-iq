@@ -10,6 +10,7 @@ import re
 
 from app.agent_brain.core.base_agent import BaseAgent
 from app.agent_brain.extraction.datetime_extractor import extract_date_phrase
+from app.agent_brain.extraction.datetime_resolver import resolve_deadline_iso
 from app.agent_brain.extraction.signals import find_signals
 from app.agent_brain.models.agent_context import AgentContext
 from app.agent_brain.models.recommendation import Recommendation
@@ -55,6 +56,7 @@ class EmailDraftAgent(BaseAgent):
             obj = self._object(text)
             subject = obj.title()
             deadline = extract_date_phrase(text)
+            deadline_iso = resolve_deadline_iso(deadline, now=self._now())
             body_draft = f"Hi,\n\nAs discussed, please find the details for {obj} below.\n\nRegards,"
 
             recommendations.append(
@@ -71,6 +73,8 @@ class EmailDraftAgent(BaseAgent):
                         "subject": subject,
                         "bodyDraft": body_draft,
                         "deadlineText": deadline,
+                        # Additive (N4a): ISO resolution, None when ambiguous.
+                        "deadlineDate": deadline_iso,
                     },
                     explanation="An explicit request to send/share a document was detected.",
                 )

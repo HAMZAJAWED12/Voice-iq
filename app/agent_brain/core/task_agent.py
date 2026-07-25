@@ -7,6 +7,7 @@ import re
 from app.agent_brain.core.base_agent import BaseAgent
 from app.agent_brain.extraction.assignee_extractor import extract_assignee
 from app.agent_brain.extraction.datetime_extractor import extract_date_phrase
+from app.agent_brain.extraction.datetime_resolver import resolve_deadline_iso
 from app.agent_brain.extraction.priority_classifier import classify_priority
 from app.agent_brain.extraction.signals import find_signals
 from app.agent_brain.models.agent_context import AgentContext
@@ -59,6 +60,7 @@ class TaskAgent(BaseAgent):
 
             assignee = extract_assignee(text)
             deadline = extract_date_phrase(text)
+            deadline_iso = resolve_deadline_iso(deadline, now=self._now())
             title = self._title(text, has_assignee=assignee is not None)
             description = (
                 f"{assignee} was assigned to {title[0].lower() + title[1:]}."
@@ -75,7 +77,7 @@ class TaskAgent(BaseAgent):
                     priority=classify_priority(text),
                     confidence=self._confidence(assignee=assignee, deadline=deadline),
                     source=self._source(segment),
-                    entities=Entities(assignee=assignee, deadline_text=deadline),
+                    entities=Entities(assignee=assignee, deadline_text=deadline, deadline_date=deadline_iso),
                     explanation="Detected a commitment/assignment cue with an actionable clause.",
                 )
             )

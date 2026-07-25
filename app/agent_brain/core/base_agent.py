@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from datetime import date
 
 from app.agent_brain.models.agent_context import AgentContext, TranscriptSegment
 from app.agent_brain.models.enums import ActionType, AgentType
@@ -25,6 +26,16 @@ class BaseAgent(ABC):
     @abstractmethod
     def detect(self, context: AgentContext) -> list[Recommendation]:
         """Return recommendations derived from `context` (possibly empty)."""
+
+    @staticmethod
+    def _now() -> date:
+        """Reference date for resolving relative deadlines ("next Monday").
+
+        A single overridable seam: the resolver itself is pure and takes an
+        explicit `now`, and tests subclass or patch this to freeze the clock
+        rather than threading a date through every agent signature.
+        """
+        return date.today()
 
     @staticmethod
     def _source(segment: TranscriptSegment) -> Source:
