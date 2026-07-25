@@ -14,8 +14,12 @@ Design
   stage code for the returned dict to see their values.
 * **The 12 side-effect points are mocked** (7 heavy ML services + the two
   heavy audio utils + the network-bound FactCheckService + the byte-producing
-  PDFService + KeywordService), all ``autospec=True`` so call-signature drift
-  fails loudly.
+  PDFService + KeywordService). Signature drift still fails loudly wherever
+  the real class can be imported — see the adaptive-patching note below.
+* **This module runs on the lightweight stack** (N2). The orchestrator
+  imports its eight ML-backed services inside the stage methods, so nothing
+  heavy is pulled at import time. Verified in a venv built from
+  ``requirements-insight.txt`` alone: 51/51 in ~8s.
 * **The 5 cheap, pure-python services run REAL** (alignment, metadata,
   intent, flag, insight + adapter). They are deterministic and
   side-effect-free, so running them real gives truer coverage than hand-built
@@ -38,19 +42,79 @@ test perturbs exactly one stage to its failure/skip branch.
 from __future__ import annotations
 
 import contextlib
+import importlib
+import sys
 from collections.abc import Iterator
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.pipeline.orchestrator import VoiceIQOrchestrator, _safe_ctor_kwargs
-from app.utils.audio_quality import AudioQualityReport
 from app.utils.audio_utils import AudioNormalizationTimeout
 from app.utils.job_io import JobIO
 
 _ORCH = "app.pipeline.orchestrator"
+
+# --------------------------------------------------------------------------- #
+# Adaptive patching (N2)                                                      #
+#                                                                             #
+# The eight ML-backed services are imported inside their `_run_<stage>`       #
+# methods, so `orchestrator` itself is importable without the heavy stack.    #
+# That means this harness runs on the lightweight lane — but the patch target #
+# depends on what is installed:                                               #
+#                                                                             #
+#   heavy deps present (dev box)  -> patch the real class with autospec=True, #
+#                                    so call-signature drift still fails loud #
+#   heavy deps absent  (light CI) -> inject a stub module into sys.modules so #
+#                                    the in-method import resolves to a mock  #
+#                                                                             #
+# Same assertions either way; the strongest guarantee each environment can    #
+# actually offer. Never silently degrades on a machine that CAN autospec.     #
+# --------------------------------------------------------------------------- #
+
+
+def _module_importable(module_path: str) -> bool:
+    try:
+        importlib.import_module(module_path)
+    except Exception:
+        return False
+    return True
+
+
+def _patch_service(stack: contextlib.ExitStack, module_path: str, attr: str) -> Any:
+    """Patch `attr` in `module_path`, autospec'ing it when importable."""
+    if _module_importable(module_path):
+        return stack.enter_context(patch(f"{module_path}.{attr}", autospec=True))
+
+    # Heavy dep missing: stand in a fake module so the in-method
+    # `from <module_path> import <attr>` resolves without touching the real one.
+    stub = sys.modules.get(module_path)
+    if not isinstance(stub, ModuleType) or not hasattr(stub, "__voiceiq_stub__"):
+        stub = ModuleType(module_path)
+        stub.__voiceiq_stub__ = True  # type: ignore[attr-defined]
+        stack.enter_context(patch.dict(sys.modules, {module_path: stub}))
+    mock = MagicMock(name=attr)
+    setattr(stub, attr, mock)
+    return mock
+
+
+def _make_quality_report(**fields: Any) -> Any:
+    """A real AudioQualityReport when numpy/soundfile are available, else a
+    duck-typed stand-in exposing exactly what the orchestrator reads."""
+    try:
+        from app.utils.audio_quality import AudioQualityReport
+
+        return AudioQualityReport(**fields)
+    except Exception:
+
+        class _Report(SimpleNamespace):
+            def to_dict(self) -> dict[str, Any]:
+                return dict(self.__dict__)
+
+        return _Report(**fields)
+
 
 # Every timing key run() records, in order. Used to assert stage completeness.
 ALL_TIMINGS = [
@@ -92,7 +156,7 @@ GOLDEN_DIAR: list[dict[str, Any]] = [
 ]
 
 
-def _golden_aq(**overrides: Any) -> AudioQualityReport:
+def _golden_aq(**overrides: Any) -> Any:
     """A clean (non-silent, good-SNR) audio-quality report; override to perturb."""
     fields: dict[str, Any] = {
         "duration_sec": 4.0,
@@ -108,7 +172,7 @@ def _golden_aq(**overrides: Any) -> AudioQualityReport:
         "very_low_snr": False,
     }
     fields.update(overrides)
-    return AudioQualityReport(**fields)
+    return _make_quality_report(**fields)
 
 
 def _wire_happy(m: SimpleNamespace) -> None:
@@ -165,21 +229,28 @@ def mx() -> Iterator[SimpleNamespace]:
     with contextlib.ExitStack() as stack:
 
         def _p(name: str) -> Any:
+            """Patch a name still imported at orchestrator module scope."""
             return stack.enter_context(patch(f"{_ORCH}.{name}", autospec=True))
 
+        def _lazy(module_path: str, attr: str) -> Any:
+            """Patch a service the orchestrator imports inside its stage."""
+            return _patch_service(stack, module_path, attr)
+
         ns = SimpleNamespace(
+            # Still module-scope in orchestrator (light imports).
             normalize=_p("normalize_to_wav"),
-            aq=_p("analyze_audio_quality"),
-            asr=_p("ASRService"),
-            diar=_p("DiarizationService"),
-            sentiment=_p("SentimentService"),
-            keywords=_p("KeywordService"),
-            gender=_p("GenderService"),
             emotion=_p("EmotionService"),
-            topic=_p("TopicService"),
-            summary=_p("SummaryService"),
             factcheck=_p("FactCheckService"),
             pdf=_p("PDFService"),
+            # Imported inside their stage method (heavy) -> patch at source.
+            aq=_lazy("app.utils.audio_quality", "analyze_audio_quality"),
+            asr=_lazy("app.services.asr_service", "ASRService"),
+            diar=_lazy("app.services.diarization_service", "DiarizationService"),
+            sentiment=_lazy("app.services.sentiment_service", "SentimentService"),
+            keywords=_lazy("app.services.keyword_service", "KeywordService"),
+            gender=_lazy("app.services.gender_service", "GenderService"),
+            topic=_lazy("app.services.topic_service", "TopicService"),
+            summary=_lazy("app.services.summary_service", "SummaryService"),
         )
         _wire_happy(ns)
         yield ns

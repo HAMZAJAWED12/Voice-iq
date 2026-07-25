@@ -5,30 +5,36 @@ import base64
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+# Light imports only at module scope.
+#
+# The eight ML-backed services (ASR, diarization, sentiment, keywords,
+# gender, topic, summary + analyze_audio_quality) are imported INSIDE the
+# `_run_<stage>` method that uses them. Importing them here would pull
+# whisper / torch / transformers / spacy / librosa at module import time,
+# which made `test_orchestrator.py` unrunnable on the lightweight
+# `requirements-insight.txt` stack and forced a separate 8-12 minute CI job.
+#
+# The services below are safe at module scope: they are pure-python, or
+# (EmotionService) guard their heavy import in a try/except of their own.
 from app.insights.adapters import VoiceIQInsightAdapter
 from app.insights.service import InsightService
 from app.services.alignment_service import AlignmentService
-from app.services.asr_service import ASRService
-from app.services.diarization_service import DiarizationService
 from app.services.emotion_service import EmotionService
 from app.services.factcheck_service import FactCheckService
 from app.services.flag_service import FlagService
-from app.services.gender_service import GenderService
 from app.services.intent_service import IntentService
-from app.services.keyword_service import KeywordService
 from app.services.metadata_service import MetadataExtractor
 from app.services.pdf_service import PDFService
-from app.services.sentiment_service import SentimentService
-from app.services.summary_service import SummaryService
-from app.services.topic_service import TopicService
-from app.utils.audio_quality import AudioQualityReport, analyze_audio_quality
 from app.utils.audio_utils import (
     AudioNormalizationTimeout,
     normalize_to_wav,
 )
 from app.utils.job_io import JobIO, JobPaths
+
+if TYPE_CHECKING:  # annotation-only; never imported at runtime
+    from app.utils.audio_quality import AudioQualityReport
 
 
 def _now_ms() -> int:
@@ -275,6 +281,8 @@ class VoiceIQOrchestrator:
         st.timing("audio_normalize", t0)
 
     def _run_audio_quality(self, st: _PipelineState) -> None:
+        from app.utils.audio_quality import analyze_audio_quality
+
         t0 = _now_ms()
         try:
             st.aq = analyze_audio_quality(st.normalized_wav)
@@ -320,6 +328,8 @@ class VoiceIQOrchestrator:
         st.low_snr_flag = bool(st.aq and (st.aq.low_snr or st.aq.very_low_snr))
 
     def _run_asr(self, st: _PipelineState) -> None:
+        from app.services.asr_service import ASRService
+
         t0 = _now_ms()
         try:
             asr = ASRService(model_name=st.whisper_model, language=st.language)
@@ -362,6 +372,8 @@ class VoiceIQOrchestrator:
         st.transcript_text = self.io.load_text(st.job, "artifacts/asr/transcript.txt", default="") or ""
 
     def _run_diarization(self, st: _PipelineState) -> None:
+        from app.services.diarization_service import DiarizationService
+
         t0 = _now_ms()
         diar_warns: list[str] = []
         try:
@@ -484,6 +496,8 @@ class VoiceIQOrchestrator:
         st.timing("stats", t0)
 
     def _run_sentiment(self, st: _PipelineState) -> None:
+        from app.services.sentiment_service import SentimentService
+
         t0 = _now_ms()
         try:
             if st.speaker_segments:
@@ -499,6 +513,8 @@ class VoiceIQOrchestrator:
         st.timing("sentiment", t0)
 
     def _run_keywords(self, st: _PipelineState) -> None:
+        from app.services.keyword_service import KeywordService
+
         t0 = _now_ms()
         try:
             if st.speaker_segments:
@@ -514,6 +530,8 @@ class VoiceIQOrchestrator:
         st.timing("keywords", t0)
 
     def _run_gender(self, st: _PipelineState) -> None:
+        from app.services.gender_service import GenderService
+
         t0 = _now_ms()
         try:
             if st.low_snr_flag:
@@ -554,6 +572,8 @@ class VoiceIQOrchestrator:
         st.timing("emotion", t0)
 
     def _run_topic(self, st: _PipelineState) -> None:
+        from app.services.topic_service import TopicService
+
         t0 = _now_ms()
         try:
             st.topic = TopicService.classify(st.transcript_text or "")
@@ -566,6 +586,8 @@ class VoiceIQOrchestrator:
         st.timing("topic", t0)
 
     def _run_summary(self, st: _PipelineState) -> None:
+        from app.services.summary_service import SummaryService
+
         t0 = _now_ms()
         try:
             st.summary_text = SummaryService.generate_summary(st.transcript_text or "")

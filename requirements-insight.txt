@@ -14,5 +14,8 @@ SQLAlchemy>=2.0.30
 python-multipart
 httpx==0.28.1
 slowapi>=0.1.9
+# Pure-python PDF writer. Needed on the light stack because the orchestrator
+# harness now imports app.pipeline.orchestrator (which pulls PDFService).
+fpdf==1.7.2
 pytest==8.3.3
 pytest-asyncio==0.24.0
