@@ -77,3 +77,8 @@ def factcheck_rate_limit(request: Request) -> None:
 def process_audio_rate_limit(request: Request) -> None:
     """Route dependency for POST /v1/process-audio."""
     _enforce(request, get_settings().rate_limit_process_audio)
+
+
+def agent_brain_rate_limit(request: Request) -> None:
+    """Route dependency for the internal Agent Brain generate endpoint."""
+    _enforce(request, get_settings().rate_limit_agent_brain)

@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 
+from app.agent_brain.api.agent_routes import router as agent_brain_router
 from app.insights.api import router as insight_router
 from app.insights.config.settings import get_settings
 from app.insights.repository.db import init_db
@@ -56,6 +57,10 @@ app = FastAPI(
 
 app.include_router(process_router, prefix="/v1")
 app.include_router(insight_router, prefix="/v1")
+# Agent Brain carries its own /internal/v1/agent-brain prefix. Internal-only:
+# the Java Action Layer calls it with an X-API-Key; it is not part of the
+# public /v1 surface.
+app.include_router(agent_brain_router)
 
 
 @app.get("/healthz", tags=["Ops"], summary="Liveness probe")

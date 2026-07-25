@@ -153,6 +153,13 @@ class InsightSettings(BaseSettings):
             "Rate limit for POST /v1/fact-check (fans out to external APIs). " "slowapi format, e.g. '60/minute'."
         ),
     )
+    rate_limit_agent_brain: str = Field(
+        default="60/minute",
+        description=(
+            "Rate limit for POST /internal/v1/agent-brain/recommendations/generate "
+            "(runs five agents over a transcript). slowapi format."
+        ),
+    )
 
     # --- Authentication -------------------------------------------------- #
     # `NoDecode` tells pydantic-settings to skip its default JSON-decode
