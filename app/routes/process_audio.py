@@ -14,6 +14,7 @@ from app.pipeline.orchestrator import VoiceIQOrchestrator
 from app.security import enforce_content_length, verify_api_key
 from app.security.rate_limit import process_audio_rate_limit
 from app.utils.audio_sniff import is_recognized_audio
+from app.utils.factcheck_gate import DISABLED_STUB, factcheck_requested
 from app.utils.job_io import JobIO
 from app.utils.logger import logger
 from app.utils.upload import resolve_audio_ext
@@ -112,6 +113,15 @@ def _auto_run_factcheck(request_id: str, result: dict) -> None:
 async def process_audio(
     file: UploadFile = File(...),
     expected_speakers: int | None = Query(default=None, description="Optional hint (2 for calls, 3-6 for meetings)"),
+    fact_check: bool | None = Query(
+        default=None,
+        description=(
+            "Run fact-check enrichment for this request. Omit to use the "
+            "factcheck_auto_enrich setting (default off). Fact-check sends "
+            "transcript-derived claim subjects to external providers — see "
+            "DOCS/DATA-FLOW.md."
+        ),
+    ),
 ):
     request_id = str(uuid.uuid4())
     logger.info(f"[{request_id}] Received: {file.filename}")
@@ -205,7 +215,11 @@ async def process_audio(
             },
         )
 
-    # Auto-enrich with rule-based fact verification (Sprint 5).
-    _auto_run_factcheck(request_id, result)
+    # Auto-enrich with rule-based fact verification (Sprint 5). Opt-in: this
+    # transmits transcript-derived claim subjects to external providers.
+    if factcheck_requested(fact_check):
+        _auto_run_factcheck(request_id, result)
+    else:
+        result["fact_checks_v2"] = dict(DISABLED_STUB)
 
     return result

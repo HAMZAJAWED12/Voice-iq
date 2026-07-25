@@ -183,6 +183,17 @@ class InsightSettings(BaseSettings):
         return value
 
     # --- Fact-Check source clients --------------------------------------- #
+    factcheck_auto_enrich: bool = Field(
+        default=False,
+        description=(
+            "Whether /v1/process-audio automatically runs the fact-check "
+            "engine over the transcript. Claim subjects (city, country, "
+            "currency, asset, ticker) parsed from the call are sent to "
+            "external providers, so this leaves the trust boundary — it is "
+            "opt-in. Enable globally with VOICEIQ_FACTCHECK_AUTO_ENRICH=true "
+            "or per request with ?fact_check=true. See DOCS/DATA-FLOW.md."
+        ),
+    )
     openweather_api_key: str = Field(
         default="",
         description=(
