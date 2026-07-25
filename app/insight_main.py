@@ -46,7 +46,14 @@ async def lifespan(app: FastAPI):
     yield
 
 
+# Interactive docs expose the full request/response schema of every route.
+# Useful in dev, needless attack-surface detail in production.
+_docs_enabled = settings.environment != "production"
+
 app = FastAPI(
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
     title=f"{settings.service_name} — Insight Service",
     description=(
         "Standalone Insight Service surface. Exposes the conversational "
