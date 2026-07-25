@@ -21,14 +21,23 @@ tests, 100%) stays green throughout.
 |----|----------|-------|------|
 | S1 | Medium | ✅ No rate limiting on any endpoint — done `93f73b1` | DoS / quota-exhaustion |
 | S2 | Medium | ✅ No job-artifact retention (disk growth + PII persistence) — done `3c3adb2` | DoS / privacy |
-| S3 | Medium | Fact-check exfiltrates transcript fragments to 3rd parties, silently | data governance |
+| S3 | Medium | ✅ Fact-check exfiltrates transcript fragments to 3rd parties, silently — done `61fbf56` | data governance |
 | S4 | Low | ✅ Raw exception detail leaked to client (500) — done `f7ecd55` | info disclosure |
 | S5 | Low | ✅ `file.filename is None` → unhandled 500 — done `525316d` | robustness |
 | S6 | Low | ✅ Unencoded value in Wikipedia URL path — done `7b0c313` | request integrity |
 | S7 | Low | HMAC callback replayable; `callback_url` scheme unchecked | integrity |
 | S8 | Low | `/docs` + `/openapi.json` public in production | info disclosure |
 
-**Progress:** Waves **S-A + S-B + S-C complete** (S4, S5, S6, S2, S1). Next: S-D (fact-check data governance) — needs the opt-in/opt-out decision.
+**Progress:** Waves **S-A + S-B + S-C + S-D complete** (S4, S5, S6, S2, S1, S3).
+All three Mediums closed. Next: S-E (S7 HMAC replay — needs Java-side
+coordination; S8 docs gating in production).
+
+**Fact-check governance (S3) — decision taken: (a) opt-in.**
+`/v1/process-audio` no longer fact-checks by default; pass `?fact_check=true`
+or set `VOICEIQ_FACTCHECK_AUTO_ENRICH=true`. Skipped requests return
+`fact_checks_v2: {"status": "disabled"}` and make zero external calls.
+Egress fully documented in [DATA-FLOW.md](DATA-FLOW.md). **Behavior change:**
+callers relying on automatic `fact_checks_v2` must opt in.
 
 **Rate limiting (S1) — decision taken: (a) slowapi.** Implemented as FastAPI
 route dependencies over slowapi's engine (the `limits` library), *not* the
