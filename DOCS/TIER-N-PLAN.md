@@ -8,10 +8,11 @@ before starting, the naive version of each is wrong.
 
 | ID | Item | Feasible here? | Risk |
 |----|------|----------------|------|
-| N1 | Java callback v2 validation | ❌ **not in this repo** — spec only | none (doc) |
-| N2 | Lazy ML imports → harness rejoins light CI | ✅ yes | **medium** (breaks harness patch targets) |
-| N3 | E3 alignment `O(n²)` → two-pointer/bisect | ✅ yes, **tests first** | **high** (no safety net today) |
-| N4 | Sprint 6 Phase 2 NLP enrichment | ⚠️ **partially** — split it | medium → high |
+| N1 | Java callback v2 validation | ✅ **spec shipped** `2bf9b76` — Java team owns the code | none (doc) |
+| N2 | Lazy ML imports → harness rejoins light CI | ⏳ **not started** — pre-work below | **medium** (breaks harness patch targets) |
+| N3 | E3 alignment `O(n²)` → two-pointer/bisect | ✅ **done** — `5c43f45` (tests) + `1f79131` (perf, ~5×) | was high; net in place |
+| N4a | dateparser date resolution | ⏳ **not started** | medium |
+| N4b | multilingual ur/ar + model extraction | ⛔ **deferred** — own sprint | high |
 
 ---
 
@@ -89,6 +90,32 @@ all 541.
 
 **Risk control.** Steps 1–2 are one commit (harness must never be red). Step
 3 is a separate commit so a CI-config problem is revertible on its own.
+
+**Pre-work done — only 9 of the 12 imports are actually heavy.** Verified by
+reading each service's top-level imports:
+
+| Must become lazy (heavy top-level import) | Already light — leave alone |
+|---|---|
+| `ASRService` (whisper) | `FactCheckService` (httpx) |
+| `DiarizationService` (torch, soundfile, huggingface_hub) | `PDFService` (fpdf) |
+| `SentimentService` (transformers) | `normalize_to_wav` (subprocess only) |
+| `KeywordService` (spacy, sentence_transformers, sklearn) | |
+| `GenderService` (librosa, numpy) | |
+| `TopicService` (transformers) | |
+| `SummaryService` (transformers) | |
+| `analyze_audio_quality` (numpy, soundfile) | |
+
+`EmotionService` is a surprise: its only top-level import is the logger, so
+it may already be light — **confirm before moving it**.
+
+`AudioQualityReport` is used only as the `_PipelineState.aq` annotation.
+With `from __future__ import annotations` in force, move it under
+`if TYPE_CHECKING:` rather than importing it at runtime.
+
+Each heavy name is used in exactly one `_run_<stage>` method, so each import
+moves to exactly one call site (grep line numbers recorded at investigation
+time: ASR 325, Diar 368, Sentiment 490, Keyword 505, Gender 523, Emotion
+542/544, Topic 559, Summary 571, normalize 231, audio_quality 280).
 
 ---
 
