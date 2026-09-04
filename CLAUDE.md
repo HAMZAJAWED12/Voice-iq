@@ -87,8 +87,22 @@ voiceiq-AI/
 | Tier 3 | Waves A/B/D: cleanups, schema fixes, mypy hard-gate | ✅ Done |
 | Sprint 6 | Agent Brain (`app/agent_brain/`): 5 rule-based agents (Task/FollowUp/Email/Escalation/FactCheckReview), confidence refine, difflib dedup, ranker, runner w/ per-agent fault isolation, internal API, pipeline adapter, HMAC Java callback; 103 tests, 100% | ✅ Done |
 | Tier S | Security hardening (8 items): rate limiting, job-artifact TTL, opt-in fact-check + `DOCS/DATA-FLOW.md`, error-detail leak, filename guard, URL encoding, callback replay/TLS, prod docs gating. See `DOCS/SECURITY-HARDENING-PLAN.md` | ✅ Done |
+| Sprint 7 | **Fact-Check Agent** — open-source LLM (Qwen3) claim extraction, hybrid retrieval, evidence-grounded reasoning, citations. Phases 0–7. Phase 0 (contract lock, no code) drafted in `DOCS/FACTCHECK-AGENT-PHASE-0.md` | 🟡 Phase 0 — awaiting sign-off |
 
-**Currently open:** Tier 3 Wave E remainder (E3 alignment O(n²), deferred) + Agent Brain Phase 2 (NLP/model extraction; see the handoff doc §13). Wave E's E1/E1.b/E2/E4/E5 are all done.
+**Currently open:** Sprint 7 Fact-Check Agent, blocked at Phase 0 on nine
+sign-offs (`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1). Also open: Tier 3 Wave E
+remainder (E3 alignment O(n²), deferred) + Agent Brain Phase 2 (NLP/model
+extraction; see the handoff doc §13). Wave E's E1/E1.b/E2/E4/E5 are all done.
+
+> **Sprint 7 hard constraints** (from Phase 0, before anyone writes code):
+> the repo has **no Alembic** — `init_db()` is `create_all()` only, so it
+> creates missing *tables* and never `ALTER`s one. Fact-check-agent
+> persistence is therefore **new tables only**. The v1 fact-check contract
+> (`FactCheckRequest`/`Response`, `ClaimType`, `Verdict`) is **frozen**; the
+> agent gets its own models. And `pipeline_adapter._VERDICT_TO_STATUS` must
+> lose its `.get(..., "UNVERIFIED")` default before new verdicts arrive —
+> `CONTRADICTED` would otherwise fall through to `UNVERIFIED` and silently
+> drop the review recommendation from `CRITICAL` to `HIGH`.
 
 ## Engineering standards (STRICT)
 
