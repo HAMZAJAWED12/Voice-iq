@@ -87,22 +87,33 @@ voiceiq-AI/
 | Tier 3 | Waves A/B/D: cleanups, schema fixes, mypy hard-gate | ✅ Done |
 | Sprint 6 | Agent Brain (`app/agent_brain/`): 5 rule-based agents (Task/FollowUp/Email/Escalation/FactCheckReview), confidence refine, difflib dedup, ranker, runner w/ per-agent fault isolation, internal API, pipeline adapter, HMAC Java callback; 103 tests, 100% | ✅ Done |
 | Tier S | Security hardening (8 items): rate limiting, job-artifact TTL, opt-in fact-check + `DOCS/DATA-FLOW.md`, error-detail leak, filename guard, URL encoding, callback replay/TLS, prod docs gating. See `DOCS/SECURITY-HARDENING-PLAN.md` | ✅ Done |
-| Sprint 7 | **Fact-Check Agent** — open-source LLM (Qwen3) claim extraction, hybrid retrieval, evidence-grounded reasoning, citations. Phases 0–7. Phase 0 (contract lock, no code) drafted in `DOCS/FACTCHECK-AGENT-PHASE-0.md` | 🟡 Phase 0 — awaiting sign-off |
+| Sprint 7 | **Fact-Check Agent** — open-source LLM (Qwen3) claim extraction, hybrid retrieval, evidence-grounded reasoning, citations. Phases 0–7. Phase 0 (contract lock, no code) in `DOCS/FACTCHECK-AGENT-PHASE-0.md`; D1 + D2 signed | 🟡 Phase 0 — 2/9 decisions signed |
 
-**Currently open:** Sprint 7 Fact-Check Agent, blocked at Phase 0 on nine
-sign-offs (`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1). Also open: Tier 3 Wave E
-remainder (E3 alignment O(n²), deferred) + Agent Brain Phase 2 (NLP/model
-extraction; see the handoff doc §13). Wave E's E1/E1.b/E2/E4/E5 are all done.
+**Currently open:** Sprint 7 Fact-Check Agent, at Phase 0 with 2 of 9
+decisions signed — D3–D9 still block Phase 1
+(`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1). Also open: Tier 3 Wave E remainder
+(E3 alignment O(n²), deferred) + Agent Brain Phase 2 (NLP/model extraction;
+see the handoff doc §13). Wave E's E1/E1.b/E2/E4/E5 are all done.
 
-> **Sprint 7 hard constraints** (from Phase 0, before anyone writes code):
-> the repo has **no Alembic** — `init_db()` is `create_all()` only, so it
-> creates missing *tables* and never `ALTER`s one. Fact-check-agent
-> persistence is therefore **new tables only**. The v1 fact-check contract
-> (`FactCheckRequest`/`Response`, `ClaimType`, `Verdict`) is **frozen**; the
-> agent gets its own models. And `pipeline_adapter._VERDICT_TO_STATUS` must
-> lose its `.get(..., "UNVERIFIED")` default before new verdicts arrive —
-> `CONTRADICTED` would otherwise fall through to `UNVERIFIED` and silently
-> drop the review recommendation from `CRITICAL` to `HIGH`.
+> **Sprint 7 hard constraints** (settled in Phase 0 — do not relitigate):
+>
+> 1. **New tables only** (D1). The repo has no Alembic; `init_db()` is
+>    `create_all()`, which creates missing *tables* and never `ALTER`s one.
+>    A column added to an existing table lands on a fresh DB and is silently
+>    absent on one with prior data — every fresh-DB test passes.
+> 2. **Job-based execution** (D2). `/v1/process-audio` returns before the
+>    agent finishes, so `fact_check_report` is a *state envelope*
+>    (`pending|complete|failed|disabled|skipped`) and
+>    `GET /v2/fact-check/{runId}` is required, not optional. The PDF must
+>    not ship with a silently empty fact-check section.
+> 3. **v1 is frozen.** `FactCheckRequest`/`Response`, `ClaimType`, `Verdict`
+>    take no new members. The agent gets its own models.
+> 4. **No default in the verdict map.** `pipeline_adapter._VERDICT_TO_STATUS`
+>    must lose its `.get(..., "UNVERIFIED")` fallback before v2 verdicts
+>    arrive: `CONTRADICTED` would fall through to `UNVERIFIED` and silently
+>    drop the review recommendation from `CRITICAL` to `HIGH`. Non-checkable
+>    statements are excluded *before* mapping — otherwise every opinion in a
+>    call generates a manual-review recommendation.
 
 ## Engineering standards (STRICT)
 

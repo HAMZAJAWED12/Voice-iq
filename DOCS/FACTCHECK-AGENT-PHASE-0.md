@@ -15,7 +15,7 @@ breaks it is a defect, not a judgement call.
 |---|---|---|
 | Approved API schema + compatibility policy | §2, §3 | drafted — needs sign-off |
 | Approved privacy boundary + source policy | §6 | drafted — needs sign-off |
-| Persistence option, execution mode, decision table w/ owners + dates | §1, §4 | **blocked on D1–D9** |
+| Persistence option, execution mode, decision table w/ owners + dates | §1, §4 | D1 + D2 **signed**; blocked on D3–D9 |
 
 ---
 
@@ -26,10 +26,10 @@ questions but assigned neither owner nor date, so none could be chased.
 
 `Needed by` is relative to the Phase 0 kick-off date.
 
-| ID | Decision | Owner | Needed by | Recommended default | Status |
-|----|----------|-------|-----------|---------------------|--------|
-| D1 | Persistence: new tables only, or adopt Alembic? | Tech lead | +2 days | **Option A — new tables only** | ⬜ pending |
-| D2 | Synchronous or job-based execution? | Tech lead + product | +3 days | **Job-based** until hardware proves otherwise | ⬜ pending |
+| ID | Decision | Owner | Needed by | Recommendation | Status |
+|----|----------|-------|-----------|----------------|--------|
+| D1 | Persistence: new tables only, or adopt Alembic? | Tech lead | +2 days | **Option A — new tables only** | ✅ **signed 2026-09-04 — Option A** |
+| D2 | Synchronous or job-based execution? | Tech lead + product | +3 days | **Job-based** until hardware proves otherwise | ✅ **signed 2026-09-04 — job-based** |
 | D3 | Who owns and resources the gold set? | Eng manager | +2 days | — (must be named) | ⬜ pending |
 | D4 | Does "open-source" cover web search too, or only the LLM? | Senior sponsor | +3 days | Self-host search (SearXNG) | ⬜ pending |
 | D5 | Production GPU/RAM, and max acceptable fact-check latency? | Infrastructure | +5 days | — (must be measured) | ⬜ pending |
@@ -38,7 +38,7 @@ questions but assigned neither owner nor date, so none could be chased.
 | D8 | How long must v1 + legacy process-audio fields survive? | Product + consumers | before Phase 6 | Indefinitely within this project | ⬜ pending |
 | D9 | Source-authority rules for high-stakes claims? | Product + legal | before Phase 5 | Tier 1 only — see §6.3 | ⬜ pending |
 
-### D1 — Persistence *(recommendation: Option A, new tables only)*
+### D1 — Persistence · ✅ **signed: Option A, new tables only**
 
 **Evidence.** `app/insights/repository/db.py` ends `init_db()` with:
 
@@ -60,16 +60,15 @@ prior data.
 | Cost | zero | own project, own approval, own risk |
 | Blocks Phase 6 | no | yes, until shipped |
 
-**Recommendation: Option A.** The new agent's results are a new shape
+**Decision: Option A.** The new agent's results are a new shape
 anyway — run, claim, evidence and citation records are one-to-many and do not
 belong bolted onto the flat `fact_check_results` row. Option B remains
 available later as an independent decision; nothing in this plan should
 create pressure to rush it.
 
-**Consequence if adopted:** §4 becomes binding and no phase may assume
-`ALTER TABLE`.
+**Consequence:** §4 is binding. No phase may assume `ALTER TABLE`.
 
-### D2 — Execution mode *(recommendation: job-based until measured)*
+### D2 — Execution mode · ✅ **signed: job-based**
 
 Order-of-magnitude anchor (plan §5, to be replaced by Phase 1 measurement):
 a 4B quantized model on CPU runs ~5–15 tokens/sec, and each claim costs two
@@ -87,9 +86,29 @@ This decides the shape of the integration, so it cannot be deferred to Phase 1:
   report is regenerated or amended. Survives slow hardware; costs a second
   artifact-write path and a status field.
 
-**Recommendation: assume job-based** until D5 supplies hardware that proves
-synchronous is viable. Designing synchronous-first and retrofitting async is
-the expensive direction.
+**Decision: job-based.** Designing synchronous-first and retrofitting async
+is the expensive direction, and D5 has not yet supplied hardware that would
+make synchronous viable. If D5 later reports a GPU that fits p95 inside the
+existing request budget, a synchronous path may be added as an *option* —
+`FACTCHECK_EXECUTION_MODE=sync` — but the job-based path stays the default
+and stays supported.
+
+**Consequences, binding on Phases 2, 5 and 6:**
+
+1. `/v1/process-audio` returns **before** the fact-check finishes. Its
+   `fact_check_report` key therefore carries a *state*, not just results —
+   see §2.3.
+2. The run needs a retrievable identity and a terminal status, so
+   `factcheck_agent_runs` (§4) carries `status` and both timestamps. A run
+   that is never collected must still age out under the existing
+   `job_retention_hours` sweep.
+3. The PDF cannot contain verdicts on the first pass. Phase 6 must either
+   regenerate the report when the run completes, or emit it only after
+   completion. **It must not silently ship a PDF with an empty fact-check
+   section** — that is the same class of defect as the ordering bug this
+   whole sprint exists to fix.
+4. Failure of the job never changes the audio-processing status. That
+   response has already been sent.
 
 ---
 
@@ -123,7 +142,11 @@ The new agent gets its **own** models. It does not extend these.
 
 ### 2.2 v2 contract
 
-`POST /v2/fact-check`. New route, new models, no shared mutable types with v1.
+Two new routes, new models, no shared mutable types with v1:
+
+- `POST /v2/fact-check` — submit a session for verification.
+- `GET /v2/fact-check/{runId}` — collect a run. **Required**, not optional:
+  D2 is job-based, so without it a submitted run is unreachable.
 
 Verdict set — four members, deliberately renamed away from v1's truth
 language because the agent reports *what the evidence supports*, not what is
@@ -186,6 +209,25 @@ One new canonical key: **`fact_check_report`**.
 | `fact_checks_v2` (Sprint 5 engine, route-injected) | untouched |
 | `fact_check_report` (new) | added; absent when the feature flag is off |
 
+Because D2 is **job-based**, this key is a *state envelope*, not a result
+set. The audio response has already returned by the time the agent runs, so
+the key must be able to say "not finished yet" without a consumer having to
+guess:
+
+```jsonc
+{
+  "status": "pending",        // pending | complete | failed | disabled | skipped
+  "runId": "fcr_01H…",        // null when disabled/skipped
+  "resultsUrl": "/v2/fact-check/fcr_01H…",
+  "claims": []                // populated only when status == "complete"
+}
+```
+
+`GET /v2/fact-check/{runId}` is therefore part of the v2 contract, not an
+optional extra: without it a job-based run is unreachable. `status` values
+`disabled` and `skipped` reuse the vocabulary the existing `fact_checks_v2`
+stub already returns, so consumers meet one convention rather than two.
+
 Deprecating either older key is a **separate later ticket** gated on D8 and
 on consumer sign-off. Not in scope here.
 
@@ -211,6 +253,7 @@ Normative restatement of plan §8. Three rules, then the matrix.
 | `POST /v1/fact-check` | none | no change | n/a |
 | `GET /v1/fact-check/{id}` | none | no change | n/a |
 | `POST /v2/fact-check` | new route | additive | remove route |
+| `GET /v2/fact-check/{runId}` | new route | additive | remove route |
 | `fact_checks` | none | no change | n/a |
 | `fact_checks_v2` | none | no change | n/a |
 | `fact_check_report` | new key | additive | flag off ⇒ key absent |
@@ -222,7 +265,7 @@ Normative restatement of plan §8. Three rules, then the matrix.
 
 ---
 
-## 4. Persistence policy *(binding if D1 = Option A)*
+## 4. Persistence policy *(binding — D1 signed Option A)*
 
 **Allowed.** Creating new tables. `create_all()` picks them up on next start.
 
@@ -235,6 +278,9 @@ because the mechanism to do it does not exist and its absence fails silently.
 ```
 factcheck_agent_runs      (run_id, session_id, model_name, model_revision,
                            started_at, finished_at, status, counts…)
+                          -- status is the §2.3 envelope state; D2 is
+                          -- job-based, so a run is submitted, polled and
+                          -- collected, and must age out uncollected
 factcheck_agent_claims    (claim_id, run_id → runs, text, speaker_id,
                            segment_ids, is_checkable, verdict, confidence, reason)
 factcheck_agent_evidence  (evidence_id, claim_id → claims, url, title,
@@ -364,7 +410,7 @@ un-configured deployment behaves exactly as it does today (R3).
 | `FACTCHECK_MAX_PAGES_PER_CLAIM` | int | `3` | bounds page fetching |
 | `FACTCHECK_SEARCH_BASE_URL` | str | `""` | SearXNG instance; empty ⇒ no web fallback |
 | `FACTCHECK_CACHE_ENABLED` | bool | `true` | local only, no egress; safe on |
-| `FACTCHECK_EXECUTION_MODE` | str | pending **D2** | `sync` \| `job` |
+| `FACTCHECK_EXECUTION_MODE` | str | `"job"` | `sync` \| `job`; **D2 signed job-based**. `sync` stays available for GPU deployments but is never the default |
 
 An empty `FACTCHECK_LLM_BASE_URL` or `FACTCHECK_SEARCH_BASE_URL` disables
 that path outright — it must not fall back to a public default. Same failure
@@ -377,8 +423,8 @@ skipped, it does not guess.
 
 Phase 1 may start when all nine boxes are ticked.
 
-- [ ] D1 signed — persistence option chosen
-- [ ] D2 signed — execution mode chosen
+- [x] **D1 signed** — Option A, new tables only *(2026-09-04)*
+- [x] **D2 signed** — job-based execution *(2026-09-04)*
 - [ ] D3 signed — gold-set owner named and resourced (5–8 person-days)
 - [ ] D4 signed — open-source scope
 - [ ] D5 signed — hardware + latency target
