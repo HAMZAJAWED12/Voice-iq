@@ -175,10 +175,18 @@ CI runs the same command on every push to `main` via `.github/workflows/test.yml
 
 | Where | Command | Count |
 |---|---|---|
-| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **714** |
-| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **711 + 1 skip** |
+| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **731** |
+| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **728 + 1 skip** |
 
-711 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip("torch")`, reported as a single skip) = 714. Nothing is lost in CI.
+728 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip("torch")`, reported as a single skip) = 731. Nothing is lost in CI.
+
+Both figures are measured, not derived. Reproduce the CI figure locally without building a light venv:
+
+```bash
+.venv\Scripts\python.exe -m pytest app/insights/tests/ app/agent_brain/tests/ --ignore=app/insights/tests/test_model_load_concurrency.py -q
+```
+
+CI job logs are **not** readable without repo-admin rights (`GET /actions/jobs/{id}/logs` → `403 Must have admin rights to Repository.`), and the workflow emits its `::error::` annotation only on failure — so on a green run there is no way to read the count back out of CI. That local command is the check.
 
 Keep these numbers current — a stale reconciliation is worse than none, because the next person cannot tell a real gap from drift.
 
