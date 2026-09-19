@@ -7,6 +7,15 @@ Contract note: our fact-check Verdict and the Agent Brain's input
 FactCheckStatus do not fully overlap — UNSUPPORTED_CLAIM_TYPE has no
 Agent-Brain equivalent (mapped to UNVERIFIED) and NEEDS_REVIEW is never
 produced by our engine. All other verdicts pass through unchanged.
+
+`_VERDICT_TO_STATUS` is **total over `Verdict` and has no default**. A
+default here is a trap rather than a safety net: an unmapped verdict would
+be silently coerced to UNVERIFIED, which for a contradicting verdict means
+the downstream FactCheckReviewAgent emits HIGH instead of CRITICAL at base
+confidence 0.8 instead of 0.9 — a real finding quietly deprioritized, with
+nothing raised anywhere. Indexing directly makes a gap loud, and
+`test_verdict_map_is_total` makes it loud at test time rather than in
+production. Add the entry when you add the verdict.
 """
 
 from __future__ import annotations
@@ -19,11 +28,13 @@ from app.agent_brain.models.agent_context import (
     TranscriptSegment,
 )
 from app.agent_brain.models.enums import FactCheckStatus, LanguageCode
-from app.insights.models.factcheck_models import FactCheckResponse
+from app.insights.models.factcheck_models import FactCheckResponse, Verdict
 from app.insights.models.input_models import SessionInput
 from app.insights.models.insight_models import InsightBundle
 
-_VERDICT_TO_STATUS: dict[str, FactCheckStatus] = {
+# Keyed on Verdict (not str) so mypy rejects a key that is not a real
+# verdict. Totality — every Verdict member present — is enforced by test.
+_VERDICT_TO_STATUS: dict[Verdict, FactCheckStatus] = {
     "TRUE": "TRUE",
     "FALSE": "FALSE",
     "PARTIALLY_TRUE": "PARTIALLY_TRUE",
@@ -78,7 +89,7 @@ class PipelineAdapter:
                 ContextClaim(
                     claim_id=result.claim.claim_id,
                     claim_text=result.claim.text,
-                    status=_VERDICT_TO_STATUS.get(result.verdict, "UNVERIFIED"),
+                    status=_VERDICT_TO_STATUS[result.verdict],
                     confidence=result.confidence.score,
                 )
                 for result in fact_check.fact_check_results
