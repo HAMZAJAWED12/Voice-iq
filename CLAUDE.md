@@ -91,9 +91,9 @@ voiceiq-AI/
 
 **Currently open:** Sprint 7 Fact-Check Agent, at Phase 0 with 2 of 9
 decisions signed — D3–D9 still block Phase 1
-(`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1). Also open: Tier 3 Wave E remainder
-(E3 alignment O(n²), deferred) + Agent Brain Phase 2 (NLP/model extraction;
-see the handoff doc §13). Wave E's E1/E1.b/E2/E4/E5 are all done.
+(`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1). Also open: Agent Brain Phase 2
+(NLP/model extraction; see the handoff doc §13). **Tier 3 Wave E is now
+closed** — E1/E1.b/E2/E3/E4/E5 all done.
 
 > **Sprint 7 hard constraints** (settled in Phase 0 — do not relitigate):
 >
@@ -222,7 +222,10 @@ These need attention but are not blocking new work:
 
 ## Next-task candidates (pick one when ready)
 
-### Tier 3 Wave E (structural hardening — deferred from the Tier 3 pass)
+### ✅ Tier 3 Wave E — CLOSED (structural hardening)
+
+Nothing here is a candidate any more; kept as the record of what each item
+turned out to be. Wave E was deferred from the original Tier 3 pass.
 
 - ✅ **Consolidate `_clamp()` (E1 / E1.b).** Done — single `core/_math.py:clamp`; `scoring_engine`, `signal_aggregation`, `inconsistency_engine`, and `factcheck/scorer` all repointed.
 - ✅ **MIME / magic-byte upload check (E4).** Done — `app/utils/audio_sniff.py` rejects non-audio uploads with 415; extension check kept as first gate.
