@@ -208,11 +208,7 @@ These need attention but are not blocking new work:
 1. **`__pycache__/*.pyc` files tracked in git.** They were committed before `.gitignore` existed. Untrack with `git rm -r --cached app/**/__pycache__` and commit. They'll then be permanently ignored.
 2. **`run_eval_dev.LOCAL.py` exists alongside `run_eval_dev.py`.** Renamed during a merge conflict. Decide whether to merge or delete.
 3. **Wave E punch list lives in CLAUDE.md next-task candidates.** Tier 3 Waves A/B/D consumed the per-engine `# Tier 3 candidates` comment blocks (dead params, identity maps, type hints, schema fixes, mypy gate). The remaining structural items are scoped under next-task candidates below.
-4. **E3 profile finding — `alignment_service` O(n²) is below the optimization bar (for now).** Profiled `AlignmentService.align()` on a realistic 60-minute-call fixture (600 ASR segments / ~6000 words / 600 diarization turns): mean ~1.15 s. Top cumulative:
-   - `_best_asr_for_window` ~1.19 s — O(M·A): each merged segment scans every ASR segment (600×600 → 360k `_overlap` calls).
-   - `_align_words_to_diarization` listcomp (line ~218) ~0.72 s — O(D·W): each diarization window scans every word.
-
-   Both are genuine quadratics, but ~1.1 s is **<5% of end-to-end pipeline wall-clock** (whisper ASR + pyannote diarization on the same audio run tens of seconds to minutes), so optimizing now fails the cost/benefit bar. **Deferred, not dropped.** When it matters (much longer/denser audio): both inputs are already time-sorted, so replace the full scans with a two-pointer sweep (`_align_words_to_diarization`) and a bisect-bounded window (`_best_asr_for_window`) → O(D+W) / O(M·log A). Reproduce with the fixture above.
+4. ~~**E3 — `alignment_service` O(n²)**~~ **RESOLVED.** See the E3 entry under next-task candidates for the final numbers and the one trap worth remembering.
 
 ## Working with this repo
 
@@ -235,7 +231,23 @@ These need attention but are not blocking new work:
   - *Phase 2* decomposed `run()` (~530 LOC) into a **75-line stage sequence** of `_run_<stage>` methods. Shared state is one mutable `_PipelineState` dataclass (23 fields); the four early-return gates raise a private `_HardFail` that `run()` catches once. The harness ran green 51/51 after every single extraction — refactor changed shape, not behavior. `orchestrator.py` is 100% covered; **the harness is now a regression net for future edits.**
   - Extending this pattern to new stages: add a `_run_<stage>` method + a `_PipelineState` field, call it from `run()`, and add a stage-class in the harness. Making the top-level ML imports lazy (so the harness rejoins the light CI job) is the remaining follow-up.
 
-- **E3 — O(n²) hot paths (profiled, deferred).** `alignment_service` has genuine quadratics but they sit below the optimization bar at current scale — see "Known issues / tech debt" #4 for the profile data, fixture, and the two-pointer/bisect recipe to apply when audio grows.
+- ✅ **E3 — O(n²) hot paths in `alignment_service`. DONE**, in two passes.
+  - *N3a* (`5c43f45`) built the characterization net first — `app/insights/tests/test_alignment_service.py`, **90 tests**. The file had zero tests of its own before that; its 78% coverage was incidental, from `test_orchestrator.py` driving it through the pipeline.
+  - *N3b* (`1f79131`) bisect-bounded both scans. `_align_words_to_diarization` went 0.72 s → 0.040 s.
+  - *Completion pass* fixed the half that was still quadratic. **N3b bounded `hi` but not `lo`** — `candidates = asr[:hi]` restarted at index 0 on every window, so window *i* rescanned segments 0..*i*: 600·601/2 = 180,300 `_overlap` calls, a constant-factor halving of 360k rather than the O(log A + k) the docstring claimed. The fix adds a lower bound.
+
+  **The trap, if you ever touch this again:** the lower bound cannot bisect raw segment *ends*, because ends are **not sorted** — one long early segment finishes after several later ones. Bisecting raw starts or raw ends silently skips that long segment and picks the wrong winner. The bound must use a **running maximum of ends** (`max_ends`), which is non-decreasing by construction and therefore bisectable. `test_alignment_service.py` covers this shape; the differential fixture named `long_early_segment` exists specifically to catch it.
+
+  **Final numbers** on the 60-minute fixture (600 ASR segments / 6000 words / 600 diarization turns):
+
+  | | original | after N3b | after completion |
+  |---|---|---|---|
+  | `align()` wall-clock, mean | ~1150 ms | ~441 ms | **~42 ms** |
+  | `_best_asr_for_window` cumulative | ~1.19 s | 0.778 s | **0.005 s** |
+  | `_align_words_to_diarization` cumulative | ~0.72 s | 0.040 s | **0.034 s** |
+  | total function calls | — | 774,085 | **57,085** |
+
+  ~27× end-to-end vs the original. Output verified **byte-identical** (sha256 over canonical JSON, 8 fixture shapes) — use sha256, never `hash()`, which is `PYTHONHASHSEED`-randomized and will report a false difference between runs.
 
 ### Other candidates
 

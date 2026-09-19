@@ -10,7 +10,7 @@ before starting, the naive version of each is wrong.
 |----|------|----------------|------|
 | N1 | Java callback v2 validation | ✅ **spec shipped** `2bf9b76` — Java team owns the code | none (doc) |
 | N2 | Lazy ML imports → harness rejoins light CI | ✅ **done** — `9e57cb4` (code) + `4df98c6` (CI 4 jobs → 2) | was medium |
-| N3 | E3 alignment `O(n²)` → two-pointer/bisect | ✅ **done** — `5c43f45` (tests) + `1f79131` (perf, ~5×) | was high; net in place |
+| N3 | E3 alignment `O(n²)` → two-pointer/bisect | ✅ **done** — `5c43f45` (tests) + `1f79131` (perf) + a later completion pass (~27× total) | was high; net in place |
 | N4a | date resolution (stdlib, **not** dateparser) | ✅ **done** — `99dfc96` | medium |
 | N4b | multilingual ur/ar + model extraction | ⛔ **deferred** — own sprint | high |
 
@@ -157,6 +157,28 @@ edits. Benchmark recorded before/after on the documented 60-min fixture.
 
 **Stop condition.** If any output differs and the difference is arguably a
 bug-fix, **stop and report** — do not silently "improve" alignment.
+
+**Outcome — N3b was half-done, and the docstring hid it.** `1f79131`
+bounded the candidate scan above (`hi = bisect_left(_starts, s_end)`) but
+left it starting at index 0: `candidates = asr[:hi]`. Window *i* therefore
+rescanned segments 0..*i* — 600·601/2 = **180,300** `_overlap` calls, half of
+the original 360k rather than the O(log A + k) the docstring asserted. The
+profile is what surfaced it: `_overlap` was still the second-hottest frame
+at 180,300 calls, which is not a shape a bounded scan produces.
+
+A later completion pass added the lower bound. It cannot bisect raw ends —
+**ends are not sorted**, since a long early segment finishes after several
+later ones — so it bisects a **running maximum of ends**, which is
+non-decreasing by construction. Final: `align()` ~1150 ms → **~42 ms**
+(~27×), `_best_asr_for_window` 1.19 s → **0.005 s**, function calls
+774,085 → **57,085**. Output byte-identical across 8 fixture shapes,
+including one (`long_early_segment`) built specifically to catch a
+wrongly-bisected lower bound.
+
+**Lesson for the next optimization.** A benchmark that only reports
+wall-clock would have accepted N3b as finished — 1.15 s → 0.44 s looks like
+success. The call *count* is what proved the complexity had not actually
+changed. Record both.
 
 ---
 
