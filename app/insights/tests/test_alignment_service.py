@@ -272,6 +272,114 @@ def test_best_asr_bounded_scan_equals_full_scan(seed: int) -> None:
         assert full is bounded  # identity, not just equality
 
 
+# --- the LOWER bound: `_max_ends` ------------------------------------------ #
+#
+# N3b bounded the scan above (`hi`) but left it starting at index 0, so window
+# i still rescanned segments 0..i — half of quadratic, not O(log A + k). These
+# pin the lower bound, and the one trap in implementing it.
+
+
+def _running_max_ends(asr: list[dict]) -> list[float]:
+    """Mirror of what align() precomputes: a running maximum of ends."""
+    out: list[float] = []
+    running = float("-inf")
+    for a in asr:
+        running = max(running, float(a["end"]))
+        out.append(running)
+    return out
+
+
+def test_best_asr_lower_bound_must_not_skip_a_long_early_segment() -> None:
+    """The trap: raw ends are NOT sorted, so they cannot be bisected.
+
+    Segment 0 runs 0-100s; segments 1..n are short and early. A lower bound
+    taken from raw starts or raw ends would conclude that everything before
+    the window is finished and skip segment 0 — which is in fact the only
+    thing overlapping a late window. Only a *running maximum* of ends is
+    monotone enough to bisect safely.
+    """
+    asr = [{"start": 0.0, "end": 100.0, "text": "long"}] + [
+        {"start": float(i), "end": float(i) + 0.5, "text": f"short{i}"} for i in range(1, 20)
+    ]
+    window = {"start": 80.0, "end": 90.0}
+    starts = [a["start"] for a in asr]
+
+    full = AlignmentService._best_asr_for_window(window, asr)
+    bounded = AlignmentService._best_asr_for_window(window, asr, _starts=starts, _max_ends=_running_max_ends(asr))
+    assert full is not None
+    assert full["text"] == "long"
+    assert bounded is full  # identity, not just equality
+
+
+@pytest.mark.parametrize("seed", list(range(15)))
+def test_best_asr_fully_bounded_scan_equals_full_scan(seed: int) -> None:
+    """Differential test with BOTH bounds, over overlapping segments.
+
+    The N3b differential only passed `_starts` and only used non-overlapping
+    segments, so it could not have caught a wrong lower bound. This one
+    deliberately generates overlaps and occasional long segments.
+    """
+    rng = random.Random(seed)
+    asr, t = [], 0.0
+    for i in range(30):
+        # Every 7th segment is long enough to outlast several later ones,
+        # which is exactly the shape that breaks a naive lower bound.
+        dur = rng.uniform(8.0, 20.0) if i % 7 == 0 else rng.uniform(0.3, 2.0)
+        asr.append({"start": t, "end": t + dur, "text": f"s{i}"})
+        t += rng.uniform(0.0, 1.5)  # starts ascend; ends interleave
+    starts = [a["start"] for a in asr]
+    max_ends = _running_max_ends(asr)
+
+    for _ in range(40):
+        w_start = rng.uniform(-1.0, t + 1.0)
+        window = {"start": w_start, "end": w_start + rng.uniform(0.0, 3.0)}
+        full = AlignmentService._best_asr_for_window(window, asr)
+        bounded = AlignmentService._best_asr_for_window(window, asr, _starts=starts, _max_ends=max_ends)
+        assert full is bounded
+
+
+def test_best_asr_bound_is_actually_bounded_not_just_correct(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the *complexity*, not only the output.
+
+    A wall-clock benchmark accepted N3b as finished (1.15 s -> 0.44 s looks
+    like success). The `_overlap` call count is what proved the scan was
+    still quadratic: 600 windows produced 180,300 calls, which is 600*601/2,
+    not a bounded scan. This test fails if the lower bound regresses, even
+    though the output would still be correct.
+    """
+    n = 200
+    asr = {
+        "segments": [
+            {
+                "start": i * 2.0,
+                "end": i * 2.0 + 2.0,
+                "text": f"s{i}",
+                "avg_logprob": -0.2,
+                "no_speech_prob": 0.01,
+            }
+            for i in range(n)
+        ]
+    }
+    # Non-overlapping diarization, so _apply_overlap_policy contributes
+    # essentially nothing and the count reflects _best_asr_for_window.
+    diar = _diar([(i * 2.0, i * 2.0 + 2.0, f"S{i % 2}") for i in range(n)])
+
+    calls = 0
+    real = AlignmentService._overlap
+
+    def counting(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(AlignmentService, "_overlap", staticmethod(counting))
+    _svc().align(asr, diar)
+
+    quadratic_half = n * (n + 1) // 2  # what a hi-only bound costs: 20,100
+    assert calls < 10 * n, f"{calls} _overlap calls for {n} windows — scan is not bounded below"
+    assert calls < quadratic_half / 10
+
+
 def test_align_falls_back_when_asr_unsorted() -> None:
     """Unsorted ASR disables the bisect path; output must still be correct."""
     unsorted_asr = {

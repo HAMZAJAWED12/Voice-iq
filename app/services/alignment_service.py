@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import math
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from collections.abc import Iterable
 from typing import Any
 
@@ -67,13 +67,28 @@ class AlignmentService:
         asr: list[dict],
         *,
         _starts: list[float] | None = None,
+        _max_ends: list[float] | None = None,
     ) -> dict | None:
         """Find which ASR segment overlaps the window the most.
 
-        When ``_starts`` (the ascending list of ``asr[i]["start"]``) is
-        supplied, the scan is bounded with ``bisect`` to the segments that
-        can possibly overlap, turning the per-window cost from O(A) into
-        O(log A + k). Segments beyond that bound have zero overlap and could
+        The scan is bounded from both ends when the precomputed arrays are
+        supplied, turning the per-window cost from O(A) into O(log A + k)
+        where k is the number of segments that actually reach the window:
+
+        * ``_starts`` — the ascending list of ``asr[i]["start"]``. Segments
+          starting at or after the window end cannot overlap it, so it caps
+          the scan above.
+        * ``_max_ends`` — the *running maximum* of ``asr[i]["end"]``. It caps
+          the scan below: if the largest end seen up to index i is at or
+          before the window start, no segment up to i can overlap.
+
+        ``_max_ends`` is a running maximum rather than the raw ends because
+        the raw ends are not sorted — a long early segment can finish after
+        several later ones — and bisect needs a non-decreasing sequence. A
+        bound taken from raw starts or raw ends would silently skip that long
+        segment and pick the wrong winner.
+
+        Segments outside either bound have exactly zero overlap and could
         never win, since the comparison below is a strict ``>`` against an
         initial best of 0.0 — so the bounded scan returns exactly what the
         full scan returns, including the first-wins tie-break.
@@ -89,7 +104,11 @@ class AlignmentService:
         else:
             # Segments starting at/after the window end cannot overlap it.
             hi = bisect_left(_starts, s_end)
-            candidates = asr[:hi]
+            # Segments ending at/before the window start cannot overlap it.
+            lo = bisect_right(_max_ends, s_start) if _max_ends is not None else 0
+            # lo > hi is possible for a window that falls in a gap; the empty
+            # slice is correct there — nothing overlaps, best stays None.
+            candidates = asr[lo:hi]
 
         for a in candidates:
             a_start, a_end = float(a["start"]), float(a["end"])
@@ -367,9 +386,27 @@ class AlignmentService:
         is_ascending = all(a <= b for a, b in zip(asr_starts, asr_starts[1:], strict=False))
         sorted_starts = asr_starts if is_ascending else None
 
+        # Running maximum of segment ends, for the lower bound. Ends are not
+        # themselves sorted (a long segment can outlast several later ones),
+        # so bisect needs this monotone envelope instead. Without it the scan
+        # still starts at index 0 every time and stays O(M·A/2) — bounded on
+        # one side only.
+        max_ends: list[float] | None = None
+        if sorted_starts is not None:
+            max_ends = []
+            running = float("-inf")
+            for a in asr:
+                running = max(running, float(a["end"]))
+                max_ends.append(running)
+
         # Attach ASR confidence + placeholders
         for seg in merged:
-            best = self._best_asr_for_window({"start": seg["start"], "end": seg["end"]}, asr, _starts=sorted_starts)
+            best = self._best_asr_for_window(
+                {"start": seg["start"], "end": seg["end"]},
+                asr,
+                _starts=sorted_starts,
+                _max_ends=max_ends,
+            )
             seg["confidence"] = self._confidence_from_whisper(best) if best else 0.5
             seg.setdefault("diarization_confidence", 1.0)
             seg.setdefault("overlap", False)
