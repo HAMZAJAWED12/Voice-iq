@@ -175,10 +175,12 @@ CI runs the same command on every push to `main` via `.github/workflows/test.yml
 
 | Where | Command | Count |
 |---|---|---|
-| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **631** |
-| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **628 + 1 skip** |
+| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **714** |
+| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **711 + 1 skip** |
 
-628 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip("torch")`, reported as a single skip) = 631. Nothing is lost in CI.
+711 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip("torch")`, reported as a single skip) = 714. Nothing is lost in CI.
+
+Keep these numbers current — a stale reconciliation is worse than none, because the next person cannot tell a real gap from drift.
 
 `orchestrator.py` imports its eight ML-backed services **inside** the `_run_<stage>` methods, so importing it pulls nothing heavy and `test_orchestrator.py` runs on `requirements-insight.txt`. The separate ~8–12 minute `orchestrator-harness` job is retired. Verified in a venv built from the light requirements alone: harness 51/51 in ~8 s, full suite ~16 s.
 
