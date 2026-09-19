@@ -91,9 +91,18 @@ voiceiq-AI/
 
 **Currently open:** Sprint 7 Fact-Check Agent, at Phase 0 with 2 of 9
 decisions signed — D3–D9 still block Phase 1
-(`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1). Also open: Agent Brain Phase 2
-(NLP/model extraction; see the handoff doc §13). **Tier 3 Wave E is now
-closed** — E1/E1.b/E2/E3/E4/E5 all done.
+(`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1). Also open: **N4b multilingual
+(ur/ar)** — its dep/CI gate is cleared, see
+`DOCS/N4B-MULTILINGUAL-STRATEGY.md`; N4b-1 needs **no new dependency and no
+CI change** and is ready to start, N4b-2 waits on Sprint 7 Phase 2.
+**Tier 3 Wave E is now closed** — E1/E1.b/E2/E3/E4/E5 all done.
+
+> **N4b, in one line:** the extraction layer's ur/ar failure is a *vocabulary*
+> gap, not a model gap. `AgentContext.language` is write-only (nothing reads
+> it), and Whisper's detected language is already captured at
+> `orchestrator.py:764` and thrown away — so no language-detection dep is
+> needed either. Only native-script *person names* need a model, and that
+> reuses the Sprint 7 model server rather than adding spaCy/Stanza.
 
 > **Sprint 7 hard constraints** (settled in Phase 0 — do not relitigate):
 >

@@ -12,7 +12,7 @@ before starting, the naive version of each is wrong.
 | N2 | Lazy ML imports → harness rejoins light CI | ✅ **done** — `9e57cb4` (code) + `4df98c6` (CI 4 jobs → 2) | was medium |
 | N3 | E3 alignment `O(n²)` → two-pointer/bisect | ✅ **done** — `5c43f45` (tests) + `1f79131` (perf) + a later completion pass (~27× total) | was high; net in place |
 | N4a | date resolution (stdlib, **not** dateparser) | ✅ **done** — `99dfc96` | medium |
-| N4b | multilingual ur/ar + model extraction | ⛔ **deferred** — own sprint | high |
+| N4b | multilingual ur/ar + model extraction | 🟡 **gate cleared** — strategy in `DOCS/N4B-MULTILINGUAL-STRATEGY.md`; N4b-1 needs no deps | was high; **now low** for N4b-1 |
 
 ---
 
@@ -209,6 +209,31 @@ spaCy/Stanza pipelines, non-Latin script handling, per-language models.
 Heavy deps + model artifacts — the exact class that broke CI in Tier S (the
 spaCy `en_core_web_sm` artifact). Needs its own dep-isolation strategy and
 CI lane decision **before** any code. Do not start inside Tier N.
+
+**OUTCOME — gate cleared; the premise was wrong.** Full analysis in
+[N4B-MULTILINGUAL-STRATEGY.md](N4B-MULTILINGUAL-STRATEGY.md). Probing the
+live extractors against ur/ar/Roman-Urdu input showed the failure is
+overwhelmingly a **vocabulary** gap, not a model gap:
+
+- `signals.py` already works in Arabic script — `.lower()` is a no-op there
+  and substring matching hits. A translated word list matched immediately.
+- `priority_classifier` is an English tuple; a translated tuple works with
+  zero new deps.
+- **Roman Urdu** — the realistic call-centre register — gets *nothing* today,
+  despite being Latin script with a capitalized name, purely because the
+  assignee regex's verb list is English-only. Vocabulary, not a model.
+- Only **native-script person names** genuinely need a model: the assignee
+  regex keys on `[A-Z][a-z]+` and Arabic script has no case.
+
+Two structural findings: `AgentContext.language` is **write-only** (nothing
+in `core/`, `service.py` or `extraction/` reads it), and Whisper's detected
+language is already captured at `orchestrator.py:764` and then discarded — so
+**no language-detection dependency is needed either**.
+
+Decisions: N4b-2 reuses the Sprint 7 out-of-process model server rather than
+adding spaCy/Stanza, keeping one model-serving pattern in the repo. **No new
+CI lane, ever** — N4b-1 is pure python, N4b-2 is mocked at the HTTP seam.
+N4b-1 is unblocked and carries none of the risk that caused the deferral.
 
 ---
 
