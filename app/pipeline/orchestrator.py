@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import base64
+import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 # Light imports only at module scope.
 #
@@ -32,6 +35,7 @@ from app.utils.audio_utils import (
     normalize_to_wav,
 )
 from app.utils.job_io import JobIO, JobPaths
+from app.utils.logger import logger
 
 if TYPE_CHECKING:  # annotation-only; never imported at runtime
     from app.insights.models.input_models import SessionInput
@@ -770,6 +774,7 @@ class VoiceIQOrchestrator:
                     "artifacts/agent_brain/agent_brain.status.json",
                     {"service": "agent_brain", "status": "ok"},
                 )
+                self._dispatch_agent_callback(st.job_id, response)
         except Exception as e:
             st.warn("AGENT_BRAIN_FAILED")
             self.io.save_json(
@@ -778,6 +783,61 @@ class VoiceIQOrchestrator:
                 {"service": "agent_brain", "status": "failed", "error": str(e)},
             )
         st.timing("agent_brain", t0)
+
+    @staticmethod
+    def _dispatch_agent_callback(session_id: str, response: Any) -> threading.Thread | None:
+        """POST recommendations to the Java Action Layer, off the request path.
+
+        Disabled unless BOTH a callback URL and a secret are configured, so
+        it is off by default like every other egress in this service.
+
+        **Fire-and-forget by design.** `JavaCallbackClient` makes a real
+        network call with a 5-second timeout; blocking the audio response on
+        a third-party service that may be slow or down would make the
+        pipeline's availability depend on Java's. The thread is a daemon:
+        a callback in flight at shutdown is dropped, which is the correct
+        trade for a best-effort notification. Java de-duplicates on the
+        trace id, so a retry story belongs on their side.
+
+        Returns the thread so tests can join it; production ignores it.
+        """
+        from app.agent_brain.config.settings import get_agent_settings
+        from app.agent_brain.integrations.java_callback_client import JavaCallbackClient
+        from app.agent_brain.models.recommendation import CallbackPayload
+
+        settings = get_agent_settings()
+        if not settings.callback_enabled:
+            return None
+
+        # The min_confidence threshold (doc 11) has existed in settings since
+        # Sprint 6, documented as "dropped before callback" — but nothing ever
+        # read it, because nothing ever called the callback. It filters the
+        # CALLBACK only: the API response still carries every recommendation,
+        # so a low-confidence one stays visible to a human without being
+        # pushed at Java as actionable.
+        kept = [rec for rec in response.recommendations if rec.confidence >= settings.min_confidence]
+        if not kept:
+            logger.info("agent_brain: no recommendation met min_confidence; skipping callback")
+            return None
+
+        payload = CallbackPayload(
+            session_id=session_id,
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            recommendations=kept,
+        )
+        trace_id = uuid4().hex
+
+        def _send() -> None:
+            try:
+                JavaCallbackClient(settings).send(payload, trace_id=trace_id)
+            except Exception as exc:  # noqa: BLE001 - best effort, never propagates
+                # No payload content in the log: it carries conversation-derived
+                # recommendations.
+                logger.warning("agent_brain: Java callback failed (trace_id=%s): %s", trace_id, exc)
+
+        thread = threading.Thread(target=_send, name=f"agent-callback-{trace_id[:8]}", daemon=True)
+        thread.start()
+        return thread
 
     def _run_pdf(self, st: _PipelineState) -> None:
         t0 = _now_ms()
