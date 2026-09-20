@@ -16,7 +16,7 @@ from app.agent_brain.models.agent_context import AgentContext
 from app.agent_brain.models.recommendation import Recommendation
 from app.insights.core._math import clamp
 
-_EMAIL_SIGNALS = [
+_EMAIL_SIGNALS_EN = [
     "send me",
     "email me",
     "send over",
@@ -32,6 +32,10 @@ _EMAIL_SIGNALS = [
     "email the",
     "send a copy",
 ]
+
+# N4b-1: add a language by adding a key (decision L1). Absent or empty
+# entries fall back to English, so behaviour is unchanged until one lands.
+_EMAIL_SIGNALS: dict[str, list[str]] = {"en": _EMAIL_SIGNALS_EN}
 
 # Capture the object of the send/share request ("the pricing proposal").
 _OBJECT = re.compile(
@@ -50,12 +54,12 @@ class EmailDraftAgent(BaseAgent):
 
         for segment in context.transcript:
             text = (segment.text or "").strip()
-            if not text or not find_signals(text, _EMAIL_SIGNALS):
+            if not text or not find_signals(text, _EMAIL_SIGNALS, language=context.language):
                 continue
 
             obj = self._object(text)
             subject = obj.title()
-            deadline = extract_date_phrase(text)
+            deadline = extract_date_phrase(text, language=context.language)
             deadline_iso = resolve_deadline_iso(deadline, now=self._now())
             body_draft = f"Hi,\n\nAs discussed, please find the details for {obj} below.\n\nRegards,"
 

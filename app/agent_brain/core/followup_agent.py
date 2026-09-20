@@ -12,7 +12,7 @@ from app.agent_brain.models.agent_context import AgentContext
 from app.agent_brain.models.recommendation import Recommendation
 from app.insights.core._math import clamp
 
-_FOLLOWUP_SIGNALS = [
+_FOLLOWUP_SIGNALS_EN = [
     "let's meet",
     "let us meet",
     "meet again",
@@ -32,6 +32,10 @@ _FOLLOWUP_SIGNALS = [
     "sync up",
 ]
 
+# N4b-1: add a language by adding a key (decision L1). Absent or empty
+# entries fall back to English, so behaviour is unchanged until one lands.
+_FOLLOWUP_SIGNALS: dict[str, list[str]] = {"en": _FOLLOWUP_SIGNALS_EN}
+
 _DEFAULT_DURATION_MIN = 30
 _DURATION_MIN = re.compile(r"\b(\d{1,3})\s*(?:minutes|minute|mins|min)\b", re.IGNORECASE)
 _DURATION_HOUR = re.compile(r"\b(?:an?\s+hour|one\s+hour|1\s*hour)\b", re.IGNORECASE)
@@ -46,11 +50,11 @@ class FollowUpAgent(BaseAgent):
 
         for segment in context.transcript:
             text = (segment.text or "").strip()
-            if not text or not find_signals(text, _FOLLOWUP_SIGNALS):
+            if not text or not find_signals(text, _FOLLOWUP_SIGNALS, language=context.language):
                 continue
 
-            date_text = extract_date_phrase(text)
-            time_text = extract_time_phrase(text)
+            date_text = extract_date_phrase(text, language=context.language)
+            time_text = extract_time_phrase(text, language=context.language)
             duration = self._duration_minutes(text)
             scheduled_iso = resolve_deadline_iso(date_text, time_text, now=self._now())
 

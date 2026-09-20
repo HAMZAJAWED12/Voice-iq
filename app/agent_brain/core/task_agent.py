@@ -17,7 +17,7 @@ from app.insights.core._math import clamp
 # Commitment / assignment markers. Kept deliberately conservative for Phase 1;
 # cross-agent overlap (e.g. with the email/follow-up agents) is resolved later
 # by deduplication.
-_TASK_SIGNALS = [
+_TASK_SIGNALS_EN = [
     "will",
     "shall",
     "need to",
@@ -33,6 +33,10 @@ _TASK_SIGNALS = [
     "to-do",
     "todo",
 ]
+
+# N4b-1: add a language by adding a key (decision L1). Absent or empty
+# entries fall back to English, so behaviour is unchanged until one lands.
+_TASK_SIGNALS: dict[str, list[str]] = {"en": _TASK_SIGNALS_EN}
 
 # Strip a leading "<subject> will/should/needs to ..." so the title becomes the
 # action clause ("Prepare the report by Friday").
@@ -54,12 +58,12 @@ class TaskAgent(BaseAgent):
             if not text:
                 continue
 
-            hits = find_signals(text, _TASK_SIGNALS)
+            hits = find_signals(text, _TASK_SIGNALS, language=context.language)
             if not hits:
                 continue
 
-            assignee = extract_assignee(text)
-            deadline = extract_date_phrase(text)
+            assignee = extract_assignee(text, language=context.language)
+            deadline = extract_date_phrase(text, language=context.language)
             deadline_iso = resolve_deadline_iso(deadline, now=self._now())
             title = self._title(text, has_assignee=assignee is not None)
             description = (
@@ -74,7 +78,7 @@ class TaskAgent(BaseAgent):
                     action_type=self.action_type,
                     title=title,
                     description=description,
-                    priority=classify_priority(text),
+                    priority=classify_priority(text, language=context.language),
                     confidence=self._confidence(assignee=assignee, deadline=deadline),
                     source=self._source(segment),
                     entities=Entities(assignee=assignee, deadline_text=deadline, deadline_date=deadline_iso),

@@ -9,7 +9,7 @@ from app.agent_brain.models.agent_context import AgentContext
 from app.agent_brain.models.recommendation import Entities, Recommendation
 from app.insights.core._math import clamp
 
-_ANGER = [
+_ANGER_EN = [
     "upset",
     "angry",
     "furious",
@@ -20,8 +20,14 @@ _ANGER = [
     "ridiculous",
     "terrible",
 ]
-_COMPLAINT = ["refund", "complaint", "complain", "delayed", "delay", "not working", "broken", "still waiting"]
-_RISK = ["legal", "lawyer", "compliance", "sue", "escalate", "manager", "supervisor", "cancel my", "cancel the"]
+_COMPLAINT_EN = ["refund", "complaint", "complain", "delayed", "delay", "not working", "broken", "still waiting"]
+_RISK_EN = ["legal", "lawyer", "compliance", "sue", "escalate", "manager", "supervisor", "cancel my", "cancel the"]
+
+# N4b-1: add a language by adding a key (decision L1). Absent or empty
+# entries fall back to English, so behaviour is unchanged until one lands.
+_ANGER: dict[str, list[str]] = {"en": _ANGER_EN}
+_COMPLAINT: dict[str, list[str]] = {"en": _COMPLAINT_EN}
+_RISK: dict[str, list[str]] = {"en": _RISK_EN}
 
 
 class EscalationAgent(BaseAgent):
@@ -41,9 +47,9 @@ class EscalationAgent(BaseAgent):
             if not text:
                 continue
 
-            anger = find_signals(text, _ANGER)
-            complaint = find_signals(text, _COMPLAINT)
-            risk = find_signals(text, _RISK)
+            anger = find_signals(text, _ANGER, language=context.language)
+            complaint = find_signals(text, _COMPLAINT, language=context.language)
+            risk = find_signals(text, _RISK, language=context.language)
             if not (anger or complaint or risk):
                 continue
 
@@ -63,7 +69,7 @@ class EscalationAgent(BaseAgent):
                     action_type=self.action_type,
                     title=self._title(text, subject),
                     description=f"Potential escalation: {risk_reason}",
-                    priority=classify_priority(text, base="HIGH"),
+                    priority=classify_priority(text, base="HIGH", language=context.language),
                     confidence=clamp(
                         0.55
                         + (0.15 if anger else 0.0)
