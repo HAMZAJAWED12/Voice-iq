@@ -20,6 +20,10 @@ production. Add the entry when you add the verdict.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
+from app.agent_brain.extraction.language import DEFAULT_LANGUAGE, resolve_language
 from app.agent_brain.models.agent_context import (
     AgentContext,
     ContextClaim,
@@ -60,8 +64,30 @@ class PipelineAdapter:
         fact_check: FactCheckResponse | None = None,
         summary: str | None = None,
         organization_id: str | None = None,
-        language: LanguageCode = "en",
+        language: LanguageCode | None = None,
+        asr_meta: Mapping[str, Any] | None = None,
     ) -> AgentContext:
+        """Build an AgentContext from internal pipeline models.
+
+        `language` resolution, in precedence order:
+
+        1. an explicit `language=` argument — the caller knows best;
+        2. `asr_meta["language"]`, i.e. what Whisper actually detected. The
+           orchestrator already surfaces this on the response as
+           `result["asr_meta"]["language"]`; before N4b-1 it was computed and
+           then thrown away;
+        3. English.
+
+        Anything Whisper emits that is outside the `LanguageCode` contract
+        degrades to English rather than raising — see `resolve_language`.
+        """
+        if language is not None:
+            resolved_language = language
+        elif asr_meta is not None:
+            resolved_language = resolve_language(asr_meta.get("language"))
+        else:
+            resolved_language = DEFAULT_LANGUAGE
+
         transcript = [
             TranscriptSegment(
                 segment_id=utt.id,
@@ -98,7 +124,7 @@ class PipelineAdapter:
         return AgentContext(
             session_id=session.session_id,
             organization_id=organization_id,
-            language=language,
+            language=resolved_language,
             transcript=transcript,
             insights=context_insights,
             fact_checks=ContextFactChecks(claims=claims),
