@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from app.agent_brain.core.base_agent import BaseAgent
 from app.agent_brain.core.confidence import refine_confidence
-from app.agent_brain.core.deduplication import deduplicate, is_duplicate
+from app.agent_brain.core.deduplication import deduplicate, duplicate_counts
 from app.agent_brain.core.email_draft_agent import EmailDraftAgent
 from app.agent_brain.core.escalation_agent import EscalationAgent
 from app.agent_brain.core.factcheck_review_agent import FactCheckReviewAgent
@@ -41,7 +41,12 @@ class AgentRunner:
 
     def run(self, context: AgentContext) -> list[Recommendation]:
         candidates = self._collect(context)
-        refined = [self._refine(rec, context, candidates) for rec in candidates]
+        # Both of these used to be recomputed once per candidate inside
+        # _refine — the repetition sweep quadratically, over difflib. Hoisting
+        # them changes cost, not results (L5-0).
+        repetitions = duplicate_counts(candidates)
+        asr_by_segment = {seg.segment_id: seg.confidence for seg in context.transcript if seg.segment_id}
+        refined = [self._refine(rec, asr_by_segment, repetitions[index]) for index, rec in enumerate(candidates)]
         return rank(deduplicate(refined))
 
     def _collect(self, context: AgentContext) -> list[Recommendation]:
@@ -54,10 +59,13 @@ class AgentRunner:
         return candidates
 
     @staticmethod
-    def _refine(rec: Recommendation, context: AgentContext, candidates: list[Recommendation]) -> Recommendation:
-        asr_by_segment = {seg.segment_id: seg.confidence for seg in context.transcript if seg.segment_id}
+    def _refine(
+        rec: Recommendation,
+        asr_by_segment: dict[str, float | None],
+        duplicates: int,
+    ) -> Recommendation:
         asr = asr_by_segment.get(rec.source.segment_id) if rec.source.segment_id else None
-        repetition = 1 + sum(1 for other in candidates if other is not rec and is_duplicate(rec, other))
+        repetition = 1 + duplicates
         confidence = refine_confidence(
             base=rec.confidence,
             asr_confidence=asr,
