@@ -780,6 +780,107 @@ class TestAgentBrainStage:
         assert "AGENT_BRAIN_FAILED" in res["warnings"]
         assert "recommendations" not in res
 
+    # --- L5: to_context is reached from production ------------------------ #
+    #
+    # Before L5 the entire push integration (PipelineAdapter -> agents ->
+    # Java callback) existed and NOTHING invoked any of it; to_context ran
+    # only in its own unit tests. These two are the pair that proves it:
+    # called when enabled, never called when not. A regression to the
+    # unwired state fails the first.
+
+    @staticmethod
+    def _spy_on_to_context():
+        """Wrap PipelineAdapter.to_context, recording the contexts it returns."""
+        from app.agent_brain.adapters.pipeline_adapter import PipelineAdapter
+
+        real = PipelineAdapter.to_context
+        produced: list[Any] = []
+
+        def spy(*args: Any, **kwargs: Any) -> Any:
+            context = real(*args, **kwargs)
+            produced.append(context)
+            return context
+
+        return PipelineAdapter, staticmethod(spy), produced
+
+    def test_to_context_is_called_from_the_pipeline(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _seed_input(io)
+        monkeypatch.setenv("VOICEIQ_AGENT_BRAIN_AUTO_RUN", "true")
+        get_settings.cache_clear()
+        adapter_cls, spy, produced = self._spy_on_to_context()
+        try:
+            with patch.object(adapter_cls, "to_context", spy):
+                orch.run(JOB_ID)
+        finally:
+            get_settings.cache_clear()
+
+        assert len(produced) == 1, "PipelineAdapter.to_context was not reached from the pipeline"
+        context = produced[0]
+        assert context.session_id == JOB_ID
+        assert context.transcript, "the adapter received an empty transcript"
+
+    def test_to_context_is_not_called_when_disabled(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
+    ) -> None:
+        """Off means silent: no adapter call, no agents, no artifact."""
+        _seed_input(io)
+        adapter_cls, spy, produced = self._spy_on_to_context()
+        with patch.object(adapter_cls, "to_context", spy):
+            res = orch.run(JOB_ID)
+
+        assert produced == []
+        assert "recommendations" not in res
+        job = io.init_job(JOB_ID)
+        assert io.load_json(job, "artifacts/agent_brain/recommendations.json", default=None) is None
+
+    def test_detected_language_reaches_the_agent_context(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Joins N4b-1 to L5: Whisper's language now reaches the agents.
+
+        N4b-1 made `AgentContext.language` readable; L5 supplies the caller
+        that actually fills it from `asr_meta`. Neither half is worth
+        anything alone, so this asserts the whole chain in one go.
+        """
+        _seed_input(io)
+        asr_with_urdu = dict(GOLDEN_ASR)
+        asr_with_urdu["meta"] = {**GOLDEN_ASR["meta"], "language": "ur"}
+        mx.asr.return_value.transcribe.return_value = asr_with_urdu
+
+        monkeypatch.setenv("VOICEIQ_AGENT_BRAIN_AUTO_RUN", "true")
+        get_settings.cache_clear()
+        adapter_cls, spy, produced = self._spy_on_to_context()
+        try:
+            with patch.object(adapter_cls, "to_context", spy):
+                orch.run(JOB_ID)
+        finally:
+            get_settings.cache_clear()
+
+        assert produced[0].language == "ur"
+
+    def test_unknown_detected_language_degrades_to_english(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Whisper can emit any ISO-639-1 code; an unmapped one must not raise."""
+        _seed_input(io)
+        asr_with_hindi = dict(GOLDEN_ASR)
+        asr_with_hindi["meta"] = {**GOLDEN_ASR["meta"], "language": "hi"}
+        mx.asr.return_value.transcribe.return_value = asr_with_hindi
+
+        monkeypatch.setenv("VOICEIQ_AGENT_BRAIN_AUTO_RUN", "true")
+        get_settings.cache_clear()
+        adapter_cls, spy, produced = self._spy_on_to_context()
+        try:
+            with patch.object(adapter_cls, "to_context", spy):
+                res = orch.run(JOB_ID)
+        finally:
+            get_settings.cache_clear()
+
+        assert produced[0].language == "en"
+        assert res["pipeline_meta"]["status"] == "ok"
+
     def test_skipped_without_insights(
         self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
     ) -> None:
