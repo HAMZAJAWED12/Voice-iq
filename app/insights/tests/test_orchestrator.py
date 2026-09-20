@@ -51,6 +51,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.insights.config.settings import get_settings
 from app.pipeline.orchestrator import VoiceIQOrchestrator, _safe_ctor_kwargs
 from app.utils.audio_utils import AudioNormalizationTimeout
 from app.utils.job_io import JobIO
@@ -134,6 +135,7 @@ ALL_TIMINGS = [
     "factcheck",
     "flags",
     "insights",
+    "agent_brain",
     "pdf",
 ]
 
@@ -711,7 +713,94 @@ class TestInsightsStage:
 
 
 # --------------------------------------------------------------------------- #
-# Stage I — pdf report                                                         #
+# Stage I — agent brain (opt-in, off by default)                               #
+# --------------------------------------------------------------------------- #
+class TestAgentBrainStage:
+    """The stage exists and is inert unless asked for.
+
+    L5 gave PipelineAdapter.to_context its first production caller. The
+    default-off behaviour is the contract guard: every deployment that does
+    not opt in must see byte-identical output to pre-L5.
+    """
+
+    def test_off_by_default_no_key_no_work(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        res = orch.run(JOB_ID)
+        assert "recommendations" not in res
+        assert "agent_brain" in res["pipeline_meta"]["skipped_steps"]
+        # The stage still times itself, so stage order stays stable.
+        assert "agent_brain" in res["pipeline_meta"]["timings_ms"]
+
+    def test_enabled_produces_recommendations(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _seed_input(io)
+        monkeypatch.setenv("VOICEIQ_AGENT_BRAIN_AUTO_RUN", "true")
+        get_settings.cache_clear()
+        try:
+            res = orch.run(JOB_ID)
+        finally:
+            get_settings.cache_clear()
+
+        assert "recommendations" in res
+        assert res["recommendations"]["sessionId"] == JOB_ID
+        assert isinstance(res["recommendations"]["recommendations"], list)
+        assert "agent_brain" not in res["pipeline_meta"]["skipped_steps"]
+
+    def test_enabled_writes_its_artifact(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _seed_input(io)
+        monkeypatch.setenv("VOICEIQ_AGENT_BRAIN_AUTO_RUN", "true")
+        get_settings.cache_clear()
+        try:
+            orch.run(JOB_ID)
+        finally:
+            get_settings.cache_clear()
+
+        job = io.init_job(JOB_ID)
+        assert io.load_json(job, "artifacts/agent_brain/recommendations.json", default=None) is not None
+        status = io.load_json(job, "artifacts/agent_brain/agent_brain.status.json", default={})
+        assert status["status"] == "ok"
+
+    def test_agent_brain_exception_is_soft(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A failing Agent Brain must never change the audio-processing status."""
+        _seed_input(io)
+        monkeypatch.setenv("VOICEIQ_AGENT_BRAIN_AUTO_RUN", "true")
+        get_settings.cache_clear()
+        try:
+            with patch("app.agent_brain.service.AgentBrainService.generate", side_effect=RuntimeError("brain died")):
+                res = orch.run(JOB_ID)
+        finally:
+            get_settings.cache_clear()
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert "AGENT_BRAIN_FAILED" in res["warnings"]
+        assert "recommendations" not in res
+
+    def test_skipped_without_insights(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No speaker segments -> no insight models -> nothing to adapt."""
+        _seed_input(io)
+        monkeypatch.setenv("VOICEIQ_AGENT_BRAIN_AUTO_RUN", "true")
+        get_settings.cache_clear()
+        try:
+            with patch(f"{_ORCH}.AlignmentService", autospec=True) as align_cls:
+                align_cls.return_value.align.return_value = {"speaker_segments": []}
+                align_cls.return_value.build_conversation.return_value = []
+                res = orch.run(JOB_ID)
+        finally:
+            get_settings.cache_clear()
+
+        assert "AGENT_BRAIN_SKIPPED_NO_INSIGHTS" in res["warnings"]
+        assert "recommendations" not in res
+
+
+# --------------------------------------------------------------------------- #
+# Stage J — pdf report                                                         #
 # --------------------------------------------------------------------------- #
 class TestPDFStage:
     def test_ok_report_base64_present(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:

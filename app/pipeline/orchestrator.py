@@ -34,6 +34,8 @@ from app.utils.audio_utils import (
 from app.utils.job_io import JobIO, JobPaths
 
 if TYPE_CHECKING:  # annotation-only; never imported at runtime
+    from app.insights.models.input_models import SessionInput
+    from app.insights.models.insight_models import InsightBundle
     from app.utils.audio_quality import AudioQualityReport
 
 
@@ -111,6 +113,14 @@ class _PipelineState:
     fact_checks: list[dict[str, Any]] = field(default_factory=list)
     flags: list[dict[str, Any]] = field(default_factory=list)
     insight_payload: dict[str, Any] | None = None
+    # Typed insight objects, kept for the Agent Brain stage (L5). The payload
+    # above is the serialised form the response and PDF use; PipelineAdapter
+    # needs the models themselves, and _run_insights is the only place they
+    # exist.
+    session_input: SessionInput | None = None
+    insight_bundle: InsightBundle | None = None
+    agent_summary: str | None = None
+    recommendations: dict[str, Any] | None = None
 
     def warn(self, code: str) -> None:
         if code not in self.meta["warnings"]:
@@ -203,7 +213,10 @@ class VoiceIQOrchestrator:
         # Step H: Insight Service
         self._run_insights(st)
 
-        # Step I: PDF report
+        # Step I: Agent Brain (opt-in, needs the insight models from Step H)
+        self._run_agent_brain(st)
+
+        # Step J: PDF report
         self._run_pdf(st)
 
         meta["status"] = "ok"
@@ -655,6 +668,11 @@ class VoiceIQOrchestrator:
 
                 insight_response = InsightService.generate(session_input)
                 st.insight_payload = insight_response.model_dump()
+                # Carried for _run_agent_brain — these objects exist nowhere
+                # else in the pipeline.
+                st.session_input = session_input
+                st.insight_bundle = insight_response.insights
+                st.agent_summary = insight_response.summaries.overall_summary
 
                 self.io.save_json(st.job, "artifacts/insights/insight_result.json", st.insight_payload)
                 self.io.save_json(
@@ -691,6 +709,75 @@ class VoiceIQOrchestrator:
                 },
             )
         st.timing("insights", t0)
+
+    def _run_agent_brain(self, st: _PipelineState) -> None:
+        """Turn the pipeline's own output into action recommendations (L5).
+
+        Opt-in and off by default. This is the production caller
+        `PipelineAdapter.to_context` never had — before it, the whole push
+        integration (adapter -> agents -> Java callback) existed but nothing
+        invoked any of it.
+
+        `fact_check=None` is deliberate, not an oversight. `fact_checks_v2`
+        is produced by the route *after* `run()` returns, and Sprint 7 D2
+        makes it a job that finishes after the audio response, so a
+        `FactCheckResponse` is not available at this point in the pipeline
+        and will not be. `FactCheckReviewAgent` therefore stays dormant on
+        this path until decision **D10** settles whether the fact-check job
+        re-runs downstream consumers. The other four agents are unaffected.
+        """
+        t0 = _now_ms()
+        # Imported here, not at module scope: keeps the orchestrator's import
+        # light (see the note at the top of this file) and means an
+        # unconfigured deployment never pays for it.
+        from app.insights.config.settings import get_settings
+
+        if not get_settings().agent_brain_auto_run:
+            st.skip("agent_brain")
+            st.timing("agent_brain", t0)
+            return
+
+        try:
+            if st.session_input is None or st.insight_bundle is None:
+                st.skip("agent_brain")
+                st.warn("AGENT_BRAIN_SKIPPED_NO_INSIGHTS")
+                self.io.save_json(
+                    st.job,
+                    "artifacts/agent_brain/agent_brain.status.json",
+                    {"service": "agent_brain", "status": "skipped", "reason": "no_insights"},
+                )
+            else:
+                from app.agent_brain.adapters.pipeline_adapter import PipelineAdapter
+                from app.agent_brain.service import AgentBrainService
+
+                context = PipelineAdapter.to_context(
+                    st.session_input,
+                    insights=st.insight_bundle,
+                    summary=st.agent_summary,
+                    fact_check=None,  # see docstring — D10
+                    asr_meta=st.asr_out.get("meta", {}) if isinstance(st.asr_out, dict) else {},
+                )
+                response = AgentBrainService().generate(context)
+                # by_alias: the Agent Brain payload is the Java-facing
+                # camelCase contract. POST /internal/v1/agent-brain/... and
+                # the HMAC callback both emit that shape, so this key must
+                # too — one payload shape for Java, not two.
+                st.recommendations = response.model_dump(mode="json", by_alias=True)
+
+                self.io.save_json(st.job, "artifacts/agent_brain/recommendations.json", st.recommendations)
+                self.io.save_json(
+                    st.job,
+                    "artifacts/agent_brain/agent_brain.status.json",
+                    {"service": "agent_brain", "status": "ok"},
+                )
+        except Exception as e:
+            st.warn("AGENT_BRAIN_FAILED")
+            self.io.save_json(
+                st.job,
+                "artifacts/agent_brain/agent_brain.status.json",
+                {"service": "agent_brain", "status": "failed", "error": str(e)},
+            )
+        st.timing("agent_brain", t0)
 
     def _run_pdf(self, st: _PipelineState) -> None:
         t0 = _now_ms()
@@ -750,13 +837,17 @@ class VoiceIQOrchestrator:
         fact_checks = self.io.load_json(job, "artifacts/nlp/fact_checks.json", default=[])
         emotion_overview = self.io.load_json(job, "artifacts/nlp/emotion_overview.json", default={})
         insights = self.io.load_json(job, "artifacts/insights/insight_result.json", default=None)
+        # None when the Agent Brain stage was off or skipped — the key is then
+        # omitted entirely rather than emitted as null, so the response shape
+        # is byte-identical to pre-L5 for every existing deployment.
+        recommendations = self.io.load_json(job, "artifacts/agent_brain/recommendations.json", default=None)
 
         pdf_b64 = self.io.load_text(job, "artifacts/report/report_base64.txt", default=None)
         audio_quality = self.io.load_json(job, "artifacts/audio/audio_quality.json", default=None)
 
         single_speaker_mode = "SINGLE_SPEAKER_MODE" in (meta.get("warnings") or [])
 
-        return {
+        response: dict[str, Any] = {
             "request_id": meta.get("job_id"),
             "transcript": transcript or "",
             "asr_meta": {
@@ -799,3 +890,6 @@ class VoiceIQOrchestrator:
                 "job_dir": str(job.root),
             },
         }
+        if recommendations is not None:
+            response["recommendations"] = recommendations
+        return response

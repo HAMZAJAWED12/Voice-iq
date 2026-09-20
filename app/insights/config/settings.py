@@ -201,6 +201,19 @@ class InsightSettings(BaseSettings):
             "or per request with ?fact_check=true. See DOCS/DATA-FLOW.md."
         ),
     )
+    # --- Agent Brain -------------------------------------------------- #
+    agent_brain_auto_run: bool = Field(
+        default=False,
+        description=(
+            "Whether /v1/process-audio runs the Agent Brain over the "
+            "pipeline's own output and returns a `recommendations` key. "
+            "Off by default: it is new behaviour on an existing contract, "
+            "and the Java Action Layer may prefer to drive the Agent Brain "
+            "itself via POST /internal/v1/agent-brain/... instead. Enable "
+            "with VOICEIQ_AGENT_BRAIN_AUTO_RUN=true. See "
+            "DOCS/N4B-MULTILINGUAL-STRATEGY.md (L5)."
+        ),
+    )
     openweather_api_key: str = Field(
         default="",
         description=(
