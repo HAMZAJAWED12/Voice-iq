@@ -171,18 +171,46 @@ the same "off means silent" rule as Sprint 7 (`FACTCHECK-AGENT-PHASE-0.md` §3 R
 
 Unblocked by this document. No new dependency in any phase.
 
-**Phase 1 — read the language that already exists.**
-Carry `meta["language"]` from the ASR result through to
-`AgentContext.language`, map Whisper's ISO-639-1 onto `LanguageCode`, and fall
-back to `en` for any code outside the literal (never crash on an unexpected
-language). Give `PipelineAdapter.to_context` a real production caller, or
-record explicitly that it stays test-only.
+**Phase 1 — read the language that already exists. ✅ DONE.**
 
-**Phase 2 — language-keyed vocabulary tables.**
-Move `_CRITICAL_TERMS`, `_HIGH_TERMS`, the agent signal lists and the
-datetime-extractor keywords out of module constants and into a per-language
-table keyed by `LanguageCode`. `en` entries stay byte-identical, so every
-existing test must pass untouched — that is the acceptance bar.
+Shipped: `extraction/language.py` (`resolve_language` + `vocabulary_for`),
+`PipelineAdapter.to_context(asr_meta=...)`, language-keyed tables in all four
+extractors, and all four agents reading `context.language` and passing it
+down. 34 seam tests; every touched module 100%. All 731 pre-existing tests
+passed unedited — English behaviour is unchanged, which is the point.
+
+`AgentContext.language` is no longer write-only.
+
+> **Honest limit — L5 is still open.** The adapter now *accepts* and resolves
+> the detected language, but `PipelineAdapter.to_context` still has **no
+> production caller** — only tests. The seam is complete and proven; it is
+> not yet load-bearing in a running deployment. Until L5 is closed, nothing
+> in production sets a non-English language, so Phase 2 vocabulary would sit
+> unreachable even if L1 landed tomorrow. **Close L5 before, or with,
+> Phase 2** — not after.
+
+**Phase 2 — fill the vocabulary tables. 🔴 BLOCKED on L1.**
+
+The tables themselves already exist and are wired (that was Phase 1); every
+one carries a single populated `"en"` key. Phase 2 is **data entry, not
+engineering**: add a `"ur"` / `"ar"` key and it takes effect immediately,
+because `vocabulary_for()` treats absent and empty identically.
+
+Tables awaiting entries:
+
+| Module | Table |
+|---|---|
+| `priority_classifier` | `_CRITICAL_TERMS`, `_HIGH_TERMS` |
+| `assignee_extractor` | `_PATTERNS` |
+| `datetime_extractor` | `_PATTERNS` |
+| `task_agent` | `_TASK_SIGNALS` |
+| `email_draft_agent` | `_EMAIL_SIGNALS` |
+| `followup_agent` | `_FOLLOWUP_SIGNALS` |
+| `escalation_agent` | `_ANGER`, `_COMPLAINT`, `_RISK` |
+
+**No engineer should invent these terms.** L1 exists precisely because
+guessed vocabulary in a language you do not speak produces confident,
+untraceable false positives in a customer-facing recommendation.
 
 **Phase 3 — Roman Urdu vocabulary.**
 Extend the assignee verb alternation and the signal lists with Roman-Urdu
@@ -213,7 +241,7 @@ value in every cell except the three native-script assignee cells.
 | L2 | How is `mixed` decided? Whisper never emits it. Options: script-ratio heuristic on the transcript, or drop `mixed` from routing and always fall back to `en` vocabulary plus the language-specific table. | Tech lead | before Phase 1 |
 | L3 | Does Roman Urdu route as `ur` or as `mixed`? It is Latin script with Urdu vocabulary, so it fits neither cleanly. Affects how the tables are keyed. | Tech lead | before Phase 2 |
 | L4 | Confirm Option A: N4b-2 reuses the Sprint 7 model server rather than adding spaCy/Stanza. | Tech lead | before N4b-2 |
-| L5 | Is `PipelineAdapter` given a production caller, or formally declared test-only? | Tech lead | before Phase 1 |
+| L5 | Is `PipelineAdapter` given a production caller, or formally declared test-only? **Still open — Phase 1 shipped the seam but not a caller, so no production path sets a language yet.** | Tech lead | **before/with Phase 2** |
 
 **Recommended defaults if no answer comes:** L2 — drop `mixed` from routing,
 fall back to `en`; L3 — route Roman Urdu as `mixed` once L2 is resolved, else

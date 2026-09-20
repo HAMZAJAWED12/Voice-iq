@@ -92,17 +92,32 @@ voiceiq-AI/
 **Currently open:** Sprint 7 Fact-Check Agent, at Phase 0 with 2 of 9
 decisions signed — D3–D9 still block Phase 1
 (`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1). Also open: **N4b multilingual
-(ur/ar)** — its dep/CI gate is cleared, see
-`DOCS/N4B-MULTILINGUAL-STRATEGY.md`; N4b-1 needs **no new dependency and no
-CI change** and is ready to start, N4b-2 waits on Sprint 7 Phase 2.
+(ur/ar)** — **Phase 1 (wiring) shipped**; Phase 2 (vocabulary) is blocked on
+decision **L1**, and **L5** must close with it. See
+`DOCS/N4B-MULTILINGUAL-STRATEGY.md`. N4b-2 waits on Sprint 7 Phase 2.
 **Tier 3 Wave E is now closed** — E1/E1.b/E2/E3/E4/E5 all done.
 
 > **N4b, in one line:** the extraction layer's ur/ar failure is a *vocabulary*
-> gap, not a model gap. `AgentContext.language` is write-only (nothing reads
-> it), and Whisper's detected language is already captured at
+> gap, not a model gap. Whisper's detected language was already captured at
 > `orchestrator.py:764` and thrown away — so no language-detection dep is
 > needed either. Only native-script *person names* need a model, and that
 > reuses the Sprint 7 model server rather than adding spaCy/Stanza.
+>
+> **Phase 1 state (do not redo):** `extraction/language.py` holds
+> `resolve_language()` + `vocabulary_for()`; every extractor and agent takes a
+> `language` argument and selects a language-keyed table; `AgentContext.language`
+> is **read**, not write-only. Each table has exactly one populated key, `"en"`,
+> holding the pre-N4b terms verbatim. **`vocabulary_for()` treats an absent key
+> and an empty key identically, both falling back to English** — so adding a
+> language is *data*: add the key, it takes effect. Don't restructure the
+> tables; fill them.
+>
+> ⚠️ **Two traps.** (1) **Do not invent ur/ar terms.** L1 is native-speaker
+> work; guessed vocabulary in a language you don't speak yields confident,
+> untraceable false positives in a customer-facing recommendation. (2)
+> `PipelineAdapter.to_context` still has **no production caller** (L5), so no
+> deployment sets a non-English language yet — Phase 2 vocabulary would be
+> unreachable until that closes.
 
 > **Sprint 7 hard constraints** (settled in Phase 0 — do not relitigate):
 >
@@ -184,10 +199,10 @@ CI runs the same command on every push to `main` via `.github/workflows/test.yml
 
 | Where | Command | Count |
 |---|---|---|
-| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **731** |
-| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **728 + 1 skip** |
+| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **765** |
+| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **762 + 1 skip** |
 
-728 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip("torch")`, reported as a single skip) = 731. Nothing is lost in CI.
+762 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip("torch")`, reported as a single skip) = 765. Nothing is lost in CI.
 
 Both figures are measured, not derived. Reproduce the CI figure locally without building a light venv:
 
