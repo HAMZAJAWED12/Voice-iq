@@ -15,7 +15,7 @@ breaks it is a defect, not a judgement call.
 |---|---|---|
 | Approved API schema + compatibility policy | §2, §3 | drafted — needs sign-off |
 | Approved privacy boundary + source policy | §6 | drafted — needs sign-off |
-| Persistence option, execution mode, decision table w/ owners + dates | §1, §4 | D1 + D2 **signed**; blocked on D3–D9 |
+| Persistence option, execution mode, decision table w/ owners + dates | §1, §4 | D1, D2, D10 **signed**; blocked on D3–D9 |
 
 ---
 
@@ -37,7 +37,7 @@ questions but assigned neither owner nor date, so none could be chased.
 | D7 | Which fact domains ship first? | Product | +5 days | General knowledge + finance; **exclude** healthcare/legal | ⬜ pending |
 | D8 | How long must v1 + legacy process-audio fields survive? | Product + consumers | before Phase 6 | Indefinitely within this project | ⬜ pending |
 | D9 | Source-authority rules for high-stakes claims? | Product + legal | before Phase 5 | Tier 1 only — see §6.3 | ⬜ pending |
-| D10 | **Raised by N4b L5.** Does the fact-check job re-run *every* downstream consumer, or only the PDF? §D2 consequence 3 named the PDF; the Agent Brain is a second consumer and was not in scope when D2 was signed. | Tech lead | before Phase 6 | **A — re-run all consumers** | ⬜ pending |
+| D10 | **Raised by N4b L5.** Does the fact-check job re-run *every* downstream consumer, or only the PDF? | Tech lead | before Phase 6 | A — re-run all consumers | ✅ **signed 2026-09-20 — Option A** |
 
 ### D1 — Persistence · ✅ **signed: Option A, new tables only**
 
@@ -103,11 +103,15 @@ and stays supported.
    `factcheck_agent_runs` (§4) carries `status` and both timestamps. A run
    that is never collected must still age out under the existing
    `job_retention_hours` sweep.
-3. The PDF cannot contain verdicts on the first pass. Phase 6 must either
-   regenerate the report when the run completes, or emit it only after
-   completion. **It must not silently ship a PDF with an empty fact-check
+3. **Downstream consumers** cannot contain verdicts on the first pass. Phase 6
+   must either re-run them when the job completes, or emit them only after
+   completion. **Nothing may silently ship with an empty fact-check
    section** — that is the same class of defect as the ordering bug this
    whole sprint exists to fix.
+
+   *Reworded by D10.* This originally named only the PDF, because the PDF was
+   the only consumer in scope when D2 was signed. There are now two — see
+   §D10 for the list and the re-run rule.
 4. Failure of the job never changes the audio-processing status. That
    response has already been sent.
 
@@ -136,10 +140,67 @@ this path until D10 is answered.
 | **A — job re-runs all consumers** | One Agent Brain run with complete input; `FactCheckReviewAgent` works. Costs a second agent run, or deferring the first. Consistent with whatever the PDF does. |
 | **B — job re-runs the PDF only** | `FactCheckReviewAgent` stays dormant on this path permanently. Fact-check-driven review then belongs to Java via the pull route, and that should be stated rather than left implicit. |
 
-**Recommendation: A**, because the alternative leaves one of five agents
+### ✅ Decision: Option A — the job re-runs every downstream consumer
+
+Signed 2026-09-20. B was rejected because it leaves one of five agents
 permanently dead on the push path without saying so anywhere a reader would
-look. Whichever is chosen, §D2 consequence 3 should be reworded to say
-"downstream consumers" rather than naming only the PDF.
+look. §D2 consequence 3 is reworded accordingly.
+
+**The consumer list is now normative.** When the fact-check job reaches a
+terminal state, Phase 6 re-runs, in this order:
+
+| # | Consumer | Why it must re-run |
+|---|---|---|
+| 1 | Agent Brain (`_run_agent_brain`) | `FactCheckReviewAgent` needs the claims; the other four agents are unaffected by the re-run but are re-run with it, because splitting them would mean two recommendation sets per session. |
+| 2 | PDF (`_run_pdf`) | Renders verdicts, confidence and citations, **and** whatever the Agent Brain just produced. Must run *after* 1. |
+
+Adding a third consumer later means adding a row here, not rediscovering the
+rule.
+
+#### The trap Option A creates: do not fire the Java callback twice
+
+This is the part that will bite Phase 6 if it is not written down now.
+
+The Agent Brain currently fires an HMAC callback to the Java Action Layer at
+the end of its run (L5-2, `_dispatch_agent_callback`, off unless a URL *and*
+a secret are configured). Under Option A the Agent Brain runs **twice** for
+one session — once in-pipeline with `fact_check=None`, once after the job
+with the claims. Naively, Java receives two callbacks carrying **different
+recommendation sets for the same `sessionId`**, and has no rule for which
+wins.
+
+Java's trace-id de-duplication does **not** save this: the trace id is
+per-send, and the two payloads genuinely differ, so they are two legitimate
+messages rather than a retry.
+
+**Rule.** When the fact-check feature is enabled for a request, the
+in-pipeline Agent Brain run is *provisional*: it populates the response and
+the artifact but **must not fire the callback**. Only the post-job re-run
+fires it. When fact-check is disabled, skipped or the feature flag is off,
+there is no second pass and the in-pipeline run fires the callback as it does
+today.
+
+Stated as a predicate Phase 6 can implement directly:
+
+```
+fire_callback  ==  (this is the final pass for this session)
+```
+
+**Acceptance:** a test asserting that exactly one callback is dispatched per
+session when both the Agent Brain and the fact-check job are enabled. Not
+"at least one" — exactly one.
+
+#### What does not change
+
+- **Dormancy is now time-bounded, not permanent.** `FactCheckReviewAgent`
+  stays dormant on the pipeline path until Phase 6 ships the re-run. Nothing
+  in the current code changes because of this decision; D10 is a Phase 6
+  obligation, and signing it does not un-dormant anything today.
+- The first pass still populates `recommendations` in the
+  `/v1/process-audio` response. That response has already been sent by the
+  time the job finishes, so the second pass updates the stored artifact and
+  the callback — not the response that already went out. Consumers who need
+  the final set read it back, the same way they read `fact_check_report`.
 
 ---
 
@@ -463,7 +524,7 @@ Phase 1 may start when all nine boxes are ticked.
 - [ ] D7 signed — first-release domains
 - [ ] D8 signed — v1 support window
 - [ ] D9 signed — high-stakes source rules
-- [ ] D10 signed — does the job re-run all downstream consumers, or only the PDF?
+- [x] **D10 signed** — Option A, the job re-runs every downstream consumer *(2026-09-20)*
 - [ ] §2 API contract approved
 - [ ] §3 compatibility policy approved
 - [ ] §6 privacy boundary + source policy approved

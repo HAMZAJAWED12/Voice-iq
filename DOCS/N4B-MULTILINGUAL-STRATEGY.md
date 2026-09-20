@@ -278,11 +278,22 @@ byte-identical: `run()` 5.006 s → 0.148 s, difflib core 44,539 → 65 calls.
 | Agent | On the pipeline path |
 |---|---|
 | Task, Follow-up, Email draft, Escalation | ✅ live |
-| **FactCheckReview** | ⏸ **dormant** — needs a `FactCheckResponse`, which Sprint 7 D2 makes unavailable at this point. Tracked as **D10** in `FACTCHECK-AGENT-PHASE-0.md`. |
+| **FactCheckReview** | ⏸ **dormant until Sprint 7 Phase 6** — needs a `FactCheckResponse`, which D2 makes unavailable at this point. |
 
-Dormant is recorded behaviour, not a defect — but a `CONTRADICTED` verdict
-produces no manual-review recommendation from this path until D10 is
-answered.
+**D10 is signed (Option A):** when the fact-check job completes it re-runs
+*every* downstream consumer — Agent Brain first, then the PDF — so
+`FactCheckReviewAgent` gets its claims. Dormancy is therefore **time-bounded,
+not permanent**, and nothing in the current code changes because of the
+signature: D10 is a Phase 6 obligation.
+
+Until Phase 6 ships it, a `CONTRADICTED` verdict produces no manual-review
+recommendation from this path.
+
+> **Carried into Phase 6 with it:** under Option A the Agent Brain runs twice
+> per session, so the Java callback must fire **exactly once** — only on the
+> final pass. Java's trace-id de-duplication does not cover this, because the
+> two payloads genuinely differ. Full rule in `FACTCHECK-AGENT-PHASE-0.md`
+> §D10.
 
 ---
 
