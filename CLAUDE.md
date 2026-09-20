@@ -91,11 +91,12 @@ voiceiq-AI/
 
 **Currently open:** Sprint 7 Fact-Check Agent, at Phase 0 with 2 of 9
 decisions signed — D3–D9 still block Phase 1
-(`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1). Also open: **N4b multilingual
-(ur/ar)** — **Phase 1 (wiring) shipped**; Phase 2 (vocabulary) is blocked on
-decision **L1**, and **L5** must close with it. See
-`DOCS/N4B-MULTILINGUAL-STRATEGY.md`. N4b-2 waits on Sprint 7 Phase 2.
-**Tier 3 Wave E is now closed** — E1/E1.b/E2/E3/E4/E5 all done.
+(`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1), now including **D10** raised by N4b
+L5. Also open: **N4b multilingual (ur/ar)** — Phase 1 (wiring) and **L5
+(production caller) are both shipped**; Phase 2 (vocabulary) is blocked on
+decision **L1** alone. See `DOCS/N4B-MULTILINGUAL-STRATEGY.md`. N4b-2 waits
+on Sprint 7 Phase 2. **Tier 3 Wave E is now closed** — E1/E1.b/E2/E3/E4/E5
+all done.
 
 > **N4b, in one line:** the extraction layer's ur/ar failure is a *vocabulary*
 > gap, not a model gap. Whisper's detected language was already captured at
@@ -112,12 +113,18 @@ decision **L1**, and **L5** must close with it. See
 > language is *data*: add the key, it takes effect. Don't restructure the
 > tables; fill them.
 >
-> ⚠️ **Two traps.** (1) **Do not invent ur/ar terms.** L1 is native-speaker
-> work; guessed vocabulary in a language you don't speak yields confident,
-> untraceable false positives in a customer-facing recommendation. (2)
-> `PipelineAdapter.to_context` still has **no production caller** (L5), so no
-> deployment sets a non-English language yet — Phase 2 vocabulary would be
-> unreachable until that closes.
+> ⚠️ **The one trap: do not invent ur/ar terms.** L1 is native-speaker work;
+> guessed vocabulary in a language you don't speak yields confident,
+> untraceable false positives in a customer-facing recommendation.
+>
+> **L5 closed** — `_run_agent_brain` (orchestrator, between insights and PDF)
+> is `to_context`'s production caller. Opt-in:
+> `VOICEIQ_AGENT_BRAIN_AUTO_RUN=true` adds a `recommendations` key; off, the
+> key is omitted entirely. That also wired the Java HMAC callback and the
+> `min_confidence` filter, which had been documented since Sprint 6 and never
+> read. **`FactCheckReviewAgent` is dormant on this path** — it needs a
+> `FactCheckResponse`, which Sprint 7 D2 makes unavailable there; tracked as
+> **D10**. The other four agents are live.
 
 > **Sprint 7 hard constraints** (settled in Phase 0 — do not relitigate):
 >
@@ -199,10 +206,10 @@ CI runs the same command on every push to `main` via `.github/workflows/test.yml
 
 | Where | Command | Count |
 |---|---|---|
-| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **765** |
-| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **762 + 1 skip** |
+| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **795** |
+| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **792 + 1 skip** |
 
-762 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip("torch")`, reported as a single skip) = 765. Nothing is lost in CI.
+792 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip("torch")`, reported as a single skip) = 795. Nothing is lost in CI.
 
 Both figures are measured, not derived. Reproduce the CI figure locally without building a light venv:
 

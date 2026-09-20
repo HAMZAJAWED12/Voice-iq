@@ -37,6 +37,7 @@ questions but assigned neither owner nor date, so none could be chased.
 | D7 | Which fact domains ship first? | Product | +5 days | General knowledge + finance; **exclude** healthcare/legal | ⬜ pending |
 | D8 | How long must v1 + legacy process-audio fields survive? | Product + consumers | before Phase 6 | Indefinitely within this project | ⬜ pending |
 | D9 | Source-authority rules for high-stakes claims? | Product + legal | before Phase 5 | Tier 1 only — see §6.3 | ⬜ pending |
+| D10 | **Raised by N4b L5.** Does the fact-check job re-run *every* downstream consumer, or only the PDF? §D2 consequence 3 named the PDF; the Agent Brain is a second consumer and was not in scope when D2 was signed. | Tech lead | before Phase 6 | **A — re-run all consumers** | ⬜ pending |
 
 ### D1 — Persistence · ✅ **signed: Option A, new tables only**
 
@@ -109,6 +110,36 @@ and stays supported.
    whole sprint exists to fix.
 4. Failure of the job never changes the audio-processing status. That
    response has already been sent.
+
+### D10 — does the fact-check job re-run downstream consumers? *(raised by N4b L5)*
+
+**Not a new architecture — a widening of a decision already taken.** §D2
+consequence 3 says the PDF cannot hold verdicts on the first pass and must be
+regenerated or deferred when the job completes. That is a
+*downstream-consumer* rule, and the PDF was simply the only consumer in scope
+when D2 was signed.
+
+N4b L5 added a second one. `/v1/process-audio` now optionally runs the Agent
+Brain over the pipeline's own output
+(`VOICEIQ_AGENT_BRAIN_AUTO_RUN`, off by default). It runs inside the
+orchestrator, before the response returns — so under D2 a `FactCheckResponse`
+does not exist yet and will not by the time it runs.
+
+Consequence today: the Agent Brain's stage passes `fact_check=None`, so
+**`FactCheckReviewAgent` is dormant on the pipeline path**. The other four
+agents are unaffected. That is recorded behaviour, not a defect — but it
+means a `CONTRADICTED` verdict produces no manual-review recommendation from
+this path until D10 is answered.
+
+| Option | Consequence |
+|---|---|
+| **A — job re-runs all consumers** | One Agent Brain run with complete input; `FactCheckReviewAgent` works. Costs a second agent run, or deferring the first. Consistent with whatever the PDF does. |
+| **B — job re-runs the PDF only** | `FactCheckReviewAgent` stays dormant on this path permanently. Fact-check-driven review then belongs to Java via the pull route, and that should be stated rather than left implicit. |
+
+**Recommendation: A**, because the alternative leaves one of five agents
+permanently dead on the push path without saying so anywhere a reader would
+look. Whichever is chosen, §D2 consequence 3 should be reworded to say
+"downstream consumers" rather than naming only the PDF.
 
 ---
 
@@ -432,6 +463,7 @@ Phase 1 may start when all nine boxes are ticked.
 - [ ] D7 signed — first-release domains
 - [ ] D8 signed — v1 support window
 - [ ] D9 signed — high-stakes source rules
+- [ ] D10 signed — does the job re-run all downstream consumers, or only the PDF?
 - [ ] §2 API contract approved
 - [ ] §3 compatibility policy approved
 - [ ] §6 privacy boundary + source policy approved

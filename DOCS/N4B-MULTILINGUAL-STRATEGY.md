@@ -181,13 +181,15 @@ passed unedited — English behaviour is unchanged, which is the point.
 
 `AgentContext.language` is no longer write-only.
 
-> **Honest limit — L5 is still open.** The adapter now *accepts* and resolves
-> the detected language, but `PipelineAdapter.to_context` still has **no
-> production caller** — only tests. The seam is complete and proven; it is
-> not yet load-bearing in a running deployment. Until L5 is closed, nothing
-> in production sets a non-English language, so Phase 2 vocabulary would sit
-> unreachable even if L1 landed tomorrow. **Close L5 before, or with,
-> Phase 2** — not after.
+> **L5 — CLOSED.** The seam is now load-bearing. `_run_agent_brain` in the
+> orchestrator calls `PipelineAdapter.to_context` with
+> `asr_meta=st.asr_out["meta"]`, so Whisper's detected language reaches
+> `AgentContext.language` on the real pipeline path. Opt-in via
+> `VOICEIQ_AGENT_BRAIN_AUTO_RUN` (off by default); the `recommendations`
+> response key is omitted entirely when off. Proven end-to-end by
+> `TestAgentBrainStage::test_detected_language_reaches_the_agent_context`.
+>
+> **Phase 2 vocabulary is therefore reachable** the moment L1 lands.
 
 **Phase 2 — fill the vocabulary tables. 🔴 BLOCKED on L1.**
 
@@ -241,11 +243,46 @@ value in every cell except the three native-script assignee cells.
 | L2 | How is `mixed` decided? Whisper never emits it. Options: script-ratio heuristic on the transcript, or drop `mixed` from routing and always fall back to `en` vocabulary plus the language-specific table. | Tech lead | before Phase 1 |
 | L3 | Does Roman Urdu route as `ur` or as `mixed`? It is Latin script with Urdu vocabulary, so it fits neither cleanly. Affects how the tables are keyed. | Tech lead | before Phase 2 |
 | L4 | Confirm Option A: N4b-2 reuses the Sprint 7 model server rather than adding spaCy/Stanza. | Tech lead | before N4b-2 |
-| L5 | Is `PipelineAdapter` given a production caller, or formally declared test-only? **Still open — Phase 1 shipped the seam but not a caller, so no production path sets a language yet.** | Tech lead | **before/with Phase 2** |
+| L5 | Is `PipelineAdapter` given a production caller? ✅ **CLOSED** — `_run_agent_brain` in the orchestrator, opt-in via `VOICEIQ_AGENT_BRAIN_AUTO_RUN`. See below. | Tech lead | done |
 
 **Recommended defaults if no answer comes:** L2 — drop `mixed` from routing,
 fall back to `en`; L3 — route Roman Urdu as `mixed` once L2 is resolved, else
-`en`; L4 — Option A; L5 — give it a caller.
+`en`; L4 — Option A. L5 is closed.
+
+---
+
+## L5 outcome — what the wiring actually found
+
+L5 was framed as "give `to_context` a caller". Investigation found something
+larger: **the entire push integration existed and nothing invoked any of it.**
+
+| Component | Before L5 | After |
+|---|---|---|
+| `POST /internal/v1/agent-brain/…` (pull) | ✅ wired | unchanged |
+| `PipelineAdapter.to_context` | ❌ tests only | ✅ `_run_agent_brain` |
+| `JavaCallbackClient` | ❌ never instantiated | ✅ fire-and-forget, flag-gated |
+| `min_confidence` threshold | ❌ **never read** | ✅ filters the callback |
+
+`min_confidence` had been documented since Sprint 6 as "dropped before
+callback" — a filter that could not run because the callback never fired.
+
+**A live performance bug came out of it too.** `AgentRunner` computed
+"how many other candidates duplicate this one?" once per candidate, an O(n²)
+sweep over `difflib`. On a 16-minute call that was 44,539
+`find_longest_match` calls and ~2.3 s, on the *already-mounted* pull route —
+a 2-hour call exceeded a 120-second timeout outright. Fixed in L5-0, output
+byte-identical: `run()` 5.006 s → 0.148 s, difflib core 44,539 → 65 calls.
+
+### Live vs dormant
+
+| Agent | On the pipeline path |
+|---|---|
+| Task, Follow-up, Email draft, Escalation | ✅ live |
+| **FactCheckReview** | ⏸ **dormant** — needs a `FactCheckResponse`, which Sprint 7 D2 makes unavailable at this point. Tracked as **D10** in `FACTCHECK-AGENT-PHASE-0.md`. |
+
+Dormant is recorded behaviour, not a defect — but a `CONTRADICTED` verdict
+produces no manual-review recommendation from this path until D10 is
+answered.
 
 ---
 
