@@ -239,8 +239,11 @@ MAX_TRANSCRIPT_CHARS = 10_000
 ```
 
 **Rule.** No field of `FactCheckRequest`, `FactCheckResponse`,
-`FactCheckResult`, `DetectedClaim`, `Evidence`, `Confidence` or
-`FactCheckStats` may be added, removed, renamed or retyped by this project.
+`FactCheckResult`, `DetectedClaim`, `ClaimSpan` (the type of
+`DetectedClaim.span`), `Evidence`, `Confidence` or `FactCheckStats` may be
+added, removed, renamed or retyped by this project. *(`ClaimSpan` was added
+to this list on 2026-10-11; that addition is pending owner confirmation and
+not in force until the tech lead and the engineering manager confirm it.)*
 No member may be added to or removed from `ClaimType` or `Verdict`.
 `GET /v1/fact-check/{id}` is frozen on the same terms.
 
