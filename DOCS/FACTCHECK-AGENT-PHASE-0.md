@@ -1,6 +1,6 @@
 # Fact-Check Agent — Phase 0: Contract and Scope Lock
 
-Owner: engineering · Status: **awaiting sign-off** · Created: 2026-09-04
+Owner: engineering · Status: **in sign-off — partly signed, see §1 and §8** · Created: 2026-09-04
 Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` **v1.1**
 
 Phase 0 ships **no application code**. Its deliverables are the four policies
@@ -133,7 +133,7 @@ Consequence today: the Agent Brain's stage passes `fact_check=None`, so
 **`FactCheckReviewAgent` is dormant on the pipeline path**. The other four
 agents are unaffected. That is recorded behaviour, not a defect — but it
 means a `CONTRADICTED` verdict produces no manual-review recommendation from
-this path until D10 is answered.
+this path until Phase 6 ships the D10 re-run.
 
 | Option | Consequence |
 |---|---|
@@ -362,7 +362,7 @@ Normative restatement of plan §8. Three rules, then the matrix.
 **Allowed.** Creating new tables. `create_all()` picks them up on next start.
 
 **Forbidden.** Adding, removing, renaming or retyping any column on
-`fact_check_results`, `insights`, or any other existing table. Forbidden
+`fact_check_results`, `insight_records`, or any other existing table. Forbidden
 because the mechanism to do it does not exist and its absence fails silently.
 
 **Shape.** Four new tables, one-to-many downward:
@@ -392,15 +392,18 @@ have caught the Option-B assumption in plan v1.0.
 ## 5. Verdict mapping policy
 
 The v2 verdicts must reach the existing `FactCheckReviewAgent` without
-inventing new Agent Brain statuses (R1). Today the adapter maps with a
-default:
+inventing new Agent Brain statuses (R1). Until commit `1cd5350`
+(2026-09-19) the v1 adapter mapped with a default:
 
 ```python
 status=_VERDICT_TO_STATUS.get(result.verdict, "UNVERIFIED")
 ```
 
-That default is currently dead — the existing map covers all six v1 verdicts.
-It becomes live the moment v2 verdicts arrive, and it fails in two directions:
+That default is gone: the v1 map is now typed `dict[Verdict, FactCheckStatus]`,
+indexed directly, and pinned by `test_verdict_map_is_total`, so an unmapped
+verdict raises instead of degrading. The two failures below are what a
+default does the moment v2 verdicts arrive — the v2 map must keep the
+no-default property:
 
 **Failure 1 — silent downgrade.** `CONTRADICTED` is not a key, so it falls
 through to `UNVERIFIED`. The review agent then produces a `HIGH` priority
