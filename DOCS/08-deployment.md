@@ -261,7 +261,7 @@ The ORM model is intentionally trivial — a single table with primary key, stat
 
 ## Logging
 
-The app uses Python's standard `logging` library. The log level is set from `VOICEIQ_LOG_LEVEL`. Logs go to stdout/stderr in standard FastAPI/Uvicorn format. No transcript text is logged — the explainability principle requires structured `evidence` on every flag, but raw utterance text never crosses the logging boundary.
+The app uses Python's standard `logging` library. `VOICEIQ_LOG_LEVEL` is validated but currently not applied: the root level is fixed at INFO in `app/utils/logger.py`, and the `httpx`/`httpcore` loggers are pinned to WARNING so outbound request URLs (API keys, claim subjects) are not logged. Logs go to stdout/stderr in standard FastAPI/Uvicorn format. No transcript text is logged — the explainability principle requires structured `evidence` on every flag, but raw utterance text never crosses the logging boundary.
 
 ---
 
@@ -269,7 +269,7 @@ The app uses Python's standard `logging` library. The log level is set from `VOI
 
 A typical session (10–50 utterances) takes under 50 ms end-to-end on a modern x86 core. Memory footprint of the running app is around 80–120 MB resident depending on the SQLite cache.
 
-The service has no batch mode or worker pool. Each request is handled synchronously by Uvicorn's threadpool. For high concurrency, scale horizontally — there is no shared in-process state beyond the SQLAlchemy connection pool and the `lru_cache` on settings.
+The service has no batch mode or worker pool. Plain `def` routes run on Uvicorn's threadpool; `/v1/process-audio` is `async def` and runs its blocking pipeline on the event loop. Before scaling to several workers or hosts, note the per-process state: the rate-limit counters (in-memory, so each process enforces its own budget), the fact-check engine singleton with its TTL cache, and the `lru_cache` on settings, besides the SQLAlchemy connection pool.
 
 ---
 

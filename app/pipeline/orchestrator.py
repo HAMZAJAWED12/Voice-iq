@@ -727,8 +727,10 @@ class VoiceIQOrchestrator:
         makes it a job that finishes after the audio response, so a
         `FactCheckResponse` is not available at this point in the pipeline
         and will not be. `FactCheckReviewAgent` therefore stays dormant on
-        this path until decision **D10** settles whether the fact-check job
-        re-runs downstream consumers. The other four agents are unaffected.
+        this path until Phase 6 implements the D10 re-run (the fact-check job
+        re-runs the Agent Brain, then the PDF; see
+        DOCS/FACTCHECK-AGENT-PHASE-0.md §D10). The other four agents are
+        unaffected.
         """
         t0 = _now_ms()
         # Imported here, not at module scope: keeps the orchestrator's import
@@ -796,8 +798,9 @@ class VoiceIQOrchestrator:
         a third-party service that may be slow or down would make the
         pipeline's availability depend on Java's. The thread is a daemon:
         a callback in flight at shutdown is dropped, which is the correct
-        trade for a best-effort notification. Java de-duplicates on the
-        trace id, so a retry story belongs on their side.
+        trade for a best-effort notification. Retries and de-duplication
+        belong on the Java side (DOCS/JAVA-CALLBACK-V2.md); the trace id is
+        not signed, so it is not a replay guard on its own.
 
         Returns the thread so tests can join it; production ignores it.
         """

@@ -78,6 +78,12 @@ signature_v2 = hmac.new(secret.encode("utf-8"), signed_v2, hashlib.sha256).hexdi
 5. **Replay:** reject if `X-VoiceIQ-Trace-Id` was already processed. Cache
    seen ids for at least the freshness window (Redis/Caffeine with a 10-min
    TTL is sufficient).
+   **Limitation:** the trace id is not part of either signature, so a
+   captured request replayed inside the freshness window with a fresh trace
+   id passes this check. For effective replay protection, de-duplicate on the
+   `X-VoiceIQ-Signature-V2` value instead — it is unique per send, because the
+   body carries a fresh `generatedAt` and fresh recommendation ids. Changing
+   this is a contract decision for both teams.
 6. Only then bind the JSON and act.
 
 ### Reference implementation
@@ -129,7 +135,7 @@ independently revertible.
 |---|---|---|---|
 | 1 | Java | Verify **v2**; on mismatch fall back to v1 and **log a warning**. Freshness + trace-id checks active. | drop to v1-only |
 | 2 | Java | Watch the warning count. Zero over a full traffic cycle ⇒ v2 verifies universally. | — |
-| 3 | Java | Remove the v1 fallback. **Replay protection is now live.** | re-enable fallback |
+| 3 | Java | Remove the v1 fallback. Freshness and v2 verification are now enforced; replay protection is effective only with the de-duplication noted in §4 step 5. | re-enable fallback |
 | 4 | Python | Delete `X-VoiceIQ-Signature` from `java_callback_client.py` + its test. | revert commit |
 
 Do not start step 4 before Java confirms step 3 in production.
