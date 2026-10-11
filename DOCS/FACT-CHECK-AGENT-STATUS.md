@@ -15,7 +15,7 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 | | |
 |---|---|
 | Date | 2026-10-11 |
-| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96` |
+| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207` |
 | Current phase | **Phase 0 — Contract and scope lock: partially complete.** Phases 1–7 not started (no Sprint 7 application code exists). |
 | Overall progress | **0.83 %** |
 
@@ -65,6 +65,15 @@ Verified against the repository on 2026-10-11.
     success, 4xx, 5xx-then-retry and transport-error paths; failed callback;
     Docker entrypoint import; unchanged `POST /v1/fact-check` response).
     Light suite 809 passed, 1 skipped.
+  - `9aff207` — **M2: bad provider replies never become verdicts or 500s.**
+    Non-finite numbers, non-object or undecodable JSON, wrong nested types,
+    over-large or degenerate values and over-deep metadata from any source
+    client end as the existing `SOURCE_UNAVAILABLE` for that claim only; the
+    engine isolates each claim, `POST /v1/fact-check` stays 200 with strict
+    JSON, and `/v1/process-audio` stays 200 with `fact_checks_v2` degraded per
+    claim. No v1 model change. Pinned by
+    `app/insights/tests/test_factcheck_source_replies.py` (223 tests). Light
+    suite 1032 passed, 1 skipped.
 - **2026-10-11 audit and documentation sync** (this branch): stale
   operational docs corrected, PHASE-0 wording made consistent with its own
   register, this status document created.
@@ -76,7 +85,7 @@ Verified against the repository on 2026-10-11.
   changes (per-phase gate reading, `ClaimSpan` in the v1 freeze list).
 - **Prerequisite fixes** — until Phase 0 lets a phase start, no Sprint 7
   application code is written; only fixes that need no pending decision, one
-  per milestone, smallest first. M1 is done; M2 is the next milestone below.
+  per milestone, smallest first. M1 and M2 are done; M3 is the next milestone below.
 
 ## Remaining
 
@@ -90,14 +99,12 @@ Ordered backlog. Phase numbers are the plan's.
    (before Phase 1 ends, Phase 5 or Phase 6 — see PHASE-0 §8) can follow.
 2. **Decision-independent prerequisite fixes**, smallest first (earliest
    phase each one gates in brackets):
-   1. Non-finite provider values (NaN/Infinity) yield FALSE at high confidence and can break the `/v1/process-audio` response [4] — *next milestone*.
-   2. Truthy non-object JSON or a corrupt encoding from a source client aborts the whole `/v1/fact-check` run [4].
-   3. `exchangerate.host` error bodies degrade silently to `SOURCE_UNAVAILABLE`; whether the provider now needs a key is unverified (manual check first) [4].
-   4. Regex claim detector false positives ("Ada is 30" → crypto) and misses ("1 USD = 280 PKR") [3].
-   5. PDF fails entirely on any non-Latin-1 character — contain it [6].
-   6. `/v1/process-audio` is `async def` but runs blocking work on the event loop [6].
-   7. Agent Brain dedup merges distinct fact-check reviews [6].
-   8. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test [6].
+   1. `exchangerate.host` error bodies degrade silently to `SOURCE_UNAVAILABLE`; whether the provider now needs a key is unverified (manual check first) [4] — *next milestone*.
+   2. Regex claim detector false positives ("Ada is 30" → crypto) and misses ("1 USD = 280 PKR"); a very long digit run in the transcript becomes an infinite claimed value, then a 500 on `/v1/fact-check` [3].
+   3. PDF fails entirely on any non-Latin-1 character — contain it [6].
+   4. `/v1/process-audio` is `async def` but runs blocking work on the event loop [6].
+   5. Agent Brain dedup merges distinct fact-check reviews [6].
+   6. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test [6].
 3. **Phase 1** — gold set, model server, bake-off, pinned model.
 4. **Phase 2** — typed v2 models, OpenAI-compatible client, `VOICEIQ_FACTCHECK_*` settings, stubbed boundary.
 5. **Phase 3** — claim extraction with segment/speaker/timestamp traceability, checkability gate, dedup, claim cap.
@@ -149,32 +156,30 @@ Real blockers only.
 
 ## Next milestone
 
-**M2 — Non-finite provider values never become verdicts.** A
-decision-independent prerequisite fix (gates Phase 4). Status: **planned,
-awaiting approval**.
+**M3 — Make `exchangerate.host` failures visible.** A decision-independent
+prerequisite fix (gates Phase 4). Status: **planned, awaiting approval**.
 
-The numeric source clients accept any value `float()` accepts, so a provider
-reply of `"NaN"`, `"Infinity"` or `1e999` reaches the comparator. The
-comparator then returns `FALSE`, and `clamp(nan)` gives the upper bound, so
-the result is high confidence (0.95). `POST /v1/fact-check` then fails with
-500 while serializing the response. On `/v1/process-audio` the NaN escapes
-the enrichment's error handling, so the whole audio response can fail to
-render — against the rule that fact-checking never breaks that response.
+`ForexClient` sends no access key, and any error body (`{"success": false,
+...}`, or a keyed-API shape without `rates`) silently becomes
+`SOURCE_UNAVAILABLE` with no log line, so a provider-side change looks like
+"no evidence" forever. Whether the provider now requires a key is
+unverified: the first step is a manual check by the owner (this service
+makes no live calls in tests or audits).
 
 ## Acceptance evidence
 
-M2 is done when all of the following ran in the same session and passed:
+M3 is done when all of the following ran in the same session and passed:
 
-- Tests drive each numeric source client (exchangerate.host, CoinGecko,
-  OpenWeather, Alpha Vantage) through `httpx.MockTransport` with `"NaN"`,
-  `"Infinity"` and `1e999`. They assert that no verdict is built from the
-  value, that `POST /v1/fact-check` returns 200 with valid JSON, and that the
-  process-audio `fact_checks_v2` payload serializes.
+- The owner has recorded whether `exchangerate.host` now needs an access key.
+- Tests drive `ForexClient` through `httpx.MockTransport` with an error body
+  (`success: false`) and a body without `rates`, and assert the claim stays
+  `SOURCE_UNAVAILABLE` and a WARNING with no URL, key or claim subject is
+  logged.
 - The full light suite —
   `.venv\Scripts\python.exe -m pytest app/insights/tests/ app/agent_brain/tests/ -q` —
-  passes with the new tests added to the 809 + 1 skipped baseline.
+  passes with the new tests added to the 1032 + 1 skipped baseline.
 - `ruff==0.7.4 check .` and
   `mypy==1.13.0 --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/`
   are clean.
-- This document is updated: M2 moved to *Completed*, the next prerequisite
+- This document is updated: M3 moved to *Completed*, the next prerequisite
   promoted.
