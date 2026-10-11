@@ -832,8 +832,15 @@ class VoiceIQOrchestrator:
                 JavaCallbackClient(settings).send(payload, trace_id=trace_id)
             except Exception as exc:  # noqa: BLE001 - best effort, never propagates
                 # No payload content in the log: it carries conversation-derived
-                # recommendations.
-                logger.warning("agent_brain: Java callback failed (trace_id=%s): %s", trace_id, exc)
+                # recommendations. No exception text either: httpx error text
+                # embeds the callback URL. Class name + HTTP status only.
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                logger.warning(
+                    "agent_brain: Java callback failed (trace_id=%s): %s%s",
+                    trace_id,
+                    type(exc).__name__,
+                    f" (HTTP {status})" if status is not None else "",
+                )
 
         thread = threading.Thread(target=_send, name=f"agent-callback-{trace_id[:8]}", daemon=True)
         thread.start()

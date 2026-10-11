@@ -12,6 +12,8 @@ These tests pin that guard:
   * the guard is load-bearing — without it the key does reach the log;
   * importing the Docker entrypoint (``app.insight_main``) leaves the loggers
     quiet, with and without uvicorn's own logging config applied first;
+  * a failed Java callback (4xx, 5xx, transport error) logs the error class
+    and status, never the callback URL that httpx puts in its error text;
   * the ``POST /v1/fact-check`` response is identical with and without it.
 
 Every request goes through ``httpx.MockTransport``; nothing leaves the host.
@@ -33,6 +35,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.agent_brain.config.settings import get_agent_settings
+from app.agent_brain.integrations import java_callback_client
+from app.agent_brain.models.recommendation import (
+    Entities,
+    Recommendation,
+    RecommendationResponse,
+    Source,
+)
 from app.insights.api.factcheck_routes import get_factcheck_engine
 from app.insights.api.factcheck_routes import router as factcheck_router
 from app.insights.core.factcheck.factcheck_engine import FactCheckEngine, SourceRouter
@@ -44,6 +54,7 @@ from app.insights.repository import (
     get_factcheck_repository,
 )
 from app.insights.repository.db import Base
+from app.pipeline.orchestrator import VoiceIQOrchestrator
 from app.security import verify_api_key
 from app.utils.logger import setup_logging
 
@@ -234,6 +245,75 @@ def test_importing_docker_entrypoint_keeps_http_loggers_at_warning(mode, tmp_pat
     httpx_level, httpcore_level = (int(token) for token in proc.stdout.split()[-2:])
     assert httpx_level >= logging.WARNING
     assert httpcore_level >= logging.WARNING
+
+
+# --------------------------------------------------------------------------- #
+# Java callback                                                               #
+# --------------------------------------------------------------------------- #
+
+_CALLBACK_URL = "https://java.example.com/hook?token=CALLBACK-URL-MARKER"
+
+
+@pytest.fixture()
+def callback_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setenv("VOICEIQ_AGENT_CALLBACK_URL", _CALLBACK_URL)
+    monkeypatch.setenv("VOICEIQ_AGENT_CALLBACK_SECRET", FAKE_KEY)
+    monkeypatch.setenv("VOICEIQ_AGENT_MIN_CONFIDENCE", "0.50")
+    get_agent_settings.cache_clear()
+    yield
+    get_agent_settings.cache_clear()
+
+
+@pytest.mark.parametrize(
+    ("step", "expected"),
+    [
+        (_status(401), "HTTPStatusError (HTTP 401)"),
+        (_status(503), "HTTPStatusError (HTTP 503)"),
+        (_connect_error, "ConnectError"),
+    ],
+    ids=["4xx", "5xx", "transport-error"],
+)
+def test_failed_java_callback_logs_no_url(step, expected, callback_settings, monkeypatch, caplog):
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return step(request)
+
+    real_client = java_callback_client.JavaCallbackClient
+    monkeypatch.setattr(
+        java_callback_client,
+        "JavaCallbackClient",
+        lambda settings: real_client(settings, transport=httpx.MockTransport(handler)),
+    )
+    response = RecommendationResponse(
+        session_id="sess-1",
+        recommendations=[
+            Recommendation(
+                agent_type="TASK_AGENT",
+                action_type="TASK",
+                title="t",
+                description="d",
+                confidence=0.9,
+                source=Source(segment_id="seg", text="t"),
+                entities=Entities(),
+                explanation="e",
+            )
+        ],
+    )
+
+    setup_logging()
+    caplog.set_level(logging.DEBUG)
+    thread = VoiceIQOrchestrator._dispatch_agent_callback("sess-1", response)
+    assert thread is not None
+    thread.join(timeout=10)
+
+    assert len(calls) == 1 and str(calls[0].url) == _CALLBACK_URL  # it really was sent there
+    assert any("Java callback failed" in r.getMessage() and expected in r.getMessage() for r in caplog.records)
+    for record in caplog.records:
+        text = _record_text(record)
+        assert "java.example.com" not in text and "CALLBACK-URL-MARKER" not in text, text
+        assert FAKE_KEY not in text, text
 
 
 # --------------------------------------------------------------------------- #
