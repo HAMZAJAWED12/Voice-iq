@@ -4,9 +4,12 @@ Owner: engineering · Status: **in sign-off — partly signed, see §1 and §8**
 Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` **v1.1**
 
 Phase 0 ships **no application code**. Its deliverables are the four policies
-below plus a signed decision register. Phases 1–7 do not start until §1 is
-signed — that is the whole point of the phase: freeze the contract so later
-phases cannot churn it.
+below plus a signed decision register. No phase of 1–7 starts until the §1
+decisions that gate it (listed in §1 and §8) are signed and §2, §3 and §6 are
+approved — that is the whole point of the phase: freeze the contract so later
+phases cannot churn it. *(This per-phase reading is pending owner
+confirmation and not yet in force — see §1. Until it is confirmed, every §1
+decision blocks Phase 1.)*
 
 Everything here is **normative**. Where a rule says *must*, a later phase that
 breaks it is a defect, not a judgement call.
@@ -21,8 +24,19 @@ breaks it is a defect, not a judgement call.
 
 ## 1. Decision register
 
-Nine decisions. Every one blocks Phase 1. v1.0 of the plan listed the
-questions but assigned neither owner nor date, so none could be chased.
+Ten decisions (D10 was added on 2026-09-20, raised by N4b L5). Each gates a
+phase, following its *Needed by* column: D1–D5 and D7 (*+N days* from
+kick-off) block Phase 1; D6 must be signed before Phase 1 ends; D9 blocks
+Phase 5; D8 and D10 block Phase 6. v1.0 of the plan listed the questions but
+assigned neither owner nor date, so none could be chased.
+
+*Pending owner confirmation — not in force.* The per-phase reading above was
+written on 2026-10-11 to follow the register's own *Needed by* dates; plan
+v1.1 §11 and the first draft of this section said every decision blocks
+Phase 1, which contradicts those dates. It takes effect only when the tech
+lead and the engineering manager confirm it. Until then the original reading
+applies: **every §1 decision blocks Phase 1.** See
+[`FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
 
 `Needed by` is relative to the Phase 0 kick-off date.
 
@@ -516,7 +530,13 @@ skipped, it does not guess.
 
 ## 8. Exit checklist
 
-Phase 1 may start when all nine boxes are ticked.
+*Pending owner confirmation — not in force (see §1). Until it is confirmed,
+Phase 1 needs every box in this checklist ticked.*
+
+Phase 1 may start when D1–D5, D7 and the §2, §3 and §6 approvals are ticked.
+D6 gates the end of Phase 1; D9 gates the start of Phase 5; D8 and D10 gate
+the start of Phase 6. The §6 approval needed for Phase 1 covers §6 except the
+§6.3 high-stakes rule, which stays pending D9 and is settled before Phase 5.
 
 - [x] **D1 signed** — Option A, new tables only *(2026-09-04)*
 - [x] **D2 signed** — job-based execution *(2026-09-04)*
