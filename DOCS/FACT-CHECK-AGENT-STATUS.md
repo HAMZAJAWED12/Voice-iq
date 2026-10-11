@@ -15,7 +15,7 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 | | |
 |---|---|
 | Date | 2026-10-11 |
-| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`) |
+| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` |
 | Current phase | **Phase 0 — Contract and scope lock: partially complete.** Phases 1–7 not started (no Sprint 7 application code exists). |
 | Overall progress | **0.83 %** |
 
@@ -34,7 +34,8 @@ overall = (0.5 / 12.0) × (2 / 10) = 0.0083 → 0.83 %
 ```
 
 Other countable measures: decisions signed **3 / 10**; Phase 0 exit
-deliverables approved **0 / 3**.
+deliverables approved **0 / 3**. Prerequisite fixes (such as M1) are not
+plan deliverables and do not move the percentage.
 
 ## Completed
 
@@ -55,6 +56,13 @@ Verified against the repository on 2026-10-11.
   - `ff84664` — `app/insights/tests/test_db_schema_evolution.py` pins what
     `create_all()` can and cannot change — the behaviour the new-tables-only
     rule relies on.
+  - `c1b35d9` — **M1: outbound request URLs kept out of the logs.**
+    `setup_logging()` pins the `httpx` and `httpcore` loggers to WARNING, so
+    API keys and claim subjects in source-client URLs no longer reach INFO
+    logs. Pinned by `app/insights/tests/test_logging_hygiene.py` (14 tests:
+    success, 4xx, 5xx-then-retry and transport-error paths; Docker entrypoint
+    import; unchanged `POST /v1/fact-check` response). Light suite 806 passed,
+    1 skipped.
 - **2026-10-11 audit and documentation sync** (this branch): stale
   operational docs corrected, PHASE-0 wording made consistent with its own
   register, this status document created.
@@ -66,8 +74,7 @@ Verified against the repository on 2026-10-11.
   changes (per-phase gate reading, `ClaimSpan` in the v1 freeze list).
 - **Prerequisite fixes** — until Phase 0 lets a phase start, no Sprint 7
   application code is written; only fixes that need no pending decision, one
-  per milestone, smallest first. None started; the first is the next
-  milestone below.
+  per milestone, smallest first. M1 is done; M2 is the next milestone below.
 
 ## Remaining
 
@@ -81,15 +88,14 @@ Ordered backlog. Phase numbers are the plan's.
    (before Phase 1 ends, Phase 5 or Phase 6 — see PHASE-0 §8) can follow.
 2. **Decision-independent prerequisite fixes**, smallest first (earliest
    phase each one gates in brackets):
-   1. Outbound request URLs (API keys, claim subjects) reach INFO logs [4] — *next milestone*.
-   2. Non-finite provider values (NaN/Infinity) yield FALSE at high confidence and can break the `/v1/process-audio` response [4].
-   3. Truthy non-object JSON or a corrupt encoding from a source client aborts the whole `/v1/fact-check` run [4].
-   4. `exchangerate.host` error bodies degrade silently to `SOURCE_UNAVAILABLE`; whether the provider now needs a key is unverified (manual check first) [4].
-   5. Regex claim detector false positives ("Ada is 30" → crypto) and misses ("1 USD = 280 PKR") [3].
-   6. PDF fails entirely on any non-Latin-1 character — contain it [6].
-   7. `/v1/process-audio` is `async def` but runs blocking work on the event loop [6].
-   8. Agent Brain dedup merges distinct fact-check reviews [6].
-   9. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test [6].
+   1. Non-finite provider values (NaN/Infinity) yield FALSE at high confidence and can break the `/v1/process-audio` response [4] — *next milestone*.
+   2. Truthy non-object JSON or a corrupt encoding from a source client aborts the whole `/v1/fact-check` run [4].
+   3. `exchangerate.host` error bodies degrade silently to `SOURCE_UNAVAILABLE`; whether the provider now needs a key is unverified (manual check first) [4].
+   4. Regex claim detector false positives ("Ada is 30" → crypto) and misses ("1 USD = 280 PKR") [3].
+   5. PDF fails entirely on any non-Latin-1 character — contain it [6].
+   6. `/v1/process-audio` is `async def` but runs blocking work on the event loop [6].
+   7. Agent Brain dedup merges distinct fact-check reviews [6].
+   8. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test [6].
 3. **Phase 1** — gold set, model server, bake-off, pinned model.
 4. **Phase 2** — typed v2 models, OpenAI-compatible client, `VOICEIQ_FACTCHECK_*` settings, stubbed boundary.
 5. **Phase 3** — claim extraction with segment/speaker/timestamp traceability, checkability gate, dedup, claim cap.
@@ -141,32 +147,32 @@ Real blockers only.
 
 ## Next milestone
 
-**M1 — Keep outbound request URLs out of the logs.** A decision-independent
-prerequisite fix (gates Phase 4). Status: **planned, awaiting approval**.
+**M2 — Non-finite provider values never become verdicts.** A
+decision-independent prerequisite fix (gates Phase 4). Status: **planned,
+awaiting approval**.
 
-`app/utils/logger.py` sets the root logger to INFO at import, and httpx logs
-`HTTP Request: GET <full URL>` at INFO for every request that gets a
-response. The
-OpenWeather and Alpha Vantage clients pass their API keys as query
-parameters (`appid`, `apikey`), so live keys — and transcript-derived claim
-subjects such as the city or ticker — reach stdout and container logs
-whenever fact-checking runs. Phase 4's search backend would put claim text in
-the same URLs. M1 pins the `httpx` and `httpcore` loggers to `WARNING` in the
-shared logging setup and adds a regression test.
+The numeric source clients accept any value `float()` accepts, so a provider
+reply of `"NaN"`, `"Infinity"` or `1e999` reaches the comparator. The
+comparator then returns `FALSE`, and `clamp(nan)` gives the upper bound, so
+the result is high confidence (0.95). `POST /v1/fact-check` then fails with
+500 while serializing the response. On `/v1/process-audio` the NaN escapes
+the enrichment's error handling, so the whole audio response can fail to
+render — against the rule that fact-checking never breaks that response.
 
 ## Acceptance evidence
 
-M1 is done when all of the following ran in the same session and passed:
+M2 is done when all of the following ran in the same session and passed:
 
-- A new test drives both keyed clients through `httpx.MockTransport` with a
-  fake key and asserts that no log record on any logger contains the key or
-  the claim subject, and that the `httpx` logger's effective level is
-  `WARNING` or higher.
+- Tests drive each numeric source client (exchangerate.host, CoinGecko,
+  OpenWeather, Alpha Vantage) through `httpx.MockTransport` with `"NaN"`,
+  `"Infinity"` and `1e999`. They assert that no verdict is built from the
+  value, that `POST /v1/fact-check` returns 200 with valid JSON, and that the
+  process-audio `fact_checks_v2` payload serializes.
 - The full light suite —
   `.venv\Scripts\python.exe -m pytest app/insights/tests/ app/agent_brain/tests/ -q` —
-  passes with the new tests added to the 792 + 1 skipped baseline.
+  passes with the new tests added to the 806 + 1 skipped baseline.
 - `ruff==0.7.4 check .` and
   `mypy==1.13.0 --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/`
   are clean.
-- This document is updated: M1 moved to *Completed*, the next prerequisite
+- This document is updated: M2 moved to *Completed*, the next prerequisite
   promoted.

@@ -53,6 +53,9 @@ it makes no request at all.
 - Hosts are fixed constants; query values go through httpx `params=`
   (auto-encoded) and redirects are disabled, so a transcript cannot redirect
   a request elsewhere.
+- Request URLs — which carry the claim subject and, for OpenWeather and
+  Alpha Vantage, your API key — are not written to the logs:
+  `app/utils/logger.py` pins the `httpx` and `httpcore` loggers to WARNING.
 
 ### Controls
 
