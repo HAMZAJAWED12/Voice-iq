@@ -15,7 +15,7 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 | | |
 |---|---|
 | Date | 2026-10-11 |
-| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` |
+| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96` |
 | Current phase | **Phase 0 — Contract and scope lock: partially complete.** Phases 1–7 not started (no Sprint 7 application code exists). |
 | Overall progress | **0.83 %** |
 
@@ -56,13 +56,15 @@ Verified against the repository on 2026-10-11.
   - `ff84664` — `app/insights/tests/test_db_schema_evolution.py` pins what
     `create_all()` can and cannot change — the behaviour the new-tables-only
     rule relies on.
-  - `c1b35d9` — **M1: outbound request URLs kept out of the logs.**
-    `setup_logging()` pins the `httpx` and `httpcore` loggers to WARNING, so
-    API keys and claim subjects in source-client URLs no longer reach INFO
-    logs. Pinned by `app/insights/tests/test_logging_hygiene.py` (14 tests:
-    success, 4xx, 5xx-then-retry and transport-error paths; Docker entrypoint
-    import; unchanged `POST /v1/fact-check` response). Light suite 806 passed,
-    1 skipped.
+  - `c1b35d9`, `cedfe96` — **M1: outbound request URLs kept out of the
+    logs.** `setup_logging()` pins the `httpx` and `httpcore` loggers to
+    WARNING, so API keys and claim subjects in source-client URLs no longer
+    reach INFO logs; a failed Java callback logs the error class and HTTP
+    status instead of httpx's error text (which embeds the callback URL).
+    Pinned by `app/insights/tests/test_logging_hygiene.py` (17 tests:
+    success, 4xx, 5xx-then-retry and transport-error paths; failed callback;
+    Docker entrypoint import; unchanged `POST /v1/fact-check` response).
+    Light suite 809 passed, 1 skipped.
 - **2026-10-11 audit and documentation sync** (this branch): stale
   operational docs corrected, PHASE-0 wording made consistent with its own
   register, this status document created.
@@ -170,7 +172,7 @@ M2 is done when all of the following ran in the same session and passed:
   process-audio `fact_checks_v2` payload serializes.
 - The full light suite —
   `.venv\Scripts\python.exe -m pytest app/insights/tests/ app/agent_brain/tests/ -q` —
-  passes with the new tests added to the 806 + 1 skipped baseline.
+  passes with the new tests added to the 809 + 1 skipped baseline.
 - `ruff==0.7.4 check .` and
   `mypy==1.13.0 --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/`
   are clean.
