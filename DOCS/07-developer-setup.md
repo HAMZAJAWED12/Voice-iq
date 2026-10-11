@@ -1,5 +1,7 @@
 # 07 — Developer Setup
 
+> Historical snapshot — Sprint 1–4 handoff. Current state: [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md), [`DOCS/FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
+
 How to clone, install, run, and exercise the Insight Service locally. Targets a developer who has not seen this repository before.
 
 ---
@@ -30,13 +32,12 @@ python -m pip install --upgrade pip
 
 ## Install dependencies
 
-The repository uses a single `requirements.txt`. The Insight-only subset is small; the full pipeline pulls heavier ML libraries.
+The repository has three requirements files: `requirements-insight.txt` (light), `requirements.txt` (full pipeline, heavy ML libraries) and `requirements-dev.txt` (evaluation extras).
 
-For the **Insight Service only** (matches the Docker image):
+For the **Insight Service only** (matches the Docker image and CI):
 
 ```bash
-pip install fastapi==0.115.6 uvicorn==0.32.1 pydantic==2.12.4 \
-            "pydantic-settings>=2.5.0" "SQLAlchemy>=2.0.30" python-multipart
+pip install -r requirements-insight.txt
 ```
 
 For the **full repository** (audio pipeline + insights):
@@ -60,7 +61,7 @@ cp .env.example .env
 Then edit anything you need. The defaults work out of the box for local development:
 
 ```
-VOICEIQ_ENVIRONMENT=dev
+VOICEIQ_ENVIRONMENT=development
 VOICEIQ_DATABASE_URL=sqlite:///./data/insights.db
 VOICEIQ_DATABASE_AUTO_CREATE=true
 VOICEIQ_THRESHOLD_PROFILE=default
@@ -101,7 +102,7 @@ curl http://localhost:8000/healthz
 # → {"status": "ok"}
 
 curl http://localhost:8000/version
-# → {"service": "voiceiq-insight-service", "version": "1.0.0", "environment": "dev"}
+# → {"service": "VoiceIQ Insight Service", "version": "1.0.0", "environment": "development"}
 ```
 
 If both succeed, the server is healthy.
@@ -143,8 +144,10 @@ Import the OpenAPI schema from `http://localhost:8000/openapi.json` directly int
 ## Running the test suite
 
 ```bash
-pytest -v
+pytest -v app/insights/tests/ app/agent_brain/tests/
 ```
+
+Pass the paths explicitly: a bare `pytest` at the repository root also collects the legacy `tests/` folder, which aborts during collection.
 
 The test suite is fully self-contained: each test that needs the database creates its own SQLite file under a `tmp_path` fixture and overrides `get_insight_repository` accordingly. There is no global test database to manage and no cleanup is required between runs.
 

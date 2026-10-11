@@ -1,5 +1,7 @@
 # 03 — Data Models
 
+> Historical snapshot — Sprint 1–4 handoff. Current state: [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md), [`DOCS/FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
+
 Every Pydantic model used by the Insight Service. Field types are quoted exactly as defined in code. Bounds and validators are reproduced verbatim.
 
 ---

@@ -1,5 +1,24 @@
 # VoiceIQ Insight Service — Developer Handoff Documentation
 
+> Historical snapshot — Sprint 1–4 handoff. Current state: [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md), [`DOCS/FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
+
+## Current documents (maintained)
+
+Files 01–10 below are the frozen Sprint 1–4 handoff. These are kept current:
+
+| File | Purpose |
+|------|---------|
+| [`FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md) | Live status of the Sprint 7 fact-check agent: phase, progress, blockers, next milestone. |
+| [`FACTCHECK-AGENT-PHASE-0.md`](FACTCHECK-AGENT-PHASE-0.md) | Sprint 7 Phase 0 contract and the decision register (§1) — the only place decision status is recorded. |
+| [`D3-GOLD-SET-BRIEF.md`](D3-GOLD-SET-BRIEF.md) | Scoping brief for decision D3 (gold-set owner and resourcing). |
+| [`DATA-FLOW.md`](DATA-FLOW.md) | Every point where data leaves the host. |
+| [`SECURITY-HARDENING-PLAN.md`](SECURITY-HARDENING-PLAN.md) | Tier S security hardening record. |
+| [`TIER-N-PLAN.md`](TIER-N-PLAN.md) | Tier N plan (N1–N4b). |
+| [`N4B-MULTILINGUAL-STRATEGY.md`](N4B-MULTILINGUAL-STRATEGY.md) | Urdu/Arabic support strategy and its decisions (L1–L5). |
+| [`JAVA-CALLBACK-V2.md`](JAVA-CALLBACK-V2.md) | Timestamp-bound callback signature; Java-side work outstanding. |
+
+## Sprint 1–4 handoff package
+
 This `DOCS/` folder is the canonical handoff package for the **VoiceIQ Insight Service**. It documents the system as it currently exists in this repository — every engine, every model, every endpoint, every persistence and configuration knob, every test, every container concern. It does **not** contain forward-looking roadmap items or speculative work; that is intentional and is left for the receiving developer to define.
 
 The documentation is organised so it can be read top-to-bottom by a senior engineer joining the project, or used as a reference once the codebase is loaded.

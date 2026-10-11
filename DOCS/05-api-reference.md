@@ -1,5 +1,7 @@
 # 05 — API Reference
 
+> Historical snapshot — Sprint 1–4 handoff. Current state: [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md), [`DOCS/FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
+
 Every HTTP route under `/v1/insights/*`, plus the shared ops endpoints. All routes are defined in `app/insights/api/insight_routes.py` and share the `APIRouter(prefix="/insights", tags=["Insights"])` declaration. The `/v1` prefix is added by the entrypoint app (`app.main` or `app.insight_main`) when including the router.
 
 ## Conventions
@@ -222,9 +224,9 @@ Returns the running service identification:
 
 ```json
 {
-  "service": "voiceiq-insight-service",
+  "service": "VoiceIQ Insight Service",
   "version": "1.0.0",
-  "environment": "dev"
+  "environment": "development"
 }
 ```
 

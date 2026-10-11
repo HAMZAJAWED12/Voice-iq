@@ -1,5 +1,7 @@
 # 08 — Deployment
 
+> Historical snapshot — Sprint 1–4 handoff. Current state: [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md), [`DOCS/FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
+
 The Insight Service is deployed as a containerised FastAPI process. The repository ships a hardened multi-stage `Dockerfile`, a `docker-compose.yml` for single-host orchestration, and the necessary configuration hooks. This document covers the container path, environment overrides per environment, and the operational expectations.
 
 > **Image scope:** this image is **insight-only**. `/v1/process-audio` (audio upload + ASR + diarization) is **not** included — it requires the heavy ML stack (torch, whisper, pyannote) and is intended for a separate full-pipeline image (deferred task). The endpoints that DO work in the container are listed under [Image variants](#image-variants).
@@ -133,9 +135,11 @@ Empty values are fine in development. Fact-check source clients without an API k
 Populate the API keys in `.env` (or, preferably, inject them through your orchestrator's secret store) **before** starting the container:
 
 ```env
+# Required in production: with no keys, every protected route returns 503.
+VOICEIQ_API_KEYS=...
 VOICEIQ_OPENWEATHER_API_KEY=...
 VOICEIQ_ALPHAVANTAGE_API_KEY=...
-VOICEIQ_ENVIRONMENT=prod
+VOICEIQ_ENVIRONMENT=production
 VOICEIQ_LOG_LEVEL=WARNING
 ```
 
@@ -150,7 +154,7 @@ For Kubernetes / ECS / Nomad deployments, prefer mounting these as secrets rathe
 ```bash
 docker run --rm -p 8888:8888 \
   -v "$(pwd)/data:/app/data" \
-  -e VOICEIQ_ENVIRONMENT=dev \
+  -e VOICEIQ_ENVIRONMENT=development \
   voiceiq-insight:dev
 ```
 
@@ -178,7 +182,7 @@ docker run -d --name voiceiq-insight \
   -p 8888:8888 \
   -v voiceiq-data:/app/data \
   --env-file .env \
-  -e VOICEIQ_ENVIRONMENT=prod \
+  -e VOICEIQ_ENVIRONMENT=production \
   -e VOICEIQ_LOG_LEVEL=WARNING \
   -e VOICEIQ_THRESHOLD_PROFILE=default \
   -e VOICEIQ_DATABASE_AUTO_CREATE=true \
@@ -217,7 +221,7 @@ open http://localhost:8888/docs
 
 | Variable | Dev | Staging | Prod |
 |----------|-----|---------|------|
-| `VOICEIQ_ENVIRONMENT` | `dev` | `staging` | `prod` |
+| `VOICEIQ_ENVIRONMENT` | `development` | `staging` | `production` |
 | `VOICEIQ_LOG_LEVEL` | `DEBUG` | `INFO` | `WARNING` |
 | `VOICEIQ_DATABASE_URL` | `sqlite:///./data/insights.db` | `sqlite:///./data/insights.db` | PostgreSQL DSN |
 | `VOICEIQ_DATABASE_AUTO_CREATE` | `true` | `true` | `true` (or `false` if managed by external migrations) |
@@ -277,6 +281,6 @@ Before promoting an Insight Service deployment to production, verify:
 - `VOICEIQ_LOG_LEVEL` is `INFO` or `WARNING`, not `DEBUG`.
 - `VOICEIQ_DATABASE_ECHO` is `false`.
 - The `/app/data` volume is mounted to durable storage (or `VOICEIQ_DATABASE_URL` points at PostgreSQL).
-- `VOICEIQ_ENVIRONMENT` is set to `prod` so it surfaces correctly in `/version` and any downstream observability.
+- `VOICEIQ_ENVIRONMENT` is set to `production` so it surfaces correctly in `/version` and any downstream observability.
 - The image was built reproducibly (tagged version, not `latest`).
 - The container's healthcheck is reporting `healthy` before traffic is routed.
