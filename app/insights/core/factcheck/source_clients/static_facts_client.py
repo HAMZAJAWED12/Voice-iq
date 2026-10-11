@@ -95,17 +95,22 @@ class StaticFactsClient(BaseSourceClient):
         if not payload:
             return None
 
-        extract = payload.get("extract") or ""
+        extract = payload.get("extract")
+        if not isinstance(extract, str):
+            return None
         capital = self._extract_capital(extract)
         if not capital:
             return None
+        page_title = payload.get("title")
+        if not isinstance(page_title, str):
+            page_title = title
 
         return Evidence(
             source=self.name,
             value_text=capital,
             raw={
                 "country": country,
-                "title": payload.get("title", title),
+                "title": page_title,
                 "extract_snippet": extract[:240],
             },
         )

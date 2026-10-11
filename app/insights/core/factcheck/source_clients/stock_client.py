@@ -56,13 +56,9 @@ class StockClient(BaseSourceClient):
         if "Note" in payload or "Information" in payload:
             return None
 
-        quote = payload.get("Global Quote") or {}
-        price_raw = quote.get("05. price")
-        if price_raw is None or price_raw == "":
-            return None
-        try:
-            value = float(price_raw)
-        except (TypeError, ValueError):
+        quote = self._as_dict(payload.get("Global Quote"))
+        value = self._finite_float(quote.get("05. price"))
+        if value is None:
             return None
 
         return Evidence(

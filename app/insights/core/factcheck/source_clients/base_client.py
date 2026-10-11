@@ -13,8 +13,9 @@ Design contract:
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import httpx
 
@@ -25,6 +26,20 @@ from app.utils.logger import logger
 # and a courtesy for every other source. Includes a contact URL per
 # Wikipedia's API etiquette guidelines.
 _DEFAULT_UA: str = "VoiceIQ-FactCheck/1.0 " "(+https://github.com/HAMZAJAWED12/Voice-iq) " "httpx"
+
+
+# json.loads hooks: a provider reply carrying a non-finite number (the NaN /
+# Infinity tokens Python's json accepts, or a float literal like 1e999 that
+# overflows to inf) is rejected as invalid JSON instead of reaching a verdict.
+def _reject_non_finite_constant(token: str) -> float:
+    raise ValueError(f"non-finite JSON constant: {token}")
+
+
+def _finite_json_float(token: str) -> float:
+    value = float(token)
+    if not math.isfinite(value):
+        raise ValueError("non-finite JSON number")
+    return value
 
 
 class BaseSourceClient(ABC):
@@ -59,6 +74,20 @@ class BaseSourceClient(ABC):
     # Helpers for subclasses                                             #
     # ------------------------------------------------------------------ #
 
+    @staticmethod
+    def _as_dict(value: Any) -> dict:
+        """`value` if it is a JSON object, else an empty dict (for nested lookups)."""
+        return value if isinstance(value, dict) else {}
+
+    @staticmethod
+    def _finite_float(value: Any) -> float | None:
+        """`float(value)` if that is a finite number, else None."""
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        return number if math.isfinite(number) else None
+
     def _get_json(
         self,
         url: str,
@@ -70,7 +99,9 @@ class BaseSourceClient(ABC):
 
         Performs at most ``retries + 1`` attempts. Retries are *only*
         triggered for transient failures (timeout, connection error, 5xx).
-        4xx responses are considered terminal and not retried.
+        4xx responses are considered terminal and not retried. A reply that
+        cannot be decoded, is not valid JSON, contains a non-finite number,
+        or is not a JSON object also yields `None` (no retry).
         """
         attempts = max(1, retries + 1)
         client_owned_here = self._client is None
@@ -93,6 +124,10 @@ class BaseSourceClient(ABC):
                     if attempt == attempts - 1:
                         return None
                     continue
+                except httpx.HTTPError as exc:
+                    # Not transient (e.g. a body that fails to decode): no retry.
+                    logger.warning("%s: unusable response (%s)", self.name, type(exc).__name__)
+                    return None
 
                 status = response.status_code
                 if 500 <= status < 600 and attempt < attempts - 1:
@@ -108,10 +143,17 @@ class BaseSourceClient(ABC):
                     logger.warning("%s: HTTP %d (terminal)", self.name, status)
                     return None
                 try:
-                    return response.json()
-                except ValueError:
+                    payload = response.json(
+                        parse_constant=_reject_non_finite_constant,
+                        parse_float=_finite_json_float,
+                    )
+                except (ValueError, RecursionError):
                     logger.warning("%s: invalid JSON in response", self.name)
                     return None
+                if not isinstance(payload, dict):
+                    logger.warning("%s: JSON reply is not an object (%s)", self.name, type(payload).__name__)
+                    return None
+                return payload
             return None
         finally:
             if client_owned_here:

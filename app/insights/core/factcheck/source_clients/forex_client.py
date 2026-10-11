@@ -31,13 +31,9 @@ class ForexClient(BaseSourceClient):
         if not payload:
             return None
 
-        rates = payload.get("rates") or {}
-        rate = rates.get(quote)
-        if rate is None:
-            return None
-        try:
-            value = float(rate)
-        except (TypeError, ValueError):
+        rates = self._as_dict(payload.get("rates"))
+        value = self._finite_float(rates.get(quote))
+        if value is None:
             return None
 
         return Evidence(

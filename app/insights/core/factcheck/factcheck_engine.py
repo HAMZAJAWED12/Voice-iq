@@ -22,6 +22,7 @@ within a short window — protects scarce free-tier quotas (Alpha Vantage).
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass
 
@@ -47,6 +48,7 @@ from app.insights.models.factcheck_models import (
     FactCheckResult,
     FactCheckStats,
 )
+from app.utils.logger import logger
 
 # --------------------------------------------------------------------------- #
 # Source routing                                                              #
@@ -181,8 +183,14 @@ class FactCheckEngine:
                 skipped_count += 1
                 continue
 
-            evidence = self._fetch_with_cache(claim, client)
+            evidence, failure_reason = self._fetch_usable(claim, client)
             outcome = FactCheckComparator.compare(claim, evidence)
+            if outcome.diff_pct is not None and not math.isfinite(outcome.diff_pct):
+                # A finite but degenerate value (e.g. 5e-324) can overflow the
+                # relative difference; never turn that into a verdict.
+                logger.warning("fact-check: %s value gave a non-finite diff for %s", client.name, claim.claim_id)
+                evidence, failure_reason = None, "Relative difference is not finite; no evidence used."
+                outcome = FactCheckComparator.compare(claim, None)
             confidence = FactCheckScorer.score(outcome.verdict, outcome.diff_pct)
 
             results.append(
@@ -192,7 +200,7 @@ class FactCheckEngine:
                     verdict=outcome.verdict,
                     confidence=confidence,
                     diff_pct=outcome.diff_pct,
-                    reason=outcome.reason,
+                    reason=failure_reason or outcome.reason,
                 )
             )
             if outcome.verdict in {"TRUE", "FALSE", "PARTIALLY_TRUE"}:
@@ -215,6 +223,25 @@ class FactCheckEngine:
     # ------------------------------------------------------------------ #
     # Internals                                                          #
     # ------------------------------------------------------------------ #
+
+    def _fetch_usable(self, claim: DetectedClaim, client: BaseSourceClient) -> tuple[Evidence | None, str | None]:
+        """Fetch evidence for one claim; a client fault stays with that claim.
+
+        Per-claim isolation (the AgentRunner fan-out contract): a client that
+        raises, or hands back a non-finite value, yields no evidence — the
+        comparator then gives SOURCE_UNAVAILABLE — and the rest of the run
+        continues. Returns ``(evidence, failure_reason)``; the reason is set
+        only when a fault was contained. Logs carry no claim text.
+        """
+        try:
+            evidence = self._fetch_with_cache(claim, client)
+        except Exception as exc:  # noqa: BLE001 - one bad reply must not sink the run
+            logger.warning("fact-check: %s failed for %s (%s)", client.name, claim.claim_id, type(exc).__name__)
+            return None, f"Source client failed ({type(exc).__name__}); no evidence used."
+        if evidence is not None and evidence.value is not None and not math.isfinite(evidence.value):
+            logger.warning("fact-check: %s returned a non-finite value for %s", client.name, claim.claim_id)
+            return None, "Source returned a non-finite value; no evidence used."
+        return evidence, None
 
     def _fetch_with_cache(self, claim: DetectedClaim, client: BaseSourceClient) -> Evidence | None:
         key = _cache_key(claim)

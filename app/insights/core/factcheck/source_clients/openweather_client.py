@@ -48,14 +48,14 @@ class OpenWeatherClient(BaseSourceClient):
         if not payload:
             return None
 
-        main = payload.get("main") or {}
-        temp = main.get("temp")
-        if temp is None:
+        main = self._as_dict(payload.get("main"))
+        value = self._finite_float(main.get("temp"))
+        if value is None:
             return None
-        try:
-            value = float(temp)
-        except (TypeError, ValueError):
-            return None
+        # Metadata only: copy it into the evidence just when it is a plain id.
+        weather_id = payload.get("id")
+        if not isinstance(weather_id, int) or isinstance(weather_id, bool):
+            weather_id = None
 
         return Evidence(
             source=self.name,
@@ -65,6 +65,6 @@ class OpenWeatherClient(BaseSourceClient):
                 "city": city,
                 "temp": value,
                 "units": units_param,
-                "weather_id": (payload.get("id") if isinstance(payload, dict) else None),
+                "weather_id": weather_id,
             },
         )
