@@ -87,11 +87,13 @@ voiceiq-AI/
 | Tier 3 | Waves A/B/D: cleanups, schema fixes, mypy hard-gate | ✅ Done |
 | Sprint 6 | Agent Brain (`app/agent_brain/`): 5 rule-based agents (Task/FollowUp/Email/Escalation/FactCheckReview), confidence refine, difflib dedup, ranker, runner w/ per-agent fault isolation, internal API, pipeline adapter, HMAC Java callback; 103 tests, 100% | ✅ Done |
 | Tier S | Security hardening (8 items): rate limiting, job-artifact TTL, opt-in fact-check + `DOCS/DATA-FLOW.md`, error-detail leak, filename guard, URL encoding, callback replay/TLS, prod docs gating. See `DOCS/SECURITY-HARDENING-PLAN.md` | ✅ Done |
-| Sprint 7 | **Fact-Check Agent** — open-source LLM (Qwen3) claim extraction, hybrid retrieval, evidence-grounded reasoning, citations. Phases 0–7. Phase 0 (contract lock, no code) in `DOCS/FACTCHECK-AGENT-PHASE-0.md`; D1, D2, D10 signed | 🟡 Phase 0 — 3/10 decisions signed |
+| Sprint 7 | **Fact-Check Agent** — open-source LLM (Qwen3) claim extraction, hybrid retrieval, evidence-grounded reasoning, citations. Phases 0–7. Phase 0 (contract lock, no code) in `DOCS/FACTCHECK-AGENT-PHASE-0.md` | 🟡 Phase 0 — see [`DOCS/FACT-CHECK-AGENT-STATUS.md`](DOCS/FACT-CHECK-AGENT-STATUS.md) |
 
-**Currently open:** Sprint 7 Fact-Check Agent, at Phase 0 with 3 of 10
-decisions signed (D1, D2, **D10**) — D3–D9 still block Phase 1
-(`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1). Also open: **N4b multilingual
+**Currently open:** Sprint 7 Fact-Check Agent, at Phase 0. Live status, progress
+and the next milestone: [`DOCS/FACT-CHECK-AGENT-STATUS.md`](DOCS/FACT-CHECK-AGENT-STATUS.md).
+Decision status lives **only** in the register,
+[`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1](DOCS/FACTCHECK-AGENT-PHASE-0.md#1-decision-register) —
+link to it, never copy it. Also open: **N4b multilingual
 (ur/ar)** — Phase 1 (wiring) and **L5
 (production caller) are both shipped**; Phase 2 (vocabulary) is blocked on
 decision **L1** alone. See `DOCS/N4B-MULTILINGUAL-STRATEGY.md`. N4b-2 waits
@@ -99,8 +101,8 @@ on Sprint 7 Phase 2. **Tier 3 Wave E is now closed** — E1/E1.b/E2/E3/E4/E5
 all done.
 
 > **N4b, in one line:** the extraction layer's ur/ar failure is a *vocabulary*
-> gap, not a model gap. Whisper's detected language was already captured at
-> `orchestrator.py:764` and thrown away — so no language-detection dep is
+> gap, not a model gap. Whisper's detected language was already captured by
+> `ASRService` (`asr_meta.language`) and thrown away — so no language-detection dep is
 > needed either. Only native-script *person names* need a model, and that
 > reuses the Sprint 7 model server rather than adding spaCy/Stanza.
 >
@@ -124,8 +126,8 @@ all done.
 > `min_confidence` filter, which had been documented since Sprint 6 and never
 > read. **`FactCheckReviewAgent` is dormant on this path until Sprint 7
 > Phase 6** — it needs a `FactCheckResponse`, which D2 makes unavailable
-> there. The other four agents are live. **D10 is signed (Option A)**, so the
-> dormancy is time-bounded: the fact-check job re-runs every downstream
+> there. The other four agents are live. Under **D10** (register: PHASE-0 §1)
+> the dormancy is time-bounded: the fact-check job re-runs every downstream
 > consumer. Nothing in today's code changes — D10 is a Phase 6 obligation.
 
 > **Sprint 7 hard constraints** (settled in Phase 0 — do not relitigate):
@@ -141,12 +143,16 @@ all done.
 >    not ship with a silently empty fact-check section.
 > 3. **v1 is frozen.** `FactCheckRequest`/`Response`, `ClaimType`, `Verdict`
 >    take no new members. The agent gets its own models.
-> 4. **No default in the verdict map.** `pipeline_adapter._VERDICT_TO_STATUS`
->    must lose its `.get(..., "UNVERIFIED")` fallback before v2 verdicts
->    arrive: `CONTRADICTED` would fall through to `UNVERIFIED` and silently
->    drop the review recommendation from `CRITICAL` to `HIGH`. Non-checkable
->    statements are excluded *before* mapping — otherwise every opinion in a
->    call generates a manual-review recommendation.
+> 4. **No default in the verdict map.** Done for v1 in `1cd5350`:
+>    `pipeline_adapter._VERDICT_TO_STATUS` is typed
+>    `dict[Verdict, FactCheckStatus]`, indexed directly, and pinned by
+>    `test_verdict_map_is_total` (coverage of the `Verdict` literal via
+>    `get_args`) — an unmapped verdict raises. The v2 verdicts need their own
+>    exhaustive map with the same literal-coverage test; never re-add a
+>    `.get(..., "UNVERIFIED")` default, under which `CONTRADICTED` would
+>    silently drop from `CRITICAL` to `HIGH`. Non-checkable statements are
+>    excluded *before* mapping — otherwise every opinion in a call generates a
+>    manual-review recommendation.
 > 5. **The job re-runs every downstream consumer** (D10) — Agent Brain first,
 >    then the PDF. Adding a third consumer means adding a row to the list in
 >    §D10, not rediscovering the rule.
@@ -204,15 +210,15 @@ For every new feature:
 - Unit tests for core logic.
 - Edge cases: empty input, neutral conversation, extreme values.
 - Integration safety — must not break the pipeline.
-- Tests live under `app/insights/tests/`.
+- Tests live under `app/insights/tests/` and `app/agent_brain/tests/`.
 
 Run locally:
 
 ```bash
-pytest -v app/insights/tests/
+.venv\Scripts\python.exe -m pytest -v app/insights/tests/ app/agent_brain/tests/
 ```
 
-CI runs the same command on every push to `main` via `.github/workflows/test.yml`, against the lightweight `requirements-insight.txt` stack only — not the heavy ML deps.
+CI runs the same command on every push to `main` via `.github/workflows/test.yml`, against the lightweight `requirements-insight.txt` stack only — not the heavy ML deps. A bare `pytest` at the repo root also collects the broken legacy `tests/` folder and aborts during collection — always pass the two paths.
 
 ### One test lane (since N2) — the counts reconcile
 
@@ -221,7 +227,7 @@ CI runs the same command on every push to `main` via `.github/workflows/test.yml
 | Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **795** |
 | CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **792 + 1 skip** |
 
-792 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip("torch")`, reported as a single skip) = 795. Nothing is lost in CI.
+792 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip` of torch, transformers, soundfile, huggingface_hub and pyannote.audio, reported as a single skip) = 795. Nothing is lost in CI.
 
 Both figures are measured, not derived. Reproduce the CI figure locally without building a light venv:
 
@@ -235,7 +241,7 @@ Keep these numbers current — a stale reconciliation is worse than none, becaus
 
 `orchestrator.py` imports its eight ML-backed services **inside** the `_run_<stage>` methods, so importing it pulls nothing heavy and `test_orchestrator.py` runs on `requirements-insight.txt`. The separate ~8–12 minute `orchestrator-harness` job is retired. Verified in a venv built from the light requirements alone: harness 51/51 in ~8 s, full suite ~16 s.
 
-**Keep new heavy imports out of `orchestrator.py`'s module scope** — put them in the stage method that uses them, or the light lane breaks again. Four services that only *look* heavy are deliberately module-scope: `FactCheckService` (httpx), `PDFService` (fpdf), `normalize_to_wav` (subprocess), and `EmotionService`, which guards its torch import in its own try/except.
+**Keep new heavy imports out of `orchestrator.py`'s module scope** — put them in the stage method that uses them, or the light lane breaks again. Four services that only *look* heavy are deliberately module-scope: `FactCheckService` (the legacy regex candidate scan — no httpx, no I/O), `PDFService` (fpdf), `normalize_to_wav` (subprocess), and `EmotionService`, which guards its torch import in its own try/except.
 
 **Harness services must be mocked, not run real, when they touch model artifacts.** `KeywordService` looks pure-python but calls `spacy.load("en_core_web_sm")` and builds a `SentenceTransformer`. The spaCy model is a separate `python -m spacy download` artifact declared in no requirements file — present on a dev machine, absent in CI. That divergence passed locally and failed CI with `KEYWORDS_FAILED`. Rule: a service is **heavy** if it imports an ML lib **or** loads a model artifact; heavy ⇒ mocked. Never fix this class of failure by installing the model in CI — a safety net must not depend on model artifacts or a network fetch.
 
@@ -256,9 +262,9 @@ Keep that step — it is the only way to see why the harness failed without repo
 
 These need attention but are not blocking new work:
 
-1. **`__pycache__/*.pyc` files tracked in git.** They were committed before `.gitignore` existed. Untrack with `git rm -r --cached app/**/__pycache__` and commit. They'll then be permanently ignored.
-2. **`run_eval_dev.LOCAL.py` exists alongside `run_eval_dev.py`.** Renamed during a merge conflict. Decide whether to merge or delete.
-3. **Wave E punch list lives in CLAUDE.md next-task candidates.** Tier 3 Waves A/B/D consumed the per-engine `# Tier 3 candidates` comment blocks (dead params, identity maps, type hints, schema fixes, mypy gate). The remaining structural items are scoped under next-task candidates below.
+1. ~~**`__pycache__/*.pyc` files tracked in git.**~~ **RESOLVED** — untracked in `2d017b7`; `.gitignore` covers them (0 tracked).
+2. ~~**`run_eval_dev.LOCAL.py` exists alongside `run_eval_dev.py`.**~~ **RESOLVED** — deleted in `31585b4`.
+3. ~~**Wave E punch list lives in CLAUDE.md next-task candidates.**~~ **RESOLVED** — Wave E is closed (see next-task candidates).
 4. ~~**E3 — `alignment_service` O(n²)**~~ **RESOLVED.** See the E3 entry under next-task candidates for the final numbers and the one trap worth remembering.
 
 ## Working with this repo
@@ -281,9 +287,9 @@ turned out to be. Wave E was deferred from the original Tier 3 pass.
 - ✅ **Consolidate `_clamp()` (E1 / E1.b).** Done — single `core/_math.py:clamp`; `scoring_engine`, `signal_aggregation`, `inconsistency_engine`, and `factcheck/scorer` all repointed.
 - ✅ **MIME / magic-byte upload check (E4).** Done — `app/utils/audio_sniff.py` rejects non-audio uploads with 415; extension check kept as first gate.
 - ✅ **E2 — orchestrator decomposition COMPLETE (Phase 1 + Phase 2).**
-  - *Phase 1* built the behavioral safety net `app/insights/tests/test_orchestrator.py`: **51 tests, `orchestrator.py` 100% covered**, real `JobIO(base_dir=tmp_path)`, 12 side-effect points mocked `autospec=True` (7 heavy ML services + 2 audio utils + network FactCheckService + byte-producing PDFService + KeywordService), 5 cheap services real. Two crown-jewel invariants pin the fault contract: `test_exactly_four_hard_fail_gates` (only `MISSING_INPUT_AUDIO` / `AUDIO_NORMALIZATION_TIMEOUT` / `AUDIO_NORMALIZATION_FAILED` / `AUDIO_SILENT_OR_NEAR_SILENT` hard-fail) and `test_late_stage_exception_never_flips_status` (every other stage is fail-soft). Stage order locked via the insertion-ordered `timings_ms` keys.
+  - *Phase 1* built the behavioral safety net `app/insights/tests/test_orchestrator.py`: **51 tests, `orchestrator.py` 100% covered**, real `JobIO(base_dir=tmp_path)`, 12 side-effect points mocked `autospec=True` (7 heavy ML services + 2 audio utils + FactCheckService + byte-producing PDFService + KeywordService), 5 cheap services real. Two crown-jewel invariants pin the fault contract: `test_exactly_four_hard_fail_gates` (only `MISSING_INPUT_AUDIO` / `AUDIO_NORMALIZATION_TIMEOUT` / `AUDIO_NORMALIZATION_FAILED` / `AUDIO_SILENT_OR_NEAR_SILENT` hard-fail) and `test_late_stage_exception_never_flips_status` (every other stage is fail-soft). Stage order locked via the insertion-ordered `timings_ms` keys.
   - *Phase 2* decomposed `run()` (~530 LOC) into a **75-line stage sequence** of `_run_<stage>` methods. Shared state is one mutable `_PipelineState` dataclass (23 fields); the four early-return gates raise a private `_HardFail` that `run()` catches once. The harness ran green 51/51 after every single extraction — refactor changed shape, not behavior. `orchestrator.py` is 100% covered; **the harness is now a regression net for future edits.**
-  - Extending this pattern to new stages: add a `_run_<stage>` method + a `_PipelineState` field, call it from `run()`, and add a stage-class in the harness. Making the top-level ML imports lazy (so the harness rejoins the light CI job) is the remaining follow-up.
+  - Extending this pattern to new stages: add a `_run_<stage>` method + a `_PipelineState` field, call it from `run()`, and add a stage-class in the harness. Making the top-level ML imports lazy (so the harness rejoins the light CI job) was done in N2 (`9e57cb4`, `4df98c6`).
 
 - ✅ **E3 — O(n²) hot paths in `alignment_service`. DONE**, in two passes.
   - *N3a* (`5c43f45`) built the characterization net first — `app/insights/tests/test_alignment_service.py`, **90 tests**. The file had zero tests of its own before that; its 78% coverage was incidental, from `test_orchestrator.py` driving it through the pipeline.
