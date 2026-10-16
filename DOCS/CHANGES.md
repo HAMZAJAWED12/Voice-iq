@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 1dbfac7
+Last verified: 2026-10-16, 8f09739
 # Changelog
 
 What changed in VoiceIQ, backfilled from git history. Newest first, grouped
@@ -22,21 +22,21 @@ Taken from git at write time.
 
 | Measure | Value | Command |
 |---|---|---|
-| Commits reachable from HEAD (`1dbfac7`) | 165 | `git rev-list --count HEAD` |
-| Non-merge commits | 164 | `git rev-list --count --no-merges HEAD` |
+| Commits reachable from HEAD (`8f09739`) | 167 | `git rev-list --count HEAD` |
+| Non-merge commits | 166 | `git rev-list --count --no-merges HEAD` |
 | Merge commits | 1 (`032d822`) | `git rev-list --count --merges HEAD` |
 | Commits on `main` (`8fd3972`) | 141 | `git rev-list --count main` |
-| Commits on `sprint7/doc-sync` beyond `main` | 24 | `git rev-list --count main..HEAD` |
+| Commits on `sprint7/doc-sync` beyond `main` | 26 | `git rev-list --count main..HEAD` |
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse --format="%h %ad" --date=short` |
 
-Each of the 165 commits is listed in exactly one row below; a few hashes
+Each of the 167 commits is listed in exactly one row below; a few hashes
 also appear elsewhere as cross-references. Small commits of the same kind
 (wave-completion notes, a batch of stage extractions) share a row. Sections
 are ordered by their most recent commit. Dates are author dates.
 
 | Section | Dates | Commits |
 |---|---|---|
-| [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-16 | 24 |
+| [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-16 | 26 |
 | [Sprint 7 Phase 0 and prerequisites](#sprint-7-phase-0-and-prerequisites) | 2026-09-04 to 2026-09-20 | 7 |
 | [N4b multilingual and L5 pipeline wiring](#n4b-multilingual-and-l5-pipeline-wiring) | 2026-09-19 to 2026-09-20 | 10 |
 | [Tier 3 Wave E](#tier-3-wave-e) | 2026-06-21 to 2026-09-19 | 34 |
@@ -52,7 +52,7 @@ are ordered by their most recent commit. Dates are author dates.
 
 ## Sprint 7 on `sprint7/doc-sync`
 
-24 commits, 2026-10-11 to 2026-10-16: a documentation sync, then
+26 commits, 2026-10-11 to 2026-10-16: a documentation sync, then
 prerequisite fixes that need no pending decision, one per milestone. Why
 the work is shaped this way: "In progress" in the
 [status doc](FACT-CHECK-AGENT-STATUS.md#in-progress).
@@ -76,11 +76,18 @@ fails the whole report). Planned, not built. See
 
 | Date | Change | Commit |
 |---|---|---|
+| 2026-10-16 | M5 recorded as done; M6 promoted; detector limits documented; test counts refreshed. | `10b0039` |
 | 2026-10-16 | M4 recorded as done; M5 promoted to next milestone; test counts refreshed. | `793e02e` |
 | 2026-10-16 | M3 recorded; the forex-provider question and its options written down; the over-long-number case promoted to M4. DATA-FLOW.md: exchangerate.host needs a key and none is configured. | `2350738` |
 | 2026-10-11 | M2 recorded as done; M3 promoted; test counts refreshed. | `b370390` |
 | 2026-10-11 | The callback follow-up (`cedfe96`) added to the M1 record. | `0aec936` |
 | 2026-10-11 | M1 recorded as done; M2 promoted. DATA-FLOW.md notes that request URLs are not logged. | `b1054be` |
+
+### Housekeeping
+
+| Date | Change | Commit |
+|---|---|---|
+| 2026-10-16 | Stale code comments corrected (payload cap, callback trace id, rate-limit storage); notes about old git history reworded; `.git-blame-ignore-revs` points at the current hash of the bulk-format commit; DECISIONS entry 17 marked as followed in practice with formal approval pending. No code change. | `8f09739` |
 
 ### Project knowledge set
 

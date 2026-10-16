@@ -114,7 +114,15 @@ Verified against the repository on 2026-10-11.
   changes (per-phase gate reading, `ClaimSpan` in the v1 freeze list).
 - **Prerequisite fixes** — until Phase 0 lets a phase start, no Sprint 7
   application code is written; only fixes that need no pending decision, one
-  per milestone, smallest first. M1–M5 are done; M6 is the next milestone below.
+  per milestone, smallest first. M1–M5 are done. M6 and the old-rows fix are
+  approved and scheduled together with security and reliability hardening
+  found by a review (tracked privately; fixed in small commits).
+- **Working rules** (project owner, 2026-10-16): the claim detector gets no
+  new heuristics until Phase 3, only crash, security or performance fixes
+  ([DECISIONS #26](DECISIONS.md#26-claim-detector-no-new-heuristics-until-phase-3));
+  a milestone or security fix that grows past roughly twice its planned
+  size, or needs a second rework round after review, stops for the owner
+  ([DECISIONS #27](DECISIONS.md#27-size-rule-for-milestones-and-security-fixes)).
 
 ## Remaining
 
@@ -128,12 +136,13 @@ Ordered backlog. Phase numbers are the plan's.
    (before Phase 1 ends, Phase 5 or Phase 6 — see PHASE-0 §8) can follow.
 2. **Decision-independent prerequisite fixes**, smallest first (earliest
    phase each one gates in brackets):
-   1. PDF fails entirely on any non-Latin-1 character — contain it [6] — *next milestone*.
+   1. PDF fails entirely on any non-Latin-1 character — contain it [6] — M6, *approved*.
    2. `/v1/process-audio` is `async def` but runs blocking work on the event loop [6].
    3. Agent Brain dedup merges distinct fact-check reviews [6].
    4. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test [6].
-   5. Rows saved before M4 may hold an infinite claimed value; `GET /v1/fact-check/{conversation_id}` returns 500 for those conversations (old data only; a one-off cleanup or sanitising on read) [none].
-   6. Claim-detector limits left after M5 — past prices read as current ("I bought ETH at 1200"), capitalised acronyms read as tickers, any number after a coin, ticker or commodity read as a price ("Gold is 29.99 with free shipping"); listed in [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector) [3].
+   5. Rows saved before M4 may hold an infinite claimed value — sanitise on read, a small milestone, *approved* [none].
+   6. Claim-detector limits left after M5 — past prices read as current ("I bought ETH at 1200"), capitalised acronyms read as tickers, any number after a coin, ticker or commodity read as a price ("Gold is 29.99 with free shipping"); listed in [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector). *Wait for Phase 3* (DECISIONS #26) [3].
+   7. After the prerequisites, a separate tech-debt milestone: keyword matching in `flag_service` and the intent rules matches inside longer words [none].
 3. **Phase 1** — gold set, model server, bake-off, pinned model.
 4. **Phase 2** — typed v2 models, OpenAI-compatible client, `VOICEIQ_FACTCHECK_*` settings, stubbed boundary.
 5. **Phase 3** — claim extraction with segment/speaker/timestamp traceability, checkability gate, dedup, claim cap.
@@ -200,7 +209,8 @@ Real blockers only.
 
 **M6 — A report whose text has any character outside Latin-1 still gets a
 PDF.** A decision-independent prerequisite fix (gates Phase 6, whose cited
-report must be Unicode-safe). Status: **planned, awaiting approval**.
+report must be Unicode-safe). Status: **approved (2026-10-16)**, scheduled with
+the security and reliability hardening.
 
 The report uses the Helvetica core font, which covers Latin-1 only. One
 curly apostrophe, a euro sign, or any Urdu or Arabic script in the text the

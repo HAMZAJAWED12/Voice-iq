@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 1dbfac7
+Last verified: 2026-10-16, 8f09739
 # Decisions
 
 This file lists the decisions already taken in this repository. A decision is
@@ -45,6 +45,8 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 | 23 | M3: provider errors are named | 2026-10-16 | `dc03a44` |
 | 24 | M4: claim numbers capped at 15 digits; strict-JSON check before saving | 2026-10-16 | `8e51a94` |
 | 25 | M5: a price claim needs a number that stands alone; names need price context | 2026-10-16 | `1dbfac7` |
+| 26 | Claim detector: no new heuristics until Phase 3 | 2026-10-16 | — (owner) |
+| 27 | Size rule for milestones and security fixes | 2026-10-16 | — (owner) |
 
 ---
 
@@ -543,8 +545,34 @@ next milestone is in
   still produce claims or are skipped (listed in
   [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector)).
   The v1 models did not change. `app/insights/tests/test_claim_detector.py`
-  pins this.
+  pins this. The project owner accepted three choices on 2026-10-16: rate
+  amounts of 1, 10, 100, ... only; crypto and stock prices in other
+  currencies dropped; the weather pattern's linear-time rewrite.
 - **Date:** 2026-10-16 · **Commit:** `1dbfac7`
+
+### 26. Claim detector: no new heuristics until Phase 3
+
+- **Context:** M5 needed two rework rounds after review, and every rule it
+  added had edge cases of its own. The limits that remain (past prices read
+  as current, "21 million", capitalised abbreviations, decimal commas) need
+  sentence understanding, which Phase 3 brings.
+- **Decision:** From 2026-10-16 the regex claim detector changes only to fix
+  a crash, a security problem or a performance problem. The remaining limits
+  wait for Phase 3.
+- **Consequence:** [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector)
+  is the documented list of detector limits until Phase 3.
+- **Date:** 2026-10-16 · **Decided by:** project owner (no code change)
+
+### 27. Size rule for milestones and security fixes
+
+- **Context:** M5 grew well past its plan and needed two rework rounds.
+- **Decision:** If a milestone or a security fix grows past roughly twice
+  its planned size, or needs a second rework round after review, work stops
+  and the owner is asked before it continues.
+- **Consequence:** The rule is part of the milestone loop in
+  [WORKFLOW.md](WORKFLOW.md#the-milestone-loop) and of the working rules in
+  [CLAUDE.md](../CLAUDE.md).
+- **Date:** 2026-10-16 · **Decided by:** project owner (no code change)
 
 ---
 

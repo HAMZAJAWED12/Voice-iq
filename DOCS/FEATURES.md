@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 1dbfac7
+Last verified: 2026-10-16, 8f09739
 # Feature Catalogue
 
 This is a list of what VoiceIQ can do today. For each feature it gives the status, how you reach it, its default, and its known functional limits. Every row cites the code or test it was checked against.
@@ -188,7 +188,7 @@ These were checked by running the detector at `1dbfac7` on 2026-10-16:
 - A decimal comma reads as a thousands separator: "1 EUR = 1,08 USD" gives 108. A total for a number of units other than 10, 100, ... reads as the rate: "21 USD to PKR is 5880" gives 5880. A round amount in other wording reads as a rate: "Every 100 USD is 5 EUR cashback" gives 0.05.
 - Patterns are English only.
 
-Open follow-ups: [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md#remaining), *Remaining*.
+These limits wait for Phase 3: until then the detector changes only to fix a crash, a security problem or a performance problem ([DECISIONS.md #26](DECISIONS.md#26-claim-detector-no-new-heuristics-until-phase-3)).
 
 ---
 

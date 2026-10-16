@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 1dbfac7
+Last verified: 2026-10-16, 8f09739
 # Workflow
 
 How work gets done in this repository: branches, the local Python environment, the checks, the commit rules and the milestone loop. AI assistants read [CLAUDE.md](../CLAUDE.md) first. For where Sprint 7 stands, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For what the project is, see [CONTEXT.md](CONTEXT.md).
@@ -174,11 +174,13 @@ Each Sprint 7 prerequisite fix is one milestone: the smallest first, and only fi
 | 5. Adversarial review | An independent review pass tries to break the change, looking for secrets or URLs in logs, new 500 paths, missed input shapes and contract drift. Fix every valid finding, with its own red-checked test. Before any push that touches auth, secrets or external calls, run `/security-review` ([CLAUDE.md](../CLAUDE.md), line 322). | `cedfe96` is a review finding on `c1b35d9` |
 | 6. Checkpoint | Commit the code, then commit the docs (no push). Report the evidence to the owner and stop. The next milestone starts on the owner's approval. | Docs commits "record Mn as done; promote Mn+1" |
 
+**Size rule** (project owner, 2026-10-16): if a milestone or a security fix grows past roughly twice its planned size, or needs a second rework round after review, stop and ask the owner before continuing ([DECISIONS #27](DECISIONS.md#27-size-rule-for-milestones-and-security-fixes)).
+
 ## Writing docs in a public repository
 
 The repository is public. Everything committed must be safe to publish:
 
-- Name roles, never people. No author names, usernames, or links that contain a username.
+- Name roles, never people. No author names, usernames, or links that contain a username. (Exception, by owner decision: the repository URL in CLAUDE.md and README.md stays.)
 - No quotes from internal messages, chats or voice notes.
 - No internal URLs, hostnames, credentials or secrets of any kind.
 - Describe security limitations in general terms only. The detailed gap list with severities is tracked privately. [SECURITY.md](SECURITY.md) is the public view.

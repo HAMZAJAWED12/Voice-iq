@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 1dbfac7
+Last verified: 2026-10-16, 8f09739
 # Security
 
 This page covers the security controls in the VoiceIQ service at the commit
@@ -17,13 +17,16 @@ File references are relative to the repository root.
 
 Report security problems privately.
 
-1. **Preferred:** use GitHub private vulnerability reporting for this
-   repository. If it is enabled, the repository's **Security** tab shows a
-   "Report a vulnerability" button. The repository owner has to confirm that
-   private reporting is enabled. This page does not assume that it is.
-2. **If that option is not offered:** open an ordinary issue that only asks
-   the maintainers for a private contact channel. Leave out every detail: no
-   affected route, no steps, no proof of concept, no logs, no keys.
+Whether GitHub private vulnerability reporting is enabled is the repository
+owner's choice. These steps work either way:
+
+1. **If the repository's Security tab shows a "Report a vulnerability"
+   button**, use it. That is GitHub private vulnerability reporting.
+2. **If it does not:** open an ordinary issue titled "Security contact
+   request" that only asks the maintainers for a private contact channel.
+   Leave out every detail: no affected route, no steps, no proof of
+   concept, no logs, no keys. If issues are turned off, use the contact
+   options on the repository owner's GitHub profile in the same way.
 3. **Never** post exploit details, proofs of concept or secrets in public
    issues, pull requests, discussions or commits.
 

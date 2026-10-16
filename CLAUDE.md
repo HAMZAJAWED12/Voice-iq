@@ -164,6 +164,16 @@ all done.
 >    `sessionId` with no rule for which wins. Test for *exactly* one
 >    dispatch, not "at least one".
 
+> **Owner working rules** (2026-10-16):
+>
+> - **Claim detector:** no new heuristics until Phase 3 — only crash,
+>   security or performance fixes. The known limits are listed in
+>   `DOCS/FEATURES.md` §4.3 (DECISIONS #26).
+> - **Size rule:** if a milestone or a security fix grows past roughly
+>   twice its planned size, or needs a second rework round after review,
+>   stop and ask the owner before continuing (DECISIONS #27).
+> - The repository URL in this file and `README.md` stays.
+
 ## Project knowledge set (DOCS/)
 
 Human-facing reference docs, each verified against code and git (first line
