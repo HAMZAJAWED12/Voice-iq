@@ -31,6 +31,7 @@ from app.agent_brain.api.agent_routes import router as agent_brain_router
 from app.insights.api import router as insight_router
 from app.insights.config.settings import get_settings
 from app.insights.repository.db import init_db
+from app.security.request_guard import RequestGuardMiddleware, guarded_limits
 from app.utils.job_io import JobIO
 
 load_dotenv()
@@ -72,6 +73,9 @@ app.include_router(insight_router, prefix="/v1")
 # pure-python (no ML deps), so the lightweight image serves it too — the
 # Java Action Layer can call this image directly.
 app.include_router(agent_brain_router)
+# Checks the API key and declared size of guarded POSTs before the body is
+# read, and counts the bytes that arrive (app/security/request_guard.py).
+app.add_middleware(RequestGuardMiddleware, limits=guarded_limits(settings))
 
 
 @app.get("/healthz", tags=["Ops"], summary="Liveness probe")
