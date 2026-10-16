@@ -23,6 +23,7 @@ within a short window — protects scarce free-tier quotas (Alpha Vantage).
 from __future__ import annotations
 
 import math
+import threading
 import time
 from dataclasses import dataclass
 
@@ -96,30 +97,42 @@ class _CacheEntry:
 
 
 class _TTLCache:
-    """Tiny per-process cache. Not thread-safe; FastAPI endpoints are async
-    and the engine is invoked synchronously per request — sufficient here.
+    """Tiny per-process cache, shared by every request in the process.
+
+    `POST /v1/fact-check` is a sync route, so FastAPI runs it in worker
+    threads, and `/v1/process-audio` runs its enrichment in a worker thread
+    as well. A lock guards the dictionary; it is held only for the dictionary
+    operations, never across a provider call.
     """
 
     def __init__(self, ttl_sec: float = 60.0, max_entries: int = 256) -> None:
         self._ttl = ttl_sec
         self._max = max_entries
         self._store: dict[tuple[str, str], _CacheEntry] = {}
+        self._lock = threading.Lock()
 
     def get(self, key: tuple[str, str]) -> Evidence | None | None:
-        entry = self._store.get(key)
-        if entry is None:
-            return None
-        if entry.expires_at < time.monotonic():
-            self._store.pop(key, None)
-            return None
-        return entry.evidence
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            if entry.expires_at < time.monotonic():
+                self._store.pop(key, None)
+                return None
+            return entry.evidence
 
     def set(self, key: tuple[str, str], evidence: Evidence | None) -> None:
-        if len(self._store) >= self._max:
-            # Drop the oldest entry. Cheap O(N) scan; acceptable at small N.
-            oldest_key = min(self._store, key=lambda k: self._store[k].expires_at)
-            self._store.pop(oldest_key, None)
-        self._store[key] = _CacheEntry(evidence=evidence, expires_at=time.monotonic() + self._ttl)
+        with self._lock:
+            now = time.monotonic()
+            if len(self._store) >= self._max:
+                # Drop expired entries, then the oldest one if still full.
+                # Cheap O(N) scans; acceptable at small N.
+                for expired in [k for k, e in self._store.items() if e.expires_at < now]:
+                    del self._store[expired]
+                if len(self._store) >= self._max:
+                    oldest_key = min(self._store, key=lambda k: self._store[k].expires_at)
+                    self._store.pop(oldest_key, None)
+            self._store[key] = _CacheEntry(evidence=evidence, expires_at=now + self._ttl)
 
 
 def _cache_key(claim: DetectedClaim) -> tuple[str, str]:
