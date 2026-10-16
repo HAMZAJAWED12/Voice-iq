@@ -1,4 +1,5 @@
 # app/routes/process_audio.py
+import json
 import time
 import uuid
 
@@ -87,6 +88,11 @@ def _auto_run_factcheck(request_id: str, result: dict) -> None:
             speaker_id="pipeline",
             transcript_text=transcript,
         )
+        payload = response.model_dump(mode="json")
+        # The audio response is rendered as strict JSON (no NaN/Infinity): check
+        # the fact-check part first, so it degrades to the failed stub below
+        # instead of failing the whole response — and is never persisted.
+        json.dumps(payload, allow_nan=False)
         # Persistence is best-effort - log and continue on failure.
         try:
             factcheck_repository.save_response(response)
@@ -96,7 +102,7 @@ def _auto_run_factcheck(request_id: str, result: dict) -> None:
                 request_id,
                 persist_exc,
             )
-        result["fact_checks_v2"] = response.model_dump(mode="json")
+        result["fact_checks_v2"] = payload
     except Exception as exc:
         logger.warning(
             "fact-check auto-run failed for request_id=%s (%s)",

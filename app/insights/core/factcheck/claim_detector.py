@@ -11,6 +11,7 @@ module only finds claim *spans* and tags them with a tentative `claim_type`.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from re import Pattern
@@ -107,6 +108,17 @@ _PATTERNS: list[_ClaimPattern] = [
 ]
 
 
+#: Most digits a claimed number may have, integer and fraction digits
+#: together. 15 is a float's guaranteed decimal precision (DBL_DIG): every
+#: number of up to 15 digits converts to a float and back unchanged, and the
+#: largest one (< 1e15) is far above any real price, rate or temperature —
+#: yet far below float overflow (~1.8e308), where a 309-digit run used to
+#: become an infinite claimed value that no response could serialize. A
+#: longer number is not a checkable claim: the claim is dropped, not
+#: truncated.
+MAX_VALUE_DIGITS: int = 15
+
+
 # --------------------------------------------------------------------------- #
 # Public API                                                                  #
 # --------------------------------------------------------------------------- #
@@ -150,16 +162,16 @@ class ClaimDetector:
             last_end = end
 
         claims: list[DetectedClaim] = []
-        for idx, (start, end, ctype, match) in enumerate(kept):
-            claims.append(
-                _build_detected_claim(
-                    claim_id=f"claim_{idx + 1}",
-                    text_snippet=scan_text[start:end],
-                    span=ClaimSpan(start=start, end=end),
-                    claim_type=ctype,
-                    match=match,
-                )
+        for start, end, ctype, match in kept:
+            claim = _build_detected_claim(
+                claim_id=f"claim_{len(claims) + 1}",
+                text_snippet=scan_text[start:end],
+                span=ClaimSpan(start=start, end=end),
+                claim_type=ctype,
+                match=match,
             )
+            if claim is not None:
+                claims.append(claim)
         return claims
 
 
@@ -169,11 +181,19 @@ class ClaimDetector:
 
 
 def _to_float(value: str) -> float | None:
-    """Parse '95,000.50' or '95000.50' safely. None on failure."""
+    """Parse '95,000.50' or '95000.50' safely.
+
+    None on failure, when the number has more than `MAX_VALUE_DIGITS` digits,
+    or when it is not finite.
+    """
+    cleaned = (value or "").replace(",", "")
+    if sum(ch.isdigit() for ch in cleaned) > MAX_VALUE_DIGITS:
+        return None
     try:
-        return float(value.replace(",", ""))
+        number = float(cleaned)
     except (TypeError, ValueError):
         return None
+    return number if math.isfinite(number) else None
 
 
 def _build_detected_claim(
@@ -183,8 +203,11 @@ def _build_detected_claim(
     span: ClaimSpan,
     claim_type: ClaimType,
     match: re.Match[str],
-) -> DetectedClaim:
+) -> DetectedClaim | None:
     """Convert a regex match into a `DetectedClaim`.
+
+    Returns None — the claim is dropped — when the match carries a number
+    that cannot be used (see `MAX_VALUE_DIGITS`).
 
     Subject extraction is *minimal* here — the classifier normalizes labels
     further (e.g. "btc" → "BTC"). This keeps the detector simple and the
@@ -192,6 +215,8 @@ def _build_detected_claim(
     """
     groups = match.groupdict()
     raw_value = _to_float(groups.get("value", "")) if "value" in groups else None
+    if "value" in groups and raw_value is None:
+        return None
     unit = groups.get("unit") or None
 
     subject: dict[str, str] = {}

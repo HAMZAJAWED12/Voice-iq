@@ -44,7 +44,13 @@ from app.insights.core.factcheck.source_clients import (
     StockClient,
 )
 from app.insights.core.factcheck.source_clients.base_client import BaseSourceClient
-from app.insights.models.factcheck_models import DetectedClaim, Evidence
+from app.insights.models.factcheck_models import (
+    ClaimSpan,
+    DetectedClaim,
+    Evidence,
+    FactCheckResponse,
+    FactCheckResult,
+)
 from app.insights.repository import (
     build_factcheck_repository_from_factory,
     get_factcheck_repository,
@@ -648,3 +654,161 @@ def test_forex_provider_error_reaches_both_endpoints_and_spares_other_claims(
         _assert_isolated(body, _FOREX)
         forex = next(r for r in body["fact_check_results"] if r["claim"]["claim_type"] == "CURRENCY_RATE")
         assert forex["reason"] == "exchangerate.host: provider requires an access key (missing_access_key)."
+
+
+# --------------------------------------------------------------------------- #
+# Over-long numbers in the transcript (ASR text included)                     #
+# --------------------------------------------------------------------------- #
+
+# One template per numeric claim pattern; {n} is the claimed number.
+_NUMERIC_TEMPLATES = {
+    "CRYPTO_PRICE": "BTC is at {n}.",
+    "STOCK_PRICE": "AAPL is at {n}.",
+    "CURRENCY_RATE": "USD to PKR is {n}.",
+    "WEATHER": "The temperature in Karachi is {n} C.",
+    "COMMODITY_PRICE": "Gold price {n}.",
+}
+
+_LONG_TRANSCRIPT = "BTC is at " + "9" * 400 + ". The temperature in Karachi is 32 C."
+
+
+def _detect(text: str) -> list[DetectedClaim]:
+    from app.insights.core.factcheck.claim_detector import ClaimDetector
+
+    return ClaimDetector.detect(text)
+
+
+@pytest.mark.parametrize("claim_type", list(_NUMERIC_TEMPLATES))
+@pytest.mark.parametrize(
+    "number",
+    ["9" * 15, "1.00000000000005"],
+    ids=["15-integer-digits", "15-digits-with-fraction"],
+)
+def test_detector_keeps_numbers_up_to_the_digit_bound(claim_type, number):
+    claims = _detect(_NUMERIC_TEMPLATES[claim_type].format(n=number))
+
+    assert [c.claim_type for c in claims] == [claim_type]
+    assert claims[0].raw_value == float(number)
+
+
+@pytest.mark.parametrize("claim_type", list(_NUMERIC_TEMPLATES))
+@pytest.mark.parametrize(
+    "number",
+    ["9" * 16, "1.000000000000005", "9" * 309, "9" * 1000],
+    ids=["16-digits", "16-digits-with-fraction", "309-digits", "1000-digits"],
+)
+def test_detector_drops_a_claim_whose_number_is_too_long(claim_type, number):
+    assert _detect(_NUMERIC_TEMPLATES[claim_type].format(n=number)) == []
+
+
+def test_dropping_an_over_long_claim_keeps_the_others_and_their_ids():
+    claims = _detect(_LONG_TRANSCRIPT)
+
+    assert [(c.claim_id, c.claim_type, c.raw_value) for c in claims] == [("claim_1", "WEATHER", 32.0)]
+
+
+def test_fact_check_api_drops_the_over_long_claim(factcheck_app):
+    app, client = factcheck_app
+    app.dependency_overrides[get_factcheck_engine] = lambda: _engine()
+
+    response = client.post(
+        "/v1/fact-check",
+        json={"conversation_id": "conv-long", "speaker_id": "spk-1", "transcript_text": _LONG_TRANSCRIPT},
+    )
+
+    assert response.status_code == 200, response.text[:300]
+    body = _strict_json(response.text)
+    assert set(body) == {"conversation_id", "speaker_id", "fact_check_results", "stats"}
+    assert _verdicts(body["fact_check_results"]) == {"WEATHER": "TRUE"}
+    assert body["stats"] == {"claims_detected": 1, "verified": 1, "skipped": 0}
+
+
+def _pipeline_returning(transcript: str):
+    def fake_run(self, *, job_id, **_kwargs) -> dict:
+        return {
+            "request_id": job_id,
+            "transcript": transcript,
+            "fact_checks": [],
+            "warnings": [],
+            "pipeline_meta": {"status": "ok", "timings_ms": {}, "skipped_steps": []},
+        }
+
+    return fake_run
+
+
+def test_process_audio_drops_the_over_long_claim_from_asr_text(process_audio_client, monkeypatch):
+    # The stubbed pipeline plays the part of Whisper: its transcript reaches
+    # the fact-check unmodified, as real ASR text does.
+    monkeypatch.setattr(VoiceIQOrchestrator, "run", _pipeline_returning(_LONG_TRANSCRIPT))
+    monkeypatch.setattr(process_audio, "get_factcheck_engine", lambda: _engine())
+
+    response = process_audio_client.post(
+        "/v1/process-audio",
+        params={"fact_check": "true"},
+        files={"file": ("call.wav", _WAV_BYTES, "audio/wav")},
+    )
+
+    assert response.status_code == 200, response.text[:300]
+    v2 = _strict_json(response.text)["fact_checks_v2"]
+    assert v2.get("status") != "failed", v2
+    assert _verdicts(v2["fact_check_results"]) == {"WEATHER": "TRUE"}
+
+
+class _NonFiniteEngine:
+    """An engine whose response cannot be rendered as standard JSON."""
+
+    def run(self, *, conversation_id: str, speaker_id: str, transcript_text: str) -> FactCheckResponse:
+        claim = DetectedClaim(
+            claim_id="claim_1",
+            text="x",
+            span=ClaimSpan(start=0, end=1),
+            claim_type="CRYPTO_PRICE",
+            raw_value=float("inf"),
+        )
+        return FactCheckResponse(
+            conversation_id=conversation_id,
+            speaker_id=speaker_id,
+            fact_check_results=[FactCheckResult(claim=claim, verdict="SOURCE_UNAVAILABLE", reason="r")],
+        )
+
+
+def test_process_audio_never_500s_on_an_unrenderable_fact_check(process_audio_client, monkeypatch):
+    # Defence in depth: whatever slips past the detector and the engine, the
+    # fact-check payload is checked as strict JSON before it joins the
+    # audio response, and degrades to the failed stub.
+    monkeypatch.setattr(process_audio, "get_factcheck_engine", lambda: _NonFiniteEngine())
+
+    response = process_audio_client.post(
+        "/v1/process-audio",
+        params={"fact_check": "true"},
+        files={"file": ("call.wav", _WAV_BYTES, "audio/wav")},
+    )
+
+    assert response.status_code == 200, response.text[:300]
+    body = _strict_json(response.text)
+    assert body["fact_checks_v2"]["status"] == "failed"
+    assert body["transcript"] == _TRANSCRIPT  # the rest of the audio response is intact
+
+
+def test_process_audio_never_saves_an_unrenderable_fact_check(process_audio_client, monkeypatch):
+    # The strict-JSON check runs before persistence: a payload the audio
+    # response could not render is never stored either (a stored inf would
+    # later break GET /v1/fact-check/{conversation_id}).
+    saved: list[FactCheckResponse] = []
+
+    class _RecordingRepository:
+        def save_response(self, response: FactCheckResponse) -> None:
+            saved.append(response)
+
+    monkeypatch.setattr(process_audio, "factcheck_repository", _RecordingRepository())
+    monkeypatch.setattr(process_audio, "get_factcheck_engine", lambda: _NonFiniteEngine())
+
+    response = process_audio_client.post(
+        "/v1/process-audio",
+        params={"fact_check": "true"},
+        files={"file": ("call.wav", _WAV_BYTES, "audio/wav")},
+    )
+
+    assert response.status_code == 200
+    assert _strict_json(response.text)["fact_checks_v2"]["status"] == "failed"
+    assert saved == []
