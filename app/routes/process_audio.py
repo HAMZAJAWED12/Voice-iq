@@ -1,8 +1,11 @@
 # app/routes/process_audio.py
+import asyncio
 import json
 import time
 import uuid
+import weakref
 
+import anyio
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 # Sprint-5 fact-check engine. Imported here so the audio pipeline can
@@ -46,6 +49,23 @@ def _maybe_purge(io: JobIO) -> None:
         io.purge_expired(_JOB_RETENTION_HOURS)
     except Exception:  # pragma: no cover - retention must never break a request
         logger.exception("opportunistic job purge failed")
+
+
+# One pipeline run at a time per event loop (one loop per worker process),
+# as when the run blocked the loop, but in a worker thread so the loop keeps
+# serving other requests. A further upload waits for the slot. Keyed by loop
+# because a limiter belongs to the loop it was created on.
+_PIPELINE_SLOTS: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, anyio.CapacityLimiter]" = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _pipeline_slot() -> anyio.CapacityLimiter:
+    loop = asyncio.get_running_loop()
+    slot = _PIPELINE_SLOTS.get(loop)
+    if slot is None:
+        slot = _PIPELINE_SLOTS[loop] = anyio.CapacityLimiter(1)
+    return slot
 
 
 # Every route on this router requires a valid X-API-Key header (see
@@ -140,7 +160,7 @@ async def process_audio(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     io = JobIO()
-    _maybe_purge(io)
+    await anyio.to_thread.run_sync(_maybe_purge, io)
     job = io.init_job(request_id)
 
     input_path = io.p(job, f"input/original{ext}")
@@ -197,6 +217,16 @@ async def process_audio(
             detail=(f"Upload exceeded the limit of {MAX_UPLOAD_BYTES} bytes " "mid-stream."),
         )
 
+    return await anyio.to_thread.run_sync(
+        _run_pipeline, request_id, io, expected_speakers, fact_check, limiter=_pipeline_slot()
+    )
+
+
+def _run_pipeline(request_id: str, io: JobIO, expected_speakers: int | None, fact_check: bool | None) -> dict:
+    """The blocking part of a request: the pipeline, then fact-check enrichment.
+
+    Runs in a worker thread, one at a time per worker (`_pipeline_slot`).
+    """
     orch = VoiceIQOrchestrator(job_io=io)
     result = orch.run(
         job_id=request_id,
