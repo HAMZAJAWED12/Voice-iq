@@ -120,18 +120,20 @@ def _auto_run_factcheck(request_id: str, result: dict) -> None:
             logger.warning(
                 "fact-check persistence failed for request_id=%s (%s)",
                 request_id,
-                persist_exc,
+                type(persist_exc).__name__,
             )
         result["fact_checks_v2"] = payload
     except Exception as exc:
+        # The exception text can carry provider or input details: log the
+        # class only and give the caller a fixed reason.
         logger.warning(
             "fact-check auto-run failed for request_id=%s (%s)",
             request_id,
-            exc,
+            type(exc).__name__,
         )
         result["fact_checks_v2"] = {
             "status": "failed",
-            "reason": str(exc),
+            "reason": "fact-check enrichment failed",
         }
 
 

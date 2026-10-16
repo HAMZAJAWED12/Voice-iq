@@ -24,6 +24,7 @@ from app.insights.models.api_models import (
 )
 from app.insights.models.input_models import SessionInput
 from app.insights.models.insight_models import InsightBundle, InsightScores
+from app.utils.logger import logger
 
 
 class InsightService:
@@ -84,11 +85,13 @@ class InsightService:
             )
 
         except Exception as exc:
+            # The exception text can carry paths or input values: log the class only.
+            logger.warning("insight pipeline failed for session_id=%s (%s)", session.session_id, type(exc).__name__)
             validation.valid = False
             validation.errors.append(
                 ValidationIssue(
                     code="pipeline_execution_error",
-                    message=f"Insight pipeline failed: {exc}",
+                    message="Insight pipeline failed.",
                     field="pipeline",
                     severity="warning",
                 )
