@@ -30,7 +30,8 @@ from limits.storage import MemoryStorage
 from limits.strategies import MovingWindowRateLimiter
 from slowapi.util import get_remote_address
 
-from app.insights.config.settings import get_settings
+from app.insights.config.settings import InsightSettings, get_settings
+from app.security.api_key import API_KEY_HEADER, api_key_error
 
 # Counters are kept in this process's memory. A deployment that runs more
 # than one worker or replica should use shared storage (for example the
@@ -39,10 +40,14 @@ _storage = MemoryStorage()
 _strategy = MovingWindowRateLimiter(_storage)
 
 
-def rate_limit_key(request: Request) -> str:
-    """Bucket key: the API key if presented, else the client IP."""
-    presented = request.headers.get("X-API-Key")
-    if presented:
+def rate_limit_key(request: Request, settings: InsightSettings) -> str:
+    """Bucket key: the accepted API key, else the client IP.
+
+    A header counts only when keys are configured and it is one of them, so
+    while authentication is disabled a client cannot pick its own bucket.
+    """
+    presented = request.headers.get(API_KEY_HEADER)
+    if presented and settings.api_keys and api_key_error(presented, settings) is None:
         return f"key:{presented}"
     return f"ip:{get_remote_address(request)}"
 
@@ -57,7 +62,7 @@ def _enforce(request: Request, limit_str: str) -> None:
     if not settings.rate_limit_enabled:
         return
     item: RateLimitItem = parse(limit_str)
-    key = rate_limit_key(request)
+    key = rate_limit_key(request, settings)
     if not _strategy.hit(item, key):
         # Over the limit. Compute Retry-After from the window reset time.
         reset_at, _remaining = _strategy.get_window_stats(item, key)

@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from app.insights.config.settings import get_settings
+from app.insights.config.settings import InsightSettings, get_settings
 from app.security import rate_limit
 from app.security.rate_limit import rate_limit_key
 
@@ -24,12 +24,51 @@ def _req(headers: dict[str, str] | None = None, host: str = "1.2.3.4") -> Simple
     return SimpleNamespace(headers=headers or {}, client=SimpleNamespace(host=host))
 
 
+def _settings(**overrides) -> InsightSettings:
+    return InsightSettings(_env_file=None, **overrides)
+
+
 def test_key_prefers_api_key() -> None:
-    assert rate_limit_key(_req({"X-API-Key": "abc123"})) == "key:abc123"
+    assert rate_limit_key(_req({"X-API-Key": "abc123"}), _settings(api_keys=["abc123"])) == "key:abc123"
 
 
 def test_key_falls_back_to_client_ip() -> None:
-    assert rate_limit_key(_req({}, host="9.9.9.9")) == "ip:9.9.9.9"
+    assert rate_limit_key(_req({}, host="9.9.9.9"), _settings(api_keys=["abc123"])) == "ip:9.9.9.9"
+
+
+def test_a_header_is_not_a_bucket_while_auth_is_disabled() -> None:
+    request = _req({"X-API-Key": "anything"}, host="9.9.9.9")
+
+    assert rate_limit_key(request, _settings(api_keys=[])) == "ip:9.9.9.9"
+
+
+def test_an_unknown_key_is_not_a_bucket() -> None:
+    request = _req({"X-API-Key": "not-configured"}, host="9.9.9.9")
+
+    assert rate_limit_key(request, _settings(api_keys=["abc123"])) == "ip:9.9.9.9"
+
+
+def test_rotating_the_header_does_not_escape_the_limit_while_auth_is_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VOICEIQ_API_KEYS", "")
+    monkeypatch.setenv("VOICEIQ_ENVIRONMENT", "staging")
+    monkeypatch.setenv("VOICEIQ_RATE_LIMIT_ENABLED", "true")
+    monkeypatch.setenv("VOICEIQ_RATE_LIMIT_FACTCHECK", "2/minute")
+    get_settings.cache_clear()
+    rate_limit.reset()
+
+    try:
+        from app.insight_main import app
+
+        with TestClient(app) as client:
+            codes = [
+                client.post("/v1/fact-check", json=_BODY, headers={"X-API-Key": f"rotating-{i}"}).status_code
+                for i in range(3)
+            ]
+
+        assert codes == [200, 200, 429]
+    finally:
+        rate_limit.reset()
+        get_settings.cache_clear()
 
 
 def test_factcheck_route_returns_429_over_limit(monkeypatch: pytest.MonkeyPatch) -> None:
