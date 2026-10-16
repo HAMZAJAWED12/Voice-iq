@@ -180,6 +180,9 @@ class FactCheckEngine:
         results: list[FactCheckResult] = []
         verified_count = 0
         skipped_count = 0
+        # Subjects whose fetch failed in this run, with the reason: a repeated
+        # claim about the same subject is not fetched again in the same run.
+        failed: dict[tuple[str, str], str | None] = {}
 
         for claim in claims:
             client = self._router.client_for(claim.claim_type)
@@ -197,7 +200,13 @@ class FactCheckEngine:
                 skipped_count += 1
                 continue
 
-            evidence, failure_reason = self._fetch_usable(claim, client)
+            key = _cache_key(claim)
+            if key in failed:
+                evidence, failure_reason = None, failed[key]
+            else:
+                evidence, failure_reason = self._fetch_usable(claim, client)
+                if evidence is None:
+                    failed[key] = failure_reason
             outcome = FactCheckComparator.compare(claim, evidence)
             if outcome.diff_pct is not None and not math.isfinite(outcome.diff_pct):
                 # A finite but degenerate value (e.g. 5e-324) can overflow the

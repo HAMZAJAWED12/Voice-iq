@@ -16,6 +16,7 @@ Design contract:
 
 from __future__ import annotations
 
+import json
 import math
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar
@@ -34,6 +35,28 @@ _DEFAULT_UA: str = "VoiceIQ-FactCheck/1.0 " "(+https://github.com/HAMZAJAWED12/V
 # json.loads hooks: a provider reply carrying a non-finite number (the NaN /
 # Infinity tokens Python's json accepts, or a float literal like 1e999 that
 # overflows to inf) is rejected as invalid JSON instead of reaching a verdict.
+#: Most decoded bytes read from one provider reply. Real replies are a few
+#: kilobytes; a reply that grows past this is not read further (counted
+#: after decompression, so a small compressed body cannot expand past it).
+MAX_REPLY_BYTES: int = 1024 * 1024
+
+
+class _ReplyTooLarge(Exception):
+    pass
+
+
+def _read_capped(response: httpx.Response, limit: int) -> bytes:
+    """The decoded body of a streamed `response`; `_ReplyTooLarge` past `limit` bytes."""
+    chunks: list[bytes] = []
+    size = 0
+    for chunk in response.iter_bytes():
+        size += len(chunk)
+        if size > limit:
+            raise _ReplyTooLarge
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _reject_non_finite_constant(token: str) -> float:
     raise ValueError(f"non-finite JSON constant: {token}")
 
@@ -116,8 +139,9 @@ class BaseSourceClient(ABC):
         Performs at most ``retries + 1`` attempts. Retries are *only*
         triggered for transient failures (timeout, connection error, 5xx).
         4xx responses are considered terminal and not retried. A reply that
-        cannot be decoded, is not valid JSON, contains a non-finite number,
-        or is not a JSON object also yields `None` (no retry).
+        cannot be decoded, is larger than `MAX_REPLY_BYTES`, is not valid
+        JSON, contains a non-finite number, or is not a JSON object also
+        yields `None` (no retry).
         """
         attempts = max(1, retries + 1)
         client_owned_here = self._client is None
@@ -128,7 +152,12 @@ class BaseSourceClient(ABC):
         try:
             for attempt in range(attempts):
                 try:
-                    response = client.get(url, params=params)
+                    with client.stream("GET", url, params=params) as response:
+                        status = response.status_code
+                        body = _read_capped(response, MAX_REPLY_BYTES) if status < 400 else b""
+                except _ReplyTooLarge:
+                    logger.warning("%s: reply larger than %d bytes", self.name, MAX_REPLY_BYTES)
+                    return None
                 except (httpx.TimeoutException, httpx.TransportError) as exc:
                     logger.warning(
                         "%s: transport error on attempt %d/%d (%s)",
@@ -145,7 +174,6 @@ class BaseSourceClient(ABC):
                     logger.warning("%s: unusable response (%s)", self.name, type(exc).__name__)
                     return None
 
-                status = response.status_code
                 if 500 <= status < 600 and attempt < attempts - 1:
                     logger.warning(
                         "%s: server error %d on attempt %d/%d, retrying",
@@ -159,7 +187,8 @@ class BaseSourceClient(ABC):
                     logger.warning("%s: HTTP %d (terminal)", self.name, status)
                     return None
                 try:
-                    payload = response.json(
+                    payload = json.loads(
+                        body,
                         parse_constant=_reject_non_finite_constant,
                         parse_float=_finite_json_float,
                     )
