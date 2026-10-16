@@ -39,6 +39,7 @@ from app.insights.core.factcheck.source_clients import (
 )
 from app.insights.core.factcheck.source_clients.base_client import (
     BaseSourceClient,
+    SourceUnavailable,
 )
 from app.insights.models.factcheck_models import (
     ClaimType,
@@ -235,6 +236,8 @@ class FactCheckEngine:
         """
         try:
             evidence = self._fetch_with_cache(claim, client)
+        except SourceUnavailable as exc:  # the client says why; it has logged the details
+            return None, exc.reason
         except Exception as exc:  # noqa: BLE001 - one bad reply must not sink the run
             logger.warning("fact-check: %s failed for %s (%s)", client.name, claim.claim_id, type(exc).__name__)
             return None, f"Source client failed ({type(exc).__name__}); no evidence used."

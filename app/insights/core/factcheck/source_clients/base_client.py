@@ -6,7 +6,10 @@ Design contract:
   * Any failure mode (timeout, HTTP non-2xx, missing field, missing key,
     parse error) MUST be caught locally and converted to `None`.
   * No exceptions propagate out of a client - the engine treats `None` as
-    `SOURCE_UNAVAILABLE` and never crashes the request.
+    `SOURCE_UNAVAILABLE` and never crashes the request. The one allowed
+    exception is `SourceUnavailable`, raised to say *why* there is no
+    evidence (e.g. the provider demands an access key); the engine maps it
+    to `SOURCE_UNAVAILABLE` with that reason.
   * Each client owns a short, single-attempt retry policy. Persistent
     failures degrade gracefully.
 """
@@ -42,6 +45,18 @@ def _finite_json_float(token: str) -> float:
     return value
 
 
+class SourceUnavailable(Exception):
+    """A source could not answer, for a reason worth showing the caller.
+
+    ``reason`` becomes the fact-check result's reason. Keep it short, and
+    never put URLs, keys, response bodies or claim text in it.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
 class BaseSourceClient(ABC):
     """Common scaffolding shared by every source client."""
 
@@ -66,8 +81,9 @@ class BaseSourceClient(ABC):
     def fetch(self, claim: DetectedClaim) -> Evidence | None:
         """Resolve `claim` against the upstream source.
 
-        Concrete implementations MUST NOT raise. Returning ``None``
-        signals SOURCE_UNAVAILABLE to the engine.
+        Concrete implementations MUST NOT raise, except
+        ``SourceUnavailable`` to give the reason. Returning ``None`` signals
+        SOURCE_UNAVAILABLE to the engine.
         """
 
     # ------------------------------------------------------------------ #

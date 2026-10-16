@@ -7,7 +7,8 @@ a body that cannot be decoded — must end as the existing v1 verdict
 ``SOURCE_UNAVAILABLE`` for that claim only:
 
   * every source client returns ``None`` (the client contract) instead of
-    raising or handing back non-finite evidence;
+    raising or handing back non-finite evidence — or raises the one allowed
+    ``SourceUnavailable`` to name a provider-declared error;
   * the engine isolates each claim: the other claims in the run complete;
   * ``POST /v1/fact-check`` answers 200 with strict JSON, never 500;
   * ``/v1/process-audio`` answers 200 with ``fact_checks_v2`` degraded at the
@@ -20,6 +21,7 @@ Every request goes through ``httpx.MockTransport``; nothing leaves the host.
 from __future__ import annotations
 
 import json
+import logging
 import math
 from collections.abc import Iterator
 from pathlib import Path
@@ -500,3 +502,149 @@ def test_odd_metadata_field_does_not_break_either_endpoint(host, factcheck_app, 
     v2 = _strict_json(audio.text)["fact_checks_v2"]
     assert v2.get("status") != "failed", v2
     assert set(_verdicts(v2["fact_check_results"]).values()) == {"TRUE"}
+
+
+# --------------------------------------------------------------------------- #
+# Provider error bodies (exchangerate.host)                                   #
+# --------------------------------------------------------------------------- #
+
+# What exchangerate.host returns for a keyless call (owner-verified
+# 2026-10-11): HTTP 200, success false, error code 101 / missing_access_key.
+_INFO_TEXT = "You have not supplied an API Access Key. [Required format: access_key=YOUR_ACCESS_KEY]"
+
+# (id, reply body, reason the result must carry, logged code, logged type)
+_PROVIDER_ERRORS = [
+    (
+        "missing-key",
+        {"success": False, "error": {"code": 101, "type": "missing_access_key", "info": _INFO_TEXT}},
+        "provider requires an access key (missing_access_key)",
+        "101",
+        "missing_access_key",
+    ),
+    (
+        "invalid-key",
+        {"success": False, "error": {"code": 101, "type": "invalid_access_key", "info": _INFO_TEXT}},
+        "provider rejected the access key (invalid_access_key)",
+        "101",
+        "invalid_access_key",
+    ),
+    (
+        "usage-limit",
+        {"success": False, "error": {"code": 104, "type": "usage_limit_reached"}},
+        "provider usage limit reached (usage_limit_reached)",
+        "104",
+        "usage_limit_reached",
+    ),
+    (
+        "plan-restricted",
+        {"success": False, "error": {"code": 105, "type": "base_currency_access_restricted"}},
+        "provider plan does not allow this request (base_currency_access_restricted)",
+        "105",
+        "base_currency_access_restricted",
+    ),
+    (
+        "unknown-type",
+        {"success": False, "error": {"code": 999, "type": "something_new"}},
+        "provider returned an error (something_new)",
+        "999",
+        "something_new",
+    ),
+    ("success-false-only", {"success": False}, "provider returned an error (unknown)", "None", "unknown"),
+    (
+        "huge-code",
+        {"success": False, "error": {"code": int("9" * 4000), "type": "missing_access_key"}},
+        "provider requires an access key (missing_access_key)",
+        "None",
+        "missing_access_key",
+    ),
+    (
+        "error-object-only",
+        {"error": {"code": 101, "type": "missing_access_key"}},
+        "provider requires an access key (missing_access_key)",
+        "101",
+        "missing_access_key",
+    ),
+    (
+        "hostile-type",
+        {
+            "success": False,
+            "error": {"code": "x", "type": "https://evil.example/?access_key=SECRET", "info": _INFO_TEXT},
+        },
+        "provider returned an error (unknown)",
+        "None",
+        "unknown",
+    ),
+]
+
+# Nothing from the reply body, the request URL or the claim may reach a log.
+_MUST_NOT_LOG = ("access_key=", "evil.example", "SECRET", _INFO_TEXT, "api.exchangerate.host", "PKR")
+
+
+def _assert_logged_safely(records: list[logging.LogRecord]) -> None:
+    for record in records:
+        text = record.getMessage()
+        for forbidden in _MUST_NOT_LOG:
+            assert forbidden not in text, f"{forbidden!r} logged by {record.name}: {text!r}"
+
+
+@pytest.mark.parametrize(
+    ("body", "reason", "code", "error_type"),
+    [case[1:] for case in _PROVIDER_ERRORS],
+    ids=[case[0] for case in _PROVIDER_ERRORS],
+)
+def test_forex_provider_error_is_named_and_logged_safely(body, reason, code, error_type, caplog):
+    caplog.set_level(logging.DEBUG)
+
+    response = _engine(_FOREX, _Reply(json.dumps(body).encode())).run(
+        conversation_id="c1", speaker_id="s1", transcript_text="USD to PKR is 280."
+    )
+
+    (result,) = response.fact_check_results
+    assert result.verdict == "SOURCE_UNAVAILABLE"
+    assert result.evidence is None
+    assert result.reason == f"exchangerate.host: {reason}."
+    warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    assert any(f"code={code}" in m and f"type={error_type}" in m for m in warnings), warnings
+    _assert_logged_safely(caplog.records)
+
+
+def test_forex_reply_without_rates_is_named_and_logged_safely(caplog):
+    # The keyed /live shape (quotes.USDxxx) is not what the client reads.
+    body = {"success": True, "source": "USD", "quotes": {"USDPKR": 280.0}}
+    caplog.set_level(logging.DEBUG)
+
+    response = _engine(_FOREX, _Reply(json.dumps(body).encode())).run(
+        conversation_id="c1", speaker_id="s1", transcript_text="USD to PKR is 280."
+    )
+
+    (result,) = response.fact_check_results
+    assert result.verdict == "SOURCE_UNAVAILABLE"
+    assert result.reason == "exchangerate.host: provider reply had no rates."
+    assert any("no rates" in r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING)
+    _assert_logged_safely(caplog.records)
+
+
+def test_forex_provider_error_reaches_both_endpoints_and_spares_other_claims(
+    factcheck_app, process_audio_client, monkeypatch
+):
+    missing_key = _Reply(json.dumps(_PROVIDER_ERRORS[0][1]).encode())
+    app, client = factcheck_app
+    app.dependency_overrides[get_factcheck_engine] = lambda: _engine(_FOREX, missing_key)
+    monkeypatch.setattr(process_audio, "get_factcheck_engine", lambda: _engine(_FOREX, missing_key))
+
+    api = client.post(
+        "/v1/fact-check",
+        json={"conversation_id": "conv-forex", "speaker_id": "spk-1", "transcript_text": _TRANSCRIPT},
+    )
+    audio = process_audio_client.post(
+        "/v1/process-audio",
+        params={"fact_check": "true"},
+        files={"file": ("call.wav", _WAV_BYTES, "audio/wav")},
+    )
+
+    assert api.status_code == 200, api.text[:500]
+    assert audio.status_code == 200, audio.text[:500]
+    for body in (_strict_json(api.text), _strict_json(audio.text)["fact_checks_v2"]):
+        _assert_isolated(body, _FOREX)
+        forex = next(r for r in body["fact_check_results"] if r["claim"]["claim_type"] == "CURRENCY_RATE")
+        assert forex["reason"] == "exchangerate.host: provider requires an access key (missing_access_key)."
