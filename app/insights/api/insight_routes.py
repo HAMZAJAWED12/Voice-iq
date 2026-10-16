@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.insights.api.finite_json import FiniteJSONRoute
 from app.insights.config.settings import get_settings
 from app.insights.models.api_models import (
     InsightGenerateResponse,
@@ -29,10 +30,12 @@ _enforce_session_size = enforce_content_length(_max_payload_bytes)
 
 # Every route on this router requires a valid X-API-Key header (see
 # app.security.api_key.verify_api_key for the dev/prod behaviour matrix)
-# and POST bodies are bounded by api_max_session_payload_kb.
+# and POST bodies are bounded by api_max_session_payload_kb. JSON bodies
+# with NaN, Infinity or an out-of-range number are refused while parsing.
 router = APIRouter(
     prefix="/insights",
     tags=["Insights"],
+    route_class=FiniteJSONRoute,
     dependencies=[
         Depends(verify_api_key),
         Depends(_enforce_session_size),

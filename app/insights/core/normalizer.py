@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -202,7 +203,7 @@ class InsightNormalizer:
     def _normalize_non_negative_float(value: Any, default: float = 0.0) -> float:
         try:
             value_f = float(value)
-            return value_f if value_f >= 0.0 else default
+            return value_f if math.isfinite(value_f) and value_f >= 0.0 else default
         except (TypeError, ValueError):
             return default
 
@@ -210,7 +211,7 @@ class InsightNormalizer:
     def _normalize_optional_non_negative_float(cls, value: Any, fallback: float) -> float:
         try:
             value_f = float(value)
-            return value_f if value_f >= 0.0 else fallback
+            return value_f if math.isfinite(value_f) and value_f >= 0.0 else fallback
         except (TypeError, ValueError):
             return fallback
 

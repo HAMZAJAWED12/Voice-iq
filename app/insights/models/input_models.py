@@ -2,28 +2,39 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 SentimentLabel = Literal["positive", "neutral", "negative"]
 
 
+# Caller-sent numbers must be finite: JSON parsing accepts NaN, Infinity and
+# 1e999, and a non-finite value cannot be rendered in a response.
+_FINITE_ONLY = ConfigDict(allow_inf_nan=False)
+
+
 class SentimentInput(BaseModel):
+    model_config = _FINITE_ONLY
+
     label: SentimentLabel | None = None
     score: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class EmotionInput(BaseModel):
+    model_config = _FINITE_ONLY
+
     values: dict[str, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_emotion_values(self):
         for k, v in self.values.items():
-            if v < 0.0 or v > 1.0:
+            if not 0.0 <= v <= 1.0:
                 raise ValueError(f"Emotion score for '{k}' must be between 0 and 1.")
         return self
 
 
 class UtteranceInput(BaseModel):
+    model_config = _FINITE_ONLY
+
     id: str
     speaker: str
     start: float = Field(ge=0.0)
@@ -65,6 +76,7 @@ class SessionInput(BaseModel):
     conversation_stats: dict[str, dict] = Field(default_factory=dict)
 
     model_config = {
+        "allow_inf_nan": False,
         "json_schema_extra": {
             "examples": [
                 {
@@ -93,7 +105,7 @@ class SessionInput(BaseModel):
                     ],
                 }
             ]
-        }
+        },
     }
 
     @model_validator(mode="after")
