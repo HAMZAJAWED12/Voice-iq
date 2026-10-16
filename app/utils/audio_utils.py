@@ -1,5 +1,6 @@
 # app/utils/audio_utils.py
 import subprocess
+from pathlib import Path
 
 from app.insights.config.settings import get_settings
 from app.utils.logger import logger
@@ -61,6 +62,7 @@ class AudioNormalizer:
 
         cmd = [
             "ffmpeg",
+            "-nostdin",  # never wait on standard input
             "-y",
             "-i",
             in_path,
@@ -80,6 +82,7 @@ class AudioNormalizer:
             )
             logger.info(f"Audio normalized to WAV: {out_path}")
         except subprocess.TimeoutExpired as exc:
+            Path(out_path).unlink(missing_ok=True)  # no partial WAV left behind
             logger.warning(
                 "ffmpeg timed out after %.1fs while normalising %s",
                 timeout,
@@ -87,6 +90,7 @@ class AudioNormalizer:
             )
             raise AudioNormalizationTimeout(f"ffmpeg exceeded the {timeout:.1f}s timeout for {in_path}") from exc
         except subprocess.CalledProcessError as exc:
+            Path(out_path).unlink(missing_ok=True)  # no partial WAV left behind
             logger.exception("ffmpeg failed during audio normalization")
             raise AudioNormalizationError("Audio normalization failed") from exc
 
