@@ -1,11 +1,11 @@
-Last verified: 2026-10-16, 793e02e
+Last verified: 2026-10-16, 1dbfac7
 # Workflow
 
 How work gets done in this repository: branches, the local Python environment, the checks, the commit rules and the milestone loop. AI assistants read [CLAUDE.md](../CLAUDE.md) first. For where Sprint 7 stands, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For what the project is, see [CONTEXT.md](CONTEXT.md).
 
 ## Before every commit
 
-Run these from the repository root. All of them passed at `793e02e` on 2026-10-16.
+Run these from the repository root. All of them passed at `1dbfac7` on 2026-10-16.
 
 ```powershell
 .venv\Scripts\python.exe -m pytest -v app/insights/tests/ app/agent_brain/tests/
@@ -22,7 +22,7 @@ Then stage files by explicit path and commit. The pre-commit hooks run on their 
 | Rule | Detail |
 |---|---|
 | Base branch | `main`. |
-| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/doc-sync`, cut from `main` at `8fd3972`. It holds the 2026-10-11 documentation sync and milestones M1 to M4: 21 commits beyond `main` (`git rev-list --count main..HEAD`). |
+| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/doc-sync`, cut from `main` at `8fd3972`. It holds the 2026-10-11 documentation sync, milestones M1 to M5 and the project knowledge set: 24 commits beyond `main` (`git rev-list --count main..HEAD`). |
 | `main` | Never commit to `main` directly. |
 | Push | Never push without the owner's go-ahead. `sprint7/doc-sync` has no upstream yet: `git rev-parse --abbrev-ref sprint7/doc-sync@{upstream}` fails. |
 | CI trigger | CI runs on a push to `main` and on a pull request into `main`, nothing else ([.github/workflows/test.yml](../.github/workflows/test.yml), lines 3-7). Until a pull request is open, nothing checks a branch except the local checks. |
@@ -77,15 +77,15 @@ Locally it passes with or without `PYTHONPATH` set.
 
 ### Current count
 
-On the light stack, at `793e02e`: **1078 passed, 1 skipped**, measured on 2026-10-16 on `.venv` (CPython 3.12.10).
+On the light stack, at `1dbfac7`: **1501 passed, 1 skipped**, measured on 2026-10-16 on `.venv` (CPython 3.12.10).
 
-The skip is `app/insights/tests/test_model_load_concurrency.py`. It holds 3 tests and calls `pytest.importorskip` on torch, transformers, soundfile, huggingface_hub and pyannote.audio at module level (lines 25-29). The full reconciliation (1081 on the heavy stack, derived rather than measured) lives in [CLAUDE.md](../CLAUDE.md), section *One test lane*. Update it there, not here.
+The skip is `app/insights/tests/test_model_load_concurrency.py`. It holds 3 tests and calls `pytest.importorskip` on torch, transformers, soundfile, huggingface_hub and pyannote.audio at module level (lines 25-29). The full reconciliation (1504 on the heavy stack, derived rather than measured) lives in [CLAUDE.md](../CLAUDE.md), section *One test lane*. Update it there, not here.
 
 ### Why a bare `pytest` at the root fails
 
 | Invocation | pytest rootdir and config | Result |
 |---|---|---|
-| `pytest app/insights/tests/ app/agent_brain/tests/` | rootdir `app/`, config `app/pytest.ini` | 1078 passed, 1 skipped |
+| `pytest app/insights/tests/ app/agent_brain/tests/` | rootdir `app/`, config `app/pytest.ini` | 1501 passed, 1 skipped |
 | `pytest` (no paths, from the root) | rootdir is the repository root. The config is `pyproject.toml`, which has no pytest settings, so `app/pytest.ini` (`testpaths = app/insights/tests`) does not apply. | pytest walks the whole tree, collects the legacy `tests/` folder and stops: `Interrupted: 2 errors during collection` |
 
 The two errors come from the legacy folder. `tests/test_diarization.py` imports `app.services.diarization_service`, which needs `soundfile`. `tests/test_diarization_load.py` imports `huggingface_hub`. The light stack includes neither. Always pass the two paths.
@@ -108,7 +108,7 @@ Configuration lives in [pyproject.toml](../pyproject.toml):
 - **Ruff:** line length 120, target `py310`, rule sets E, F, I, B and UP, with `B008` ignored for the FastAPI `Depends` idiom. It excludes `.venv`, `samples`, `DOCS`, `data`, `tmp`, `uploads` and `outputs` (lines 1-9).
 - **Mypy:** pydantic plugin, `ignore_missing_imports`, `check_untyped_defs`. Test directories are excluded (lines 11-18).
 
-At `793e02e`, ruff reported "All checks passed!" with 178 files already formatted, and mypy found no issues in 83 source files.
+At `1dbfac7`, ruff reported "All checks passed!" with 178 files already formatted, and mypy found no issues in 83 source files.
 
 ## Pre-commit hooks
 
@@ -158,17 +158,17 @@ The body says what was wrong, what changed, which tests pin it, the red-check re
 
 - **Stage explicit paths only:** `git add <path> <path>`. Never use `git add .` or `git add -A`: `git add .` once staged the whole `.venv`, more than 10,000 files ([CLAUDE.md](../CLAUDE.md), line 277). Check `git status --short` before staging and `git diff --cached --stat` before committing.
 - **Keep docs separate from code.** First commit the fix, then a separate `docs(sprint7)` commit that records it. M1 went `c1b35d9` then `b1054be`, M2 went `9aff207` then `b370390`, and M4 went `8e51a94` then `793e02e`. A docs commit may correct a docstring but never changes behaviour (`3d970bf`).
-- **Never commit these untracked files** unless the owner says so: `AGENTS.md`, `postman/`, `.postman/` and `VoiceIQ-Manual-Test-Guide.pdf` (`git status` at `793e02e`).
+- **Never commit these untracked files** unless the owner says so: `AGENTS.md`, `postman/`, `.postman/` and `VoiceIQ-Manual-Test-Guide.pdf` (`git status` at `1dbfac7`).
 - **Never commit ignored material:** `.env`, `.venv/`, `data/`, `*.db`, logs, uploads and archives such as `*.zip` ([.gitignore](../.gitignore)).
 
 ## The milestone loop
 
-Each Sprint 7 prerequisite fix is one milestone: the smallest first, and only fixes that need no pending decision ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *In progress*). M1 to M4 followed this loop. M5 (detector false positives) is the next milestone and is planned.
+Each Sprint 7 prerequisite fix is one milestone: the smallest first, and only fixes that need no pending decision ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *In progress*). M1 to M5 followed this loop. M6 (PDF Latin-1 containment) is the next milestone and is planned.
 
 | Step | What happens | Evidence |
 |---|---|---|
-| 1. Plan | Set the scope, the files, the tests and the acceptance evidence. Record them under *Next milestone* and *Acceptance evidence* in the status doc. Implementation starts only after the owner approves the plan. | Status doc: M5 is "planned, awaiting approval" |
-| 2. Red-check | Write the new tests first and run them against the current code. They must fail for the stated reason, apart from deliberate controls that pin behaviour that must not change. Record the counts. | `c1b35d9`: 10 of 14 fail. `9aff207`: 212 failed, 11 controls passed. `8e51a94`: 25 failed, 10 at-bound controls passed. |
+| 1. Plan | Set the scope, the files, the tests and the acceptance evidence. Record them under *Next milestone* and *Acceptance evidence* in the status doc. Implementation starts only after the owner approves the plan. | Status doc: M6 is "planned, awaiting approval" |
+| 2. Red-check | Write the new tests first and run them against the current code. They must fail for the stated reason, apart from deliberate controls that pin behaviour that must not change. Record the counts. | `c1b35d9`: 10 of 14 fail. `9aff207`: 212 failed, 11 controls passed. `8e51a94`: 25 failed, 10 at-bound controls passed. `1dbfac7`: 352 of 433 fail against the previous detector. |
 | 3. Implement | Make the smallest change that turns the tests green. Follow the rules in [CLAUDE.md](../CLAUDE.md): the engineering standards, the Sprint 7 hard constraints (for example, v1 is frozen) and, under *Testing requirements*, no heavy imports at the orchestrator's module scope. | `9aff207`: "no v1 model or literal changes" |
 | 4. Verify | In one session: the full light suite, ruff check, ruff format check and mypy, all as in [Before every commit](#before-every-commit). Record the new test count. | Full-suite counts in each fix commit body |
 | 5. Adversarial review | An independent review pass tries to break the change, looking for secrets or URLs in logs, new 500 paths, missed input shapes and contract drift. Fix every valid finding, with its own red-checked test. Before any push that touches auth, secrets or external calls, run `/security-review` ([CLAUDE.md](../CLAUDE.md), line 322). | `cedfe96` is a review finding on `c1b35d9` |

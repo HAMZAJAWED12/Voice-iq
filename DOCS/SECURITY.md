@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 793e02e
+Last verified: 2026-10-16, 1dbfac7
 # Security
 
 This page covers the security controls in the VoiceIQ service at the commit
@@ -248,9 +248,13 @@ Every callback carries two signatures (`java_callback_client.py:78-95`):
   verdict and never a 500. This covers non-finite numbers, JSON that is not
   an object, and bodies that cannot be decoded (`9aff207`, milestone M2).
 - The claim detector drops numbers with more than 15 digits
-  (`app/insights/core/factcheck/claim_detector.py:119`, `:190`).
+  (`app/insights/core/factcheck/claim_detector.py:193`, `:478`).
   `/v1/process-audio` checks the fact-check payload as strict JSON before it
   saves or returns it (`process_audio.py:91-95`, `8e51a94`, milestone M4).
+- Every claim-detector pattern scans the 10,000-character transcript cap in
+  linear time, so crafted text cannot make detection slow. A test pins
+  hostile inputs under 0.25 s (`test_scan_time_stays_linear_on_hostile_input`,
+  `1dbfac7`, milestone M5).
 
 Some responses still include internal error text. See
 [Known limitations](#known-limitations).

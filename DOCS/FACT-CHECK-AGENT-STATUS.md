@@ -15,7 +15,7 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 | | |
 |---|---|
 | Date | 2026-10-16 |
-| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94` |
+| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7` |
 | Current phase | **Phase 0 — Contract and scope lock: partially complete.** Phases 1–7 not started (no Sprint 7 application code exists). |
 | Overall progress | **0.83 %** |
 
@@ -90,6 +90,19 @@ Verified against the repository on 2026-10-11.
     before saving or returning it and falls back to the failed stub, so it
     cannot 500 because of fact-check. 35 new tests. Light suite 1078 passed,
     1 skipped.
+  - `1dbfac7` — **M5: the claim detector stops reading names and counts as
+    prices.** A crypto, stock or commodity number followed by what it counts
+    or measures, or by another currency ("Ada is 30 years old", "Meta is 30
+    people", "5 per cent", "50 a month", "95000 rupees") is no longer a price
+    claim. A subject that is also a name or an everyday word ("Ada", "Sol",
+    "Brent"), or a stock ticker ("Meta"), needs price context ("$",
+    "dollars", "a barrel", or a price verb) unless written in capitals. "1 USD = 280 PKR"
+    is read as a rate (amounts of 1, 10, 100, ...), and "95k", "24 hundred"
+    and "1.2 million" scale the value. Every detector pattern now scans in
+    linear time. No v1 model change. 423 new tests, red-checked against the
+    previous detector (352 of 433 fail there); two adversarial review
+    rounds. Light suite 1501 passed, 1 skipped. Remaining limits:
+    [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector).
 - **2026-10-11 audit and documentation sync** (this branch): stale
   operational docs corrected, PHASE-0 wording made consistent with its own
   register, this status document created.
@@ -101,7 +114,7 @@ Verified against the repository on 2026-10-11.
   changes (per-phase gate reading, `ClaimSpan` in the v1 freeze list).
 - **Prerequisite fixes** — until Phase 0 lets a phase start, no Sprint 7
   application code is written; only fixes that need no pending decision, one
-  per milestone, smallest first. M1–M4 are done; M5 is the next milestone below.
+  per milestone, smallest first. M1–M5 are done; M6 is the next milestone below.
 
 ## Remaining
 
@@ -115,12 +128,12 @@ Ordered backlog. Phase numbers are the plan's.
    (before Phase 1 ends, Phase 5 or Phase 6 — see PHASE-0 §8) can follow.
 2. **Decision-independent prerequisite fixes**, smallest first (earliest
    phase each one gates in brackets):
-   1. Regex claim detector false positives ("Ada is 30" → crypto) and misses ("1 USD = 280 PKR") [3] — *next milestone*.
-   2. PDF fails entirely on any non-Latin-1 character — contain it [6].
-   3. `/v1/process-audio` is `async def` but runs blocking work on the event loop [6].
-   4. Agent Brain dedup merges distinct fact-check reviews [6].
-   5. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test [6].
-   6. Rows saved before M4 may hold an infinite claimed value; `GET /v1/fact-check/{conversation_id}` returns 500 for those conversations (old data only; a one-off cleanup or sanitising on read) [none].
+   1. PDF fails entirely on any non-Latin-1 character — contain it [6] — *next milestone*.
+   2. `/v1/process-audio` is `async def` but runs blocking work on the event loop [6].
+   3. Agent Brain dedup merges distinct fact-check reviews [6].
+   4. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test [6].
+   5. Rows saved before M4 may hold an infinite claimed value; `GET /v1/fact-check/{conversation_id}` returns 500 for those conversations (old data only; a one-off cleanup or sanitising on read) [none].
+   6. Claim-detector limits left after M5 — past prices read as current ("I bought ETH at 1200"), capitalised acronyms read as tickers, any number after a coin, ticker or commodity read as a price ("Gold is 29.99 with free shipping"); listed in [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector) [3].
 3. **Phase 1** — gold set, model server, bake-off, pinned model.
 4. **Phase 2** — typed v2 models, OpenAI-compatible client, `VOICEIQ_FACTCHECK_*` settings, stubbed boundary.
 5. **Phase 3** — claim extraction with segment/speaker/timestamp traceability, checkability gate, dedup, claim cap.
@@ -185,30 +198,33 @@ Real blockers only.
 
 ## Next milestone
 
-**M5 — The regex claim detector stops mislabelling names and counts, and
-reads common currency phrasing.** A decision-independent prerequisite fix
-(gates Phase 3, which keeps the detector as its fast path). Status:
-**planned, awaiting approval**.
+**M6 — A report whose text has any character outside Latin-1 still gets a
+PDF.** A decision-independent prerequisite fix (gates Phase 6, whose cited
+report must be Unicode-safe). Status: **planned, awaiting approval**.
 
-Bare coin and ticker aliases followed by "is" and a number match with no
-price context, so "Ada is 30" becomes a crypto claim, "my friend Sol is 25"
-another, and "Meta is 30 people" a stock claim — each then checked against
-a provider and typically reported FALSE at high confidence. "1 USD = 280
-PKR" is not recognised at all, and "Bitcoin is 95k" drops the "k".
+The report uses the Helvetica core font, which covers Latin-1 only. One
+curly apostrophe, a euro sign, or any Urdu or Arabic script in the text the
+report prints makes the whole PDF fail: the run records `PDF_FAILED` and
+`report_pdf_base64` is null (`app/services/pdf_service.py:111, 272`;
+`app/pipeline/orchestrator.py:852-880`). M6 contains the failure; it does
+not add Unicode output. Common punctuation maps to its nearest Latin-1 form,
+any other character the font cannot show gets a visible placeholder, and
+the JSON response keeps the original text. A Unicode font, which readable
+Urdu and Arabic need, stays Phase 6 work.
 
 ## Acceptance evidence
 
-M5 is done when all of the following ran in the same session and passed:
+M6 is done when all of the following ran in the same session and passed:
 
-- Tests cover the negative contexts above (names, ages, counts, durations)
-  producing no claim, the price phrasings that must still be detected, the
-  "<n> BASE = <n> QUOTE" form, and k/m suffixes — red-checked against the
+- Tests: report text with curly quotes, an en dash, a euro sign and Urdu or
+  Arabic script still yields a PDF (no `PDF_FAILED`, `report_pdf_base64`
+  set); Latin-1-only text prints as before — red-checked against the
   current code first.
 - The full light suite —
   `.venv\Scripts\python.exe -m pytest app/insights/tests/ app/agent_brain/tests/ -q` —
-  passes with the new tests added to the 1078 + 1 skipped baseline.
+  passes with the new tests added to the 1501 + 1 skipped baseline.
 - `ruff==0.7.4 check .` and
   `mypy==1.13.0 --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/`
   are clean.
-- This document is updated: M5 moved to *Completed*, the next prerequisite
+- This document is updated: M6 moved to *Completed*, the next prerequisite
   promoted.

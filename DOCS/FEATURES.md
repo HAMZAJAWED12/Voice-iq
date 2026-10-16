@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 793e02e
+Last verified: 2026-10-16, 1dbfac7
 # Feature Catalogue
 
 This is a list of what VoiceIQ can do today. For each feature it gives the status, how you reach it, its default, and its known functional limits. Every row cites the code or test it was checked against.
@@ -158,30 +158,37 @@ Verdict bands for numbers: a difference of up to 3% is `TRUE`, up to 10% is `PAR
 
 | Claim type | Example the detector matches | Source client | API key | What happens today |
 |---|---|---|---|---|
-| `CURRENCY_RATE` | "USD to PKR is 280" (11 currency codes) | exchangerate.host | The provider requires one. The service has no setting for it, and none is configured. | `SOURCE_UNAVAILABLE`. The request is still sent; the provider rejects it, and the client reports the reason "provider requires an access key". |
+| `CURRENCY_RATE` | "USD to PKR is 280", "1 USD = 280 PKR" (11 currency codes) | exchangerate.host | The provider requires one. The service has no setting for it, and none is configured. | `SOURCE_UNAVAILABLE`. The request is still sent; the provider rejects it, and the client reports the reason "provider requires an access key". |
 | `CRYPTO_PRICE` | "Bitcoin is at 95000" (7 assets) | CoinGecko | none | Checked against the USD price |
 | `STOCK_PRICE` | "AAPL is at 175" (14 tickers) | Alpha Vantage | `VOICEIQ_ALPHAVANTAGE_API_KEY`, empty by default | With no key: `SOURCE_UNAVAILABLE`, and no request is made |
 | `WEATHER` | "temperature in Karachi is 32 C" | OpenWeather | `VOICEIQ_OPENWEATHER_API_KEY`, empty by default | With no key: `SOURCE_UNAVAILABLE`, and no request is made |
 | `COMMODITY_PRICE` | "gold price 2400" | none | — | Always `UNSUPPORTED_CLAIM_TYPE` |
 | `STATIC_FACT` | "capital of France is Paris" | Wikipedia REST | none | Checked against the page summary |
 
-Code: detector patterns `app/insights/core/factcheck/claim_detector.py:42-108`; routing `factcheck_engine.py:69-84`; forex behaviour `source_clients/forex_client.py:1-9,73-84` (commit `dc03a44`); key checks `source_clients/stock_client.py:36-37` and `source_clients/openweather_client.py:32-34`. The per-call HTTP timeout is `VOICEIQ_FACTCHECK_HTTP_TIMEOUT_SEC` = 5.0 (range 0.5–30). For the forex provider question, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) and the [decision register](FACTCHECK-AGENT-PHASE-0.md#1-decision-register).
+Code: detector patterns `app/insights/core/factcheck/claim_detector.py:100-180`, match filter `claim_detector.py:385-467`; routing `factcheck_engine.py:69-84`; forex behaviour `source_clients/forex_client.py:1-9,73-84` (commit `dc03a44`); key checks `source_clients/stock_client.py:36-37` and `source_clients/openweather_client.py:32-34`. The per-call HTTP timeout is `VOICEIQ_FACTCHECK_HTTP_TIMEOUT_SEC` = 5.0 (range 0.5–30). For the forex provider question, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) and the [decision register](FACTCHECK-AGENT-PHASE-0.md#1-decision-register).
 
 ### 4.2 Robustness
 
 - **A bad provider reply affects only its own claim.** A transport error, an HTTP error, invalid JSON, a reply that is not an object, a non-finite number, or a client that raises: each gives that one claim `SOURCE_UNAVAILABLE` with a reason. It never produces a verdict and never causes a 500 (`factcheck_engine.py:187-194,228-247`; `source_clients/base_client.py:107-176`; commit `9aff207`; tests `test_one_bad_reply_affects_only_its_own_claim` and `test_fact_check_api_never_500s_on_a_bad_reply`).
-- **Over-long numbers are dropped.** A number with more than 15 digits is not a checkable claim, so the detector drops that claim. Other claims and their ids are kept (`claim_detector.py:119,183-196`; commit `8e51a94`; tests `test_detector_drops_a_claim_whose_number_is_too_long` and `test_dropping_an_over_long_claim_keeps_the_others_and_their_ids`).
+- **Over-long numbers are dropped.** A number with more than 15 digits is not a checkable claim, so the detector drops that claim. Other claims and their ids are kept (`claim_detector.py:193,470-484,512`; commit `8e51a94`; tests `test_detector_drops_a_claim_whose_number_is_too_long` and `test_dropping_an_over_long_claim_keeps_the_others_and_their_ids`).
+- **Names, ages and counts are not prices.** Before overlaps are resolved, each match passes `_keep_match` (`claim_detector.py:352,385-467`; commit `1dbfac7`; tests in `test_claim_detector.py`):
+  - A crypto, stock or commodity number followed on the same line by what it counts or measures, or by another currency, is dropped: "Bitcoin is 2 years old", "META is 30 people", "Bitcoin is 5 per cent up", "Gold is 50 a month", "Meta is 30 dollars a day", "BTC is 95000 rupees", "Bitcoin is 90000 in euros", "Gold is 5%", "Bitcoin is at 3:15". For a rising range the word after its end counts ("Bitcoin is 10-20 minutes"). "Gold is 24k" is a purity in karats. The word lists are `_NOT_PRICE_WORDS`, `_NOT_PRICE_PER_UNITS` and `_OTHER_CURRENCY_WORDS` (`claim_detector.py:243-313`). Crypto and stock sources quote USD, which is why other currencies are dropped.
+  - A subject that is also a name or an everyday word (ada, sol, eth, doge, brent), or any stock ticker ("Meta", "Nvda"), needs price context unless it is written in capitals ("ADA", "META"): a "$", a dollar word ("US dollars", "U.S. dollars"), "a barrel" / "per share", or a price verb (price, costs, trading at, stock). So "Ada is 30", "my friend Sol is 25" and "Brent is 30" give no claim; "Meta is 500 a share" and "Sol is $150" do.
+- **Common price phrasing is read in full.** "1 USD = 280 PKR" and "100 USD is 28000 PKR" are rates (value divided by an amount of 1, 10, 100, ...); "100 USD to PKR is 28000" is a total and is dropped. "95k", "1.2m", "24 hundred", "95 grand", "1.5 million", "1.2 mil" and "0.1 billion" scale the value exactly, and "95,000.50" is read whole.
+- **Detection runs in linear time.** Every pattern scans 10,000 hostile characters in milliseconds; whitespace sub-patterns that backtracked quadratically (0.5–2 s) were rewritten (commit `1dbfac7`; test `test_scan_time_stays_linear_on_hostile_input`).
 
 ### 4.3 Known functional limits of the detector
 
-These were checked by running the detector on 2026-10-16:
+These were checked by running the detector at `1dbfac7` on 2026-10-16:
 
-- Coin and ticker names followed by "is" and a number match with no price context. "Ada is 30 years old" and "my friend Sol is 25" become crypto claims. "Meta is 30 people" becomes a stock claim.
-- "1 USD = 280 PKR" is not recognised.
-- "Bitcoin is 95k" is read as 95.
+- A past price reads as a current one: "I bought ETH at 1200 back in 2021" gives an ETH claim of 1200.
+- Capitalised acronyms read as tickers: "The ADA is 30" and "Our CRM is at 5" give claims. "Solana is 25" gives a claim, because only ada, sol, eth, doge and brent count as names.
+- Any number after a coin, ticker or commodity counts, whatever the surrounding sentence: "The minimum for Bitcoin is 10" and "Gold is 29.99 with free shipping" give claims. A word after the number is checked only against the lists above, so "AMD is 30 interns" gives a claim.
+- Prices are not converted: "DOGE is 12 cents" and "2 EUR is 650 PKR" (an amount other than 1, 10, 100, ...) give no claim. "Bitcoin is 21 million" reads as a price of 21,000,000; "Bitcoin is 95 thousand 500" reads as 95,000.
+- A decimal comma reads as a thousands separator: "1 EUR = 1,08 USD" gives 108. A total for a number of units other than 10, 100, ... reads as the rate: "21 USD to PKR is 5880" gives 5880. A round amount in other wording reads as a rate: "Every 100 USD is 5 EUR cashback" gives 0.05.
 - Patterns are English only.
 
-Fixing these is milestone M5 in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md#next-milestone).
+Open follow-ups: [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md#remaining), *Remaining*.
 
 ---
 

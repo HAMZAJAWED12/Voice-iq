@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 793e02e
+Last verified: 2026-10-16, 1dbfac7
 # Project Context
 
 Background for people joining, reviewing or sponsoring VoiceIQ: what the
@@ -72,18 +72,18 @@ It is the only place decision status is kept; this doc does not repeat it.
 
 ## History
 
-### Counts from git (at 793e02e)
+### Counts from git (at 1dbfac7)
 
 | Measure | Value | Command |
 |---|---|---|
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse` |
-| Commits reachable from HEAD | 162 (161 non-merge, 1 merge) | `git rev-list --count [--no-merges / --merges] HEAD` |
+| Commits reachable from HEAD | 165 (164 non-merge, 1 merge) | `git rev-list --count [--no-merges / --merges] HEAD` |
 | The one merge | `032d822`, 2026-04-25 | `git rev-list --merges HEAD` |
 | Commits on `main` | 141 (tip `8fd3972`, 2026-09-20) | `git rev-list --count main` |
-| Commits on `sprint7/doc-sync` beyond `main` | 21 (16 on 2026-10-11, 5 on 2026-10-16) | `git rev-list --count main..HEAD` |
+| Commits on `sprint7/doc-sync` beyond `main` | 24 (16 on 2026-10-11, 8 on 2026-10-16) | `git rev-list --count main..HEAD` |
 
 Commits per month (`git log --date=format:%Y-%m`): Feb 6, Apr 4, May 19,
-Jun 41, Jul 49, Sep 22, Oct 21. There are no commits in March or August 2026.
+Jun 41, Jul 49, Sep 22, Oct 24. There are no commits in March or August 2026.
 
 ### Timeline
 
@@ -104,7 +104,7 @@ are commit dates; some ranges overlap.
 | 2026-06-21 to 09-19 | Tier 3, wave E: shared clamp helper, audio upload content check, orchestrator decomposition, alignment speed-up. | `e9cbd1f` to `d79ef0e` |
 | 2026-07-25 | Tier S: eight security-hardening items, all committed the same day. | `58f81f2` to `ec8dc1e` |
 | 2026-07-25 to 09-20 | Tier N: callback v2 spec (N1), lazy ML imports (N2), alignment tests and speed-up (N3), deadline phrases (N4a), language wiring for Urdu and Arabic (N4b-1 Phase 1), and the Agent Brain wired into the pipeline (L5). | `36697fd` to `17606d6` |
-| 2026-09-04 onward | Sprint 7, Phase 0: contract and decision register, gold-set scoping brief, documentation sync, prerequisite fixes M1-M4. | `c6284b6`, `8fd3972`, `ace45e4` to `793e02e` |
+| 2026-09-04 onward | Sprint 7, Phase 0: contract and decision register, gold-set scoping brief, documentation sync, prerequisite fixes M1-M5. | `c6284b6`, `8fd3972`, `ace45e4` to `1dbfac7` |
 
 Sprint and tier labels come from commit subjects and from the sprint table in
 [CLAUDE.md](../CLAUDE.md). The historical Sprint 1-4 view is
@@ -142,12 +142,13 @@ that need no pending decision, one milestone at a time, smallest first
 | M2 | `9aff207` | A malformed reply from a fact-check provider ends as "source unavailable" for that claim, never a verdict or a server error. |
 | M3 | `dc03a44` | Currency-rate provider errors are named instead of failing silently. |
 | M4 | `8e51a94` | Over-long numbers in a transcript no longer cause a server error on either fact-check path. |
+| M5 | `1dbfac7` | The claim detector no longer reads names, ages and counts as prices, and reads common price and currency phrasing ("1 USD = 280 PKR", "95k"). |
 
 `7b25b3f` also moved three pre-commit checks to run through `python -m`,
 because Windows Application Control blocked their generated `.exe` launchers
 on a development machine (commit message of `7b25b3f`; day-to-day practice is
-in [WORKFLOW.md](WORKFLOW.md)). The next milestone, **M5**, targets false
-positives in the claim detector and currency phrasing it misses.
+in [WORKFLOW.md](WORKFLOW.md)). The next milestone, **M6**, keeps the PDF
+report from failing on characters outside Latin-1.
 
 For live progress, the next milestone and its acceptance checks, read
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). This doc does not

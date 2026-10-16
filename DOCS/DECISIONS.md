@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 793e02e
+Last verified: 2026-10-16, 1dbfac7
 # Decisions
 
 This file lists the decisions already taken in this repository. A decision is
@@ -44,6 +44,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 | 22 | M2: an unusable provider reply is `SOURCE_UNAVAILABLE` for that claim only | 2026-10-11 | `9aff207` |
 | 23 | M3: provider errors are named | 2026-10-16 | `dc03a44` |
 | 24 | M4: claim numbers capped at 15 digits; strict-JSON check before saving | 2026-10-16 | `8e51a94` |
+| 25 | M5: a price claim needs a number that stands alone; names need price context | 2026-10-16 | `1dbfac7` |
 
 ---
 
@@ -436,7 +437,7 @@ in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
   `app/agent_brain/tests/test_language_seam.py` covers this.
 - **Date:** 2026-09-20 · **Commit:** `359cd5f`, `404de5b`, `c2fadaa`
 
-## Prerequisite fixes (M1–M4)
+## Prerequisite fixes (M1–M5)
 
 Working rule, recorded in the status doc (`6c8c89b`, 2026-10-11): until Phase
 0 lets a phase start, no Sprint 7 application code is written. The only work
@@ -507,7 +508,7 @@ next milestone is in
 - **Context:** A very long number in a transcript could turn into a
   non-finite claimed value, which strict JSON cannot render.
 - **Decision:** `MAX_VALUE_DIGITS = 15`
-  (`app/insights/core/factcheck/claim_detector.py:119`). Fifteen digits is
+  (`app/insights/core/factcheck/claim_detector.py:193`). Fifteen digits is
   the decimal precision a float guarantees, and real prices, rates and
   temperatures need far fewer. A claim with a longer number is dropped, and
   claim ids stay sequential. As a second layer, `/v1/process-audio` checks the
@@ -520,6 +521,30 @@ next milestone is in
   change. `app/insights/tests/test_factcheck_source_replies.py` pins this.
   Data stored before this fix is a separate item in the status doc.
 - **Date:** 2026-10-16 · **Commit:** `8e51a94`
+
+### 25. M5: a price claim needs a number that stands alone; names need price context
+
+- **Context:** The detector read a coin or ticker alias followed by "is" and
+  a number as a price, so "Ada is 30", "my friend Sol is 25" and "Meta is 30
+  people" became claims, typically reported FALSE at high confidence.
+- **Decision:** Before overlaps are resolved, `_keep_match` drops a crypto,
+  stock or commodity match whose number is followed, on the same line, by
+  what it counts or measures or by a currency other than the US dollar
+  (word lists `_NOT_PRICE_WORDS`, `_NOT_PRICE_PER_UNITS`,
+  `_OTHER_CURRENCY_WORDS`). A list of unit words was chosen over a list of
+  allowed words: a first version that allowed only listed words dropped real
+  claims such as "Bitcoin is 95000 isn't it". A subject that is also a name
+  or an everyday word (ada, sol, eth, doge, brent), or any stock ticker,
+  needs price context unless it is written in capitals ("ADA", "META"). A currency rate must be quoted per 1, 10,
+  100, ... units, so a year or a count before a currency is not an amount
+  (`app/insights/core/factcheck/claim_detector.py:196-316, 385-467`).
+- **Consequence:** Names, ages, counts and durations no longer become
+  claims; "1 USD = 280 PKR", "95k" and "24 hundred" are read. Some sentences
+  still produce claims or are skipped (listed in
+  [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector)).
+  The v1 models did not change. `app/insights/tests/test_claim_detector.py`
+  pins this.
+- **Date:** 2026-10-16 · **Commit:** `1dbfac7`
 
 ---
 

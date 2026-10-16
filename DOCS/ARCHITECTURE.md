@@ -1,7 +1,7 @@
-Last verified: 2026-10-16, 793e02e
+Last verified: 2026-10-16, 1dbfac7
 # Architecture
 
-This document describes the code structure of VoiceIQ at commit `793e02e`
+This document describes the code structure of VoiceIQ at commit `1dbfac7`
 (branch `sprint7/doc-sync`). It shows how the packages fit together, how data
 moves between them, where faults are contained, what is stored, and how to
 extend the system without breaking it.
@@ -272,7 +272,8 @@ runs one process-wide `FactCheckEngine`, built once from settings
 (`factcheck_routes.py:61-66`, `factcheck_engine.py:68-84`). The engine runs:
 
 ```
-ClaimDetector.detect (regex; drops a claim whose number has over 15 digits, claim_detector.py:119, 190)
+ClaimDetector.detect (regex; _keep_match drops names, counts and non-USD prices before overlaps,
+                      claim_detector.py:352, 385-467; drops a claim whose number has over 15 digits, :193, 478)
   → ClaimClassifier.classify
   → per claim: SourceRouter.client_for(claim_type) → client.fetch (TTL cache)
                → FactCheckComparator.compare → FactCheckScorer.score
@@ -427,7 +428,7 @@ silent, and missing tables are created.
 ## 9. Sprint 7 fact-check agent — planned, not built
 
 **Everything in this section is planned, not built.** No Sprint 7
-application code exists at `793e02e`. A search of `app/` at that commit finds
+application code exists at `1dbfac7`. A search of `app/` at that commit finds
 no `/v2` route, no `fact_check_report` key and no `factcheck_agent_*` table.
 For progress and the next milestone, see
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For each

@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 793e02e
+Last verified: 2026-10-16, 1dbfac7
 # VoiceIQ in Plain English
 
 This guide is for readers who do not write code: product owners, managers,
@@ -407,6 +407,15 @@ response says `disabled`.
 
 Only a short list of currencies, coins, share symbols and commodities is
 recognised, and the wording has to follow patterns like the ones above.
+Wordings such as "1 USD = 280 PKR" and "Bitcoin is 95k" (read as 95,000)
+are understood too.
+
+A number that counts or measures something is not treated as a price.
+"Ada is 30 years old" (ADA is also a coin's symbol) and "Meta is 30 people"
+(META is also a share symbol) give no claim, and neither does "Ada is 30"
+on its own: a name needs a sign of price, such as "dollars" or "$", before
+it is checked. A price stated in another currency, such as rupees, is
+skipped too, because the price services quote US dollars.
 
 A number is compared with the service's current value at the moment of
 checking, not the value on the day the call took place. A difference of up
@@ -434,7 +443,7 @@ affects only the claim it was answering.
 *Source:* `app/routes/process_audio.py:62-116, 224-229`;
 `app/utils/factcheck_gate.py`;
 `app/insights/core/factcheck/factcheck_engine.py:60-80, 160-245`;
-`app/insights/core/factcheck/claim_detector.py:42-110` (patterns; the
+`app/insights/core/factcheck/claim_detector.py:100-180, 385-467` (patterns and match filter; the
 example wordings were run through the detector);
 `app/insights/core/factcheck/comparator.py:34-35, 54-140`;
 `app/insights/core/factcheck/source_clients/forex_client.py:1-9, 24-30`;
@@ -528,10 +537,12 @@ conversation or the people in it.
   share prices, weather, country capitals and (without a source) commodity
   prices. Exchange-rate claims cannot be verified at present. Share-price and
   weather claims need keys that the operator must supply. The claim detector
-  can also mistake a name for a price: "Ada is 30" is read as a
-  cryptocurrency price claim, because ADA is also a coin's symbol. Such claims
-  are typically reported FALSE with high confidence. Milestone M5, which is
-  planned, addresses this.
+  can still misread some sentences: a price someone paid in the past ("I
+  bought Ethereum at 1200") is checked against today's price, and a capitalised
+  abbreviation that matches a coin or share symbol can be read as a price.
+  Such claims are typically reported FALSE with high confidence. Milestone
+  M5 stopped the detector treating names, ages and counts as prices; the
+  cases that remain are listed in [FEATURES.md](FEATURES.md) (section 4.3).
 - **Scores are indicators, not probabilities.** Each score is calculated by
   fixed rules from measures such as share of talking time, pauses, questions
   and interruptions, then kept within 0–1.
@@ -595,7 +606,7 @@ decision, see the decision register in
 | Phase 5 | Verdicts based only on the evidence found, checked citations, and consistent confidence scores |
 | Phase 6 | Running fact-check as a background job with its own version-2 routes and database tables, a status field in the response, and a PDF with citations that can print any character |
 | Phase 7 | Time limits, load limits, failure handling, metrics, and a staged rollout |
-| M1–M5 | Milestones: small fixes made one at a time while Sprint 7 work waits on Phase 0. M1 kept outbound request details out of the logs (`c1b35d9`, `cedfe96`). M2 made a bad reply from a data service produce `SOURCE_UNAVAILABLE` for that claim instead of a verdict or a crash (`9aff207`). M3 made currency-service errors say what went wrong (`dc03a44`). M4 stopped over-long numbers in a transcript from crashing the fact-check route or the audio route (`8e51a94`). M5, which is planned, stops the claim detector mistaking names and counts for prices and teaches it common currency phrasing. |
+| M1–M6 | Milestones: small fixes made one at a time while Sprint 7 work waits on Phase 0. M1 kept outbound request details out of the logs (`c1b35d9`, `cedfe96`). M2 made a bad reply from a data service produce `SOURCE_UNAVAILABLE` for that claim instead of a verdict or a crash (`9aff207`). M3 made currency-service errors say what went wrong (`dc03a44`). M4 stopped over-long numbers in a transcript from crashing the fact-check route or the audio route (`8e51a94`). M5 stopped the claim detector mistaking names, ages and counts for prices and taught it common price and currency phrasing (`1dbfac7`). M6, which is planned, keeps the PDF report from failing on characters outside Latin-1. |
 | Tier 1, 2, 3 | Earlier production-readiness rounds: access keys, size limits and time limits (Tier 1), test coverage (Tier 2), clean-ups and stricter automated checks (Tier 3) |
 | Wave E (E1–E5) | Structural clean-ups from Tier 3, for example the audio content check (E4) and the faster speaker matching (E3) |
 | Tier S | Eight security-hardening items, S1–S8, such as per-caller request limits, automatic deletion of old call files, and making fact-check opt-in. Record: [SECURITY-HARDENING-PLAN.md](SECURITY-HARDENING-PLAN.md). Current controls: [SECURITY.md](SECURITY.md). |

@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 793e02e
+Last verified: 2026-10-16, 1dbfac7
 # System: Runtime View
 
 This page covers how VoiceIQ runs: the two entrypoints, the Docker image, configuration, where data is stored, which outside services it calls, logging and CI. It does not cover:
@@ -199,7 +199,7 @@ CI is defined in `.github/workflows/test.yml` and runs on pushes to `main` and o
 | `lint` ("Lint, types, secrets") | 3.11 | Installs `requirements-insight.txt`, ruff 0.7.4 and mypy 1.13.0. Then runs `ruff check .`, `mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/`, and gitleaks 8.21.2 as `gitleaks dir . --no-banner --redact` (`:10-47`) |
 | `test` ("Run Insight Service unit tests") | 3.10 and 3.11 (matrix) | Installs `requirements-insight.txt` only, then runs `pytest -v app/insights/tests/ app/agent_brain/tests/` with `PYTHONPATH=.`. On failure, the end of the output is posted as an `::error::` annotation (`:49-93`) |
 
-- **Expected test result:** 1078 passed and 1 skipped on the light stack, measured 2026-10-16. The skipped item is `app/insights/tests/test_model_load_concurrency.py`, a 3-test module that needs the ML libraries ([CLAUDE.md](../CLAUDE.md), "One test lane").
+- **Expected test result:** 1501 passed and 1 skipped on the light stack, measured 2026-10-16 at `1dbfac7`. The skipped item is `app/insights/tests/test_model_load_concurrency.py`, a 3-test module that needs the ML libraries ([CLAUDE.md](../CLAUDE.md), "One test lane").
 - **Not in CI:** a Docker build, the heavy ML stack, and the legacy top-level `tests/` folder.
 - **Tool settings:** ruff and mypy are configured in `pyproject.toml`: line length 120, target `py310`, and the pydantic mypy plugin.
 - **Python versions in use:** Docker 3.11, CI 3.10 and 3.11, README "Python 3.10+" (`README.md:66`).
