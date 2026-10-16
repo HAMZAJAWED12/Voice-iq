@@ -32,9 +32,9 @@ from slowapi.util import get_remote_address
 
 from app.insights.config.settings import get_settings
 
-# In-memory counters (per process). Adequate for single-worker / dev; a
-# multi-worker deployment needing shared counters would swap MemoryStorage
-# for RedisStorage.
+# Counters are kept in this process's memory. A deployment that runs more
+# than one worker or replica should use shared storage (for example the
+# `limits` RedisStorage) or enforce limits at the proxy.
 _storage = MemoryStorage()
 _strategy = MovingWindowRateLimiter(_storage)
 

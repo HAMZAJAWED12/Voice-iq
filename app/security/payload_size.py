@@ -2,8 +2,9 @@
 
 Provides a dependency *factory* `enforce_content_length(max_bytes)` that
 returns a FastAPI dependency. Each protected router declares its own cap
-in bytes, and the dependency rejects requests above that cap before the
-body is read into memory.
+in bytes, and the dependency rejects requests whose declared
+Content-Length is above that cap. It runs as a route dependency, so it
+checks the header; it does not limit the bytes actually received.
 
 Why a factory rather than a single dep?
     Different routes have wildly different size budgets (a JSON session
@@ -17,10 +18,9 @@ Behaviour:
     * Header value >  max_bytes  -> 413 Payload Too Large
     * Header value <= max_bytes  -> pass
 
-Note: the Content-Length check is the *first* line of defence. For
-upload routes the handler should additionally enforce a byte counter
-while streaming to disk, because a hostile client can lie about
-Content-Length.
+Note: the Content-Length check is the *first* line of defence. Upload
+routes also count bytes while copying to disk, and a body limit at the
+proxy is recommended in deployment.
 """
 
 from __future__ import annotations

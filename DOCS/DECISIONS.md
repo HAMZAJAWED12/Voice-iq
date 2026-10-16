@@ -36,7 +36,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 | 14 | D1: new tables only | 2026-09-04 | `2a539d3` |
 | 15 | D2: job-based execution | 2026-09-04 | `2a539d3` |
 | 16 | D10: the job re-runs every downstream consumer | 2026-09-20 | `dacc926` |
-| 17 | The v1 fact-check contract is frozen | 2026-09-04 | `c6284b6` |
+| 17 | The v1 fact-check contract is frozen: followed in practice; formal approval of PHASE-0 §2 pending | 2026-09-04 | `c6284b6` |
 | 18 | Verdict map with no default | 2026-09-19 | `1cd5350` |
 | 19 | Agent Brain as an opt-in pipeline stage (L5) | 2026-09-20 | `f5e4d84`, `f619f7d` |
 | 20 | N4b language seam, Phase 1 | 2026-09-20 | `359cd5f`, `404de5b`, `c2fadaa` |
@@ -345,7 +345,7 @@ in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
   fix in the status doc.
 - **Date:** 2026-09-20 (raised in `17606d6`) · **Commit:** `dacc926`
 
-### 17. The v1 fact-check contract is frozen
+### 17. The v1 fact-check contract is frozen: followed in practice; formal approval of PHASE-0 §2 pending
 
 - **Context:** Sprint 7 adds an agent with its own verdicts. Changing the v1
   shapes would break existing consumers of `POST /v1/fact-check`,

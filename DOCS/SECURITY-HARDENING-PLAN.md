@@ -271,4 +271,4 @@ Recorded so the review scope is auditable:
 - Larger ASR/diarization models for accuracy (product decision).
 - Sprint 6 NLP Phase 2 (dateparser, multilingual).
 - E3 alignment `O(n²)` (profiled, below the bar).
-- Purging old bytecode/secrets from deep git history (Tier 4 candidate).
+- Rewriting old git history, which contains rotated credentials (Tier 4 candidate).

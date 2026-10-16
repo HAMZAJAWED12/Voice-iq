@@ -93,8 +93,8 @@ class InsightSettings(BaseSettings):
         ge=1,
         description=(
             "Hard cap on incoming JSON payload size (KB) for /v1/insights/* "
-            "and /v1/fact-check. Enforced via Content-Length; requests "
-            "above this are rejected with 413 before any body is read."
+            "and /v1/fact-check. Checked against the declared Content-Length; "
+            "requests above it are rejected with 413."
         ),
     )
     api_max_upload_mb: int = Field(
