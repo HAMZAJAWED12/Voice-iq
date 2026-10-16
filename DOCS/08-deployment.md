@@ -270,7 +270,7 @@ The app uses Python's standard `logging` library. `VOICEIQ_LOG_LEVEL` is validat
 
 A typical session (10–50 utterances) takes under 50 ms end-to-end on a modern x86 core. Memory footprint of the running app is around 80–120 MB resident depending on the SQLite cache.
 
-The service has no batch mode or worker pool. Plain `def` routes run on Uvicorn's threadpool; `/v1/process-audio` is `async def` and runs its blocking pipeline on the event loop. Before scaling to several workers or hosts, note the per-process state: the rate-limit counters (in-memory, so each process enforces its own budget), the fact-check engine singleton with its TTL cache, and the `lru_cache` on settings, besides the SQLAlchemy connection pool.
+The service has no batch mode or worker pool. Plain `def` routes run on Uvicorn's threadpool; `/v1/process-audio` is `async def` and runs its pipeline in a worker thread, one run at a time per worker process (`2bb6593`). Before scaling to several workers or hosts, note the per-process state: the rate-limit counters (in-memory, so each process enforces its own budget), the fact-check engine singleton with its TTL cache, and the `lru_cache` on settings, besides the SQLAlchemy connection pool.
 
 ---
 

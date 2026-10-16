@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 1dbfac7
+Last verified: 2026-10-17, 3bf7506
 # Project Context
 
 Background for people joining, reviewing or sponsoring VoiceIQ: what the
@@ -18,7 +18,7 @@ other rather than copying.
 |---|---|
 | What this repo is | The Python audio-intelligence service of the wider VoiceIQ platform (`README.md` line 11). |
 | What it does | Takes a call recording and returns a transcript with speakers, NLP (natural language processing) signals such as sentiment and topics, explainable insights, optional fact-checks, optional action recommendations and a PDF report (`README.md` lines 3-9). Automatic fact-checks and recommendations are both off by default (`app/insights/config/settings.py` lines 193-194 and 205-206). |
-| How it runs | A FastAPI app with two entry points: `app/main.py` mounts the full pipeline, including `/v1/process-audio` (`app/main.py` line 58; `app/routes/process_audio.py` line 118); `app/insight_main.py` is the lightweight app, which serves the insight and Agent Brain routes but no audio route (`app/insight_main.py` lines 70-74). |
+| How it runs | A FastAPI app with two entry points: `app/main.py` mounts the full pipeline, including `/v1/process-audio` (`app/main.py` line 60; `app/routes/process_audio.py` line 140); `app/insight_main.py` is the lightweight app, which serves the insight and Agent Brain routes but no audio route (`app/insight_main.py` lines 71-75). |
 | Who acts on the results | A separate Java action layer (`README.md` line 11). No Java code lives in this repo (`git ls-files '*.java'` returns nothing). |
 
 The Python service and the Java action layer meet in two places:
@@ -26,7 +26,7 @@ The Python service and the Java action layer meet in two places:
 - **Pull.** The Java layer calls
   `POST /internal/v1/agent-brain/recommendations/generate` with its own
   context (`app/agent_brain/api/agent_routes.py` lines 25-26 and 38; the
-  comment at `app/main.py` lines 60-62).
+  comment at `app/main.py` lines 62-64).
 - **Push.** When the opt-in Agent Brain stage runs inside the pipeline
   (`VOICEIQ_AGENT_BRAIN_AUTO_RUN`, default off:
   `app/insights/config/settings.py` lines 205-206;
@@ -72,18 +72,18 @@ It is the only place decision status is kept; this doc does not repeat it.
 
 ## History
 
-### Counts from git (at 1dbfac7)
+### Counts from git (at 3bf7506)
 
 | Measure | Value | Command |
 |---|---|---|
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse` |
-| Commits reachable from HEAD | 165 (164 non-merge, 1 merge) | `git rev-list --count [--no-merges / --merges] HEAD` |
+| Commits reachable from HEAD | 184 (183 non-merge, 1 merge) | `git rev-list --count [--no-merges / --merges] HEAD` |
 | The one merge | `032d822`, 2026-04-25 | `git rev-list --merges HEAD` |
 | Commits on `main` | 141 (tip `8fd3972`, 2026-09-20) | `git rev-list --count main` |
-| Commits on `sprint7/doc-sync` beyond `main` | 24 (16 on 2026-10-11, 8 on 2026-10-16) | `git rev-list --count main..HEAD` |
+| Commits on `sprint7/doc-sync` beyond `main` | 43 (16 on 2026-10-11, 16 on 2026-10-16, 11 on 2026-10-17) | `git rev-list --count main..HEAD` |
 
 Commits per month (`git log --date=format:%Y-%m`): Feb 6, Apr 4, May 19,
-Jun 41, Jul 49, Sep 22, Oct 24. There are no commits in March or August 2026.
+Jun 41, Jul 49, Sep 22, Oct 43. There are no commits in March or August 2026.
 
 ### Timeline
 
@@ -104,7 +104,7 @@ are commit dates; some ranges overlap.
 | 2026-06-21 to 09-19 | Tier 3, wave E: shared clamp helper, audio upload content check, orchestrator decomposition, alignment speed-up. | `e9cbd1f` to `d79ef0e` |
 | 2026-07-25 | Tier S: eight security-hardening items, all committed the same day. | `58f81f2` to `ec8dc1e` |
 | 2026-07-25 to 09-20 | Tier N: callback v2 spec (N1), lazy ML imports (N2), alignment tests and speed-up (N3), deadline phrases (N4a), language wiring for Urdu and Arabic (N4b-1 Phase 1), and the Agent Brain wired into the pipeline (L5). | `36697fd` to `17606d6` |
-| 2026-09-04 onward | Sprint 7, Phase 0: contract and decision register, gold-set scoping brief, documentation sync, prerequisite fixes M1-M5. | `c6284b6`, `8fd3972`, `ace45e4` to `1dbfac7` |
+| 2026-09-04 onward | Sprint 7, Phase 0: contract and decision register, gold-set scoping brief, documentation sync, prerequisite fixes M1-M6, security and reliability fixes. | `c6284b6`, `8fd3972`, `ace45e4` to `3bf7506` |
 
 Sprint and tier labels come from commit subjects and from the sprint table in
 [CLAUDE.md](../CLAUDE.md). The historical Sprint 1-4 view is
@@ -143,12 +143,17 @@ that need no pending decision, one milestone at a time, smallest first
 | M3 | `dc03a44` | Currency-rate provider errors are named instead of failing silently. |
 | M4 | `8e51a94` | Over-long numbers in a transcript no longer cause a server error on either fact-check path. |
 | M5 | `1dbfac7` | The claim detector no longer reads names, ages and counts as prices, and reads common price and currency phrasing ("1 USD = 280 PKR", "95k"). |
+| M6 | `dc9caf3` | Text outside Latin-1 no longer fails the PDF report: common punctuation maps to its nearest Latin-1 form and any other character prints as "?". |
 
 `7b25b3f` also moved three pre-commit checks to run through `python -m`,
 because Windows Application Control blocked their generated `.exe` launchers
 on a development machine (commit message of `7b25b3f`; day-to-day practice is
-in [WORKFLOW.md](WORKFLOW.md)). The next milestone, **M6**, keeps the PDF
-report from failing on characters outside Latin-1.
+in [WORKFLOW.md](WORKFLOW.md)). Alongside the milestones, engineering landed
+a set of security and reliability fixes from a review, 2026-10-16 to
+2026-10-17 (`ff874de` to `3bf7506`; listed in [CHANGES.md](CHANGES.md)). The
+remaining items from that review each wait on an owner decision. The next
+milestone, **M7**, is a tech-debt fix: keyword rules match whole words only.
+It is planned and awaits approval.
 
 For live progress, the next milestone and its acceptance checks, read
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). This doc does not
@@ -183,7 +188,7 @@ Security controls and known limitations, in general terms, are in
 | Tier | A hardening, test-coverage, clean-up or deferred-work pass outside the sprint plan (Tiers 1, 2, 3, S and N). |
 | N4b | The Tier N item for Urdu and Arabic (multilingual) support ([TIER-N-PLAN.md](TIER-N-PLAN.md) line 15). |
 | Phase | One of the eight steps, 0 to 7, of the Sprint 7 plan. |
-| Milestone (M1, M2, ...) | One small prerequisite fix landed while Phase 0 is open. |
+| Milestone (M1, M2, ...) | One small fix, made one at a time while Phase 0 is open. M1 to M6 are prerequisite fixes; M7, planned, is tech debt. |
 | Decision register | [FACTCHECK-AGENT-PHASE-0.md §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register): the Sprint 7 decisions (D1-D10), each with an owner role. |
 | L1-L5 | The N4b multilingual decisions in [N4B-MULTILINGUAL-STRATEGY.md §7](N4B-MULTILINGUAL-STRATEGY.md#7-open-decisions). |
 | Agent Brain | The rule-based recommendation layer in `app/agent_brain/` (Sprint 6). |

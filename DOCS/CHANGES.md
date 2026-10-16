@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 8f09739
+Last verified: 2026-10-17, 3bf7506
 # Changelog
 
 What changed in VoiceIQ, backfilled from git history. Newest first, grouped
@@ -22,21 +22,21 @@ Taken from git at write time.
 
 | Measure | Value | Command |
 |---|---|---|
-| Commits reachable from HEAD (`8f09739`) | 167 | `git rev-list --count HEAD` |
-| Non-merge commits | 166 | `git rev-list --count --no-merges HEAD` |
+| Commits reachable from HEAD (`3bf7506`) | 184 | `git rev-list --count HEAD` |
+| Non-merge commits | 183 | `git rev-list --count --no-merges HEAD` |
 | Merge commits | 1 (`032d822`) | `git rev-list --count --merges HEAD` |
 | Commits on `main` (`8fd3972`) | 141 | `git rev-list --count main` |
-| Commits on `sprint7/doc-sync` beyond `main` | 26 | `git rev-list --count main..HEAD` |
+| Commits on `sprint7/doc-sync` beyond `main` | 43 | `git rev-list --count main..HEAD` |
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse --format="%h %ad" --date=short` |
 
-Each of the 167 commits is listed in exactly one row below; a few hashes
+Each of the 184 commits is listed in exactly one row below; a few hashes
 also appear elsewhere as cross-references. Small commits of the same kind
 (wave-completion notes, a batch of stage extractions) share a row. Sections
 are ordered by their most recent commit. Dates are author dates.
 
 | Section | Dates | Commits |
 |---|---|---|
-| [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-16 | 26 |
+| [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-17 | 43 |
 | [Sprint 7 Phase 0 and prerequisites](#sprint-7-phase-0-and-prerequisites) | 2026-09-04 to 2026-09-20 | 7 |
 | [N4b multilingual and L5 pipeline wiring](#n4b-multilingual-and-l5-pipeline-wiring) | 2026-09-19 to 2026-09-20 | 10 |
 | [Tier 3 Wave E](#tier-3-wave-e) | 2026-06-21 to 2026-09-19 | 34 |
@@ -52,36 +52,64 @@ are ordered by their most recent commit. Dates are author dates.
 
 ## Sprint 7 on `sprint7/doc-sync`
 
-26 commits, 2026-10-11 to 2026-10-16: a documentation sync, then
-prerequisite fixes that need no pending decision, one per milestone. Why
+43 commits, 2026-10-11 to 2026-10-17: a documentation sync, prerequisite
+fixes that need no pending decision (one per milestone), and security and
+reliability fixes. Why
 the work is shaped this way: "In progress" in the
 [status doc](FACT-CHECK-AGENT-STATUS.md#in-progress).
 
-### Milestones M1 to M5
+### Milestones M1 to M6
 
 | Milestone | Date | Change | Commit |
 |---|---|---|---|
+| M6 | 2026-10-17 | Text outside Latin-1 no longer fails the PDF: common punctuation maps to Latin-1, anything else prints as "?" (`app/services/pdf_service.py`, `to_latin1`). 6 new tests. Also listed under hardening below. | see below |
 | M5 | 2026-10-16 | The claim detector stops reading names, ages and counts as prices. A crypto, stock or commodity number followed by what it counts or measures, or by another currency, is dropped; a subject that is also a name or an everyday word, or a stock ticker not in capitals, needs price context (`_keep_match`, `app/insights/core/factcheck/claim_detector.py:385-467`). "1 USD = 280 PKR" is read as a rate; "95k", "24 hundred" and "1.2 million" scale the value. Every detector pattern scans in linear time. No v1 model change. 423 new tests. | `1dbfac7` |
-| M4 | 2026-10-16 | Over-long numbers in a transcript no longer cause a 500 on either endpoint. The claim detector drops a claim whose number has more than 15 digits (`MAX_VALUE_DIGITS`, now `app/insights/core/factcheck/claim_detector.py:193`). `/v1/process-audio` checks the fact-check payload as strict JSON before saving or returning it, and falls back to the failed stub (`app/routes/process_audio.py:95`). 35 new tests. | `8e51a94` |
+| M4 | 2026-10-16 | Over-long numbers in a transcript no longer cause a 500 on either endpoint. The claim detector drops a claim whose number has more than 15 digits (`MAX_VALUE_DIGITS`, now `app/insights/core/factcheck/claim_detector.py:193`). `/v1/process-audio` checks the fact-check payload as strict JSON before saving or returning it, and falls back to the failed stub (now `app/routes/process_audio.py:111-115`). 35 new tests. | `8e51a94` |
 | Tooling | 2026-10-16 | The trailing-whitespace, end-of-file-fixer and check-merge-conflict hooks run through `python -m` in a `repo: local` block of `.pre-commit-config.yaml`, because Windows Application Control blocks the generated `.exe` launchers on some machines. Same hooks, same behaviour. | `7b25b3f` |
 | M3 | 2026-10-16 | exchangerate.host error replies are named instead of failing silently. The provider now requires an access key and none is configured, so currency-rate claims end as `SOURCE_UNAVAILABLE` with that reason; the log carries only the provider's error code and type. Provider unchanged. 11 new tests. | `dc03a44` |
 | M2 | 2026-10-11 | Bad provider replies (non-finite numbers, JSON that is not an object or cannot be decoded, wrong nested types, over-deep metadata) end that one claim as `SOURCE_UNAVAILABLE`, never a verdict or a 500. The engine isolates each claim. No v1 model change. Tests in `app/insights/tests/test_factcheck_source_replies.py`. | `9aff207` |
 | M1 | 2026-10-11 | Outbound request URLs kept out of the logs: `setup_logging()` pins the `httpx` and `httpcore` loggers to WARNING (`app/utils/logger.py`). Follow-up: a failed Java callback logs the exception class and HTTP status only. Tests in `app/insights/tests/test_logging_hygiene.py`. | `c1b35d9`, `cedfe96` |
 
-Next: **M6**, PDF Latin-1 containment (one character outside Latin-1
-fails the whole report). Planned, not built. See
+Next: **M7**, keyword rules match whole words only (tech debt).
+Planned, not built. See
 [Next milestone](FACT-CHECK-AGENT-STATUS.md#next-milestone).
 
 ### Status-document updates
 
 | Date | Change | Commit |
 |---|---|---|
+| 2026-10-16 | Owner decisions recorded: M5 choices accepted, no new detector heuristics until Phase 3, size rule; M6 and the old-rows fix approved; reporting steps that work either way. | `43a9c1b` |
 | 2026-10-16 | M5 recorded as done; M6 promoted; detector limits documented; test counts refreshed. | `10b0039` |
 | 2026-10-16 | M4 recorded as done; M5 promoted to next milestone; test counts refreshed. | `793e02e` |
 | 2026-10-16 | M3 recorded; the forex-provider question and its options written down; the over-long-number case promoted to M4. DATA-FLOW.md: exchangerate.host needs a key and none is configured. | `2350738` |
 | 2026-10-11 | M2 recorded as done; M3 promoted; test counts refreshed. | `b370390` |
 | 2026-10-11 | The callback follow-up (`cedfe96`) added to the M1 record. | `0aec936` |
 | 2026-10-11 | M1 recorded as done; M2 promoted. DATA-FLOW.md notes that request URLs are not logged. | `b1054be` |
+
+### Security and reliability hardening
+
+Fixes from a security and reliability review (its detailed list is tracked
+privately), plus M6 and the approved old-rows fix, which landed in the same
+run. Each code fix is its own commit with its own regression tests.
+
+| Date | Change | Commit |
+|---|---|---|
+| 2026-10-17 | `purge_expired` counts only job directories that were actually removed and logs the rest. | `3bf7506` |
+| 2026-10-17 | Agent Brain title comparison checks cheap upper bounds before the full ratio; verdicts unchanged. | `98a319a` |
+| 2026-10-17 | CI verifies the gitleaks archive against the release checksums before installing it. | `c661bad` |
+| 2026-10-17 | ffmpeg runs with `-nostdin`, and a failed run deletes its partial WAV. | `5696e32` |
+| 2026-10-17 | The SQLite parent directory is created from SQLAlchemy's parsed URL, so absolute and driver-qualified URLs work. | `718d763` |
+| 2026-10-17 | Fact-check provider replies are read up to 1 MiB of decoded body; a subject whose fetch failed is fetched once per run. | `83803b5` |
+| 2026-10-17 | Fixed public messages for a failed insight run and a failed fact-check enrichment; logs carry the exception class only. | `0011dd7` |
+| 2026-10-17 | The fact-check repository returns stored non-finite numbers as null (the approved old-rows fix). | `a712146` |
+| 2026-10-17 | Agent Brain keeps one review per fact-check claim (the Agent Brain dedup prerequisite). | `8103360` |
+| 2026-10-17 | M6: text outside Latin-1 no longer fails the PDF. | `dc9caf3` |
+| 2026-10-17 | The staging recipe in DOCS/08-deployment.md sets an API key (completes `702d23d`). | `395f6ff` |
+| 2026-10-16 | Rate-limit buckets use only accepted API keys, else the client IP. | `702d23d` |
+| 2026-10-16 | Insight routes and models accept only finite numbers. | `93dda14` |
+| 2026-10-16 | The fact-check evidence cache is safe across threads. | `1d967c5` |
+| 2026-10-16 | `/v1/process-audio` runs the pipeline in a worker thread, one run at a time per worker (the event-loop part of the process-audio concurrency prerequisite). | `2bb6593` |
+| 2026-10-16 | API key and declared size are checked before a request body is read; the bytes that arrive are counted. | `ff874de` |
 
 ### Housekeeping
 
@@ -210,7 +238,7 @@ from the first Tier 3 pass.
 
 | Change | Commit |
 |---|---|
-| Agent Brain router also served from the lightweight image (`app/insight_main.py:74`). | `1774209` |
+| Agent Brain router also served from the lightweight image (`app/insight_main.py:75`). | `1774209` |
 | Agent Brain router mounted on `app/main.py` (it had never been mounted, so the route was unreachable), with a payload-size cap and its own rate limit. | `df8eec3` |
 | Docs: N4a done; Tier N tractable work complete, N4b deferred. | `3723efb` |
 | Agent Brain deadline phrases resolved to ISO-8601 dates with the standard library, no new dependency; additive `deadlineDate` field (N4a). 62 new tests. | `99dfc96` |

@@ -265,12 +265,12 @@ CI runs the same command on every push to `main` via `.github/workflows/test.yml
 
 | Where | Command | Count |
 |---|---|---|
-| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **1504** |
-| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **1501 + 1 skip** |
+| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **1582** |
+| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **1579 + 1 skip** |
 
-1501 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip` of torch, transformers, soundfile, huggingface_hub and pyannote.audio, reported as a single skip) = 1504. Nothing is lost in CI.
+1579 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip` of torch, transformers, soundfile, huggingface_hub and pyannote.audio, reported as a single skip) = 1582. Nothing is lost in CI.
 
-The light figure was measured on 2026-10-16 at `1dbfac7` (1501 passed, 1 skipped). The heavy figure is derived (1501 + the 3 skipped tests); it was last measured at 795 before the 2026-10-11 logging and fact-check tests, and needs a heavy-stack run to confirm. Reproduce the CI figure locally:
+The light figure was measured on 2026-10-17 at `3bf7506` (1579 passed, 1 skipped). The heavy figure is derived (1579 + the 3 skipped tests); it was last measured at 795 before the 2026-10-11 logging and fact-check tests, and needs a heavy-stack run to confirm. Reproduce the CI figure locally:
 
 ```bash
 .venv\Scripts\python.exe -m pytest app/insights/tests/ app/agent_brain/tests/ --ignore=app/insights/tests/test_model_load_concurrency.py -q

@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 1dbfac7
+Last verified: 2026-10-17, 3bf7506
 # System: Runtime View
 
 This page covers how VoiceIQ runs: the two entrypoints, the Docker image, configuration, where data is stored, which outside services it calls, logging and CI. It does not cover:
@@ -18,14 +18,19 @@ The repository has two FastAPI applications. They share the same settings, datab
 
 | | `app.main:app` (full pipeline) | `app.insight_main:app` (light) |
 |---|---|---|
-| `POST /v1/process-audio` (audio upload, ASR, diarization, NLP, PDF) | Mounted (`app/main.py:58`) | **Not mounted** |
-| `/v1/insights/*` and `/v1/fact-check` | Mounted (`app/main.py:59`) | Mounted (`app/insight_main.py:70`) |
-| `POST /internal/v1/agent-brain/recommendations/generate` | Mounted (`app/main.py:63`) | Mounted (`app/insight_main.py:74`) |
-| `GET /healthz`, `GET /version` (no API key needed) | `app/main.py:66-77` | `app/insight_main.py:77-88` |
-| `/docs`, `/redoc`, `/openapi.json` | Served unless `VOICEIQ_ENVIRONMENT=production` (`app/main.py:41-46`) | Same rule (`app/insight_main.py:52-57`) |
-| On startup | Creates missing tables, then sweeps expired job folders (`app/main.py:28-36`) | Same (`app/insight_main.py:41-47`) |
+| `POST /v1/process-audio` (audio upload, ASR, diarization, NLP, PDF) | Mounted (`app/main.py:60`) | **Not mounted** |
+| `/v1/insights/*` and `/v1/fact-check` | Mounted (`app/main.py:61`) | Mounted (`app/insight_main.py:71`) |
+| `POST /internal/v1/agent-brain/recommendations/generate` | Mounted (`app/main.py:65`) | Mounted (`app/insight_main.py:75`) |
+| Request guard middleware (API key and declared size checked before the body is read) | Installed, including the upload cap for `/v1/process-audio` (`app/main.py:68`) | Installed, for the JSON routes only (`app/insight_main.py:78`) |
+| `GET /healthz`, `GET /version` (no API key needed) | `app/main.py:71-82` | `app/insight_main.py:81-92` |
+| `/docs`, `/redoc`, `/openapi.json` | Served unless `VOICEIQ_ENVIRONMENT=production` (`app/main.py:43-48`) | Same rule (`app/insight_main.py:53-58`) |
+| On startup | Creates missing tables, then sweeps expired job folders (`app/main.py:30-38`) | Same (`app/insight_main.py:42-48`) |
 | Dependencies | `requirements.txt` (torch, Whisper, pyannote, Transformers) plus `ffmpeg` on PATH (`README.md:66-69`) | `requirements-insight.txt` only |
-| `.env` loading | `load_dotenv()` is imported and called unconditionally (`app/main.py:11, :22`) | `load_dotenv()` is used only if python-dotenv is installed (`app/insight_main.py:20-36`) |
+| `.env` loading | `load_dotenv()` is imported and called unconditionally (`app/main.py:11, :24`) | `load_dotenv()` is used only if python-dotenv is installed (`app/insight_main.py:20-37`) |
+
+**Request path.** For POST, PUT and PATCH requests under `/v1/insights`, `/v1/fact-check`, `/internal/v1/agent-brain` and, on `app.main`, `/v1/process-audio`, the middleware runs the API-key check and then the Content-Length check before routing and before the body reaches the app, with the same status and detail as the router dependencies. A refusal carries `Connection: close`; a request that passes has its body bytes counted, and a body longer than its declared length gets 413 (`app/security/request_guard.py:38-101`). The router dependencies then run as before. Design and order: [ARCHITECTURE.md](ARCHITECTURE.md) §3.
+
+**`/v1/process-audio` concurrency.** The pipeline and its fact-check enrichment run in a worker thread, one run at a time per worker process (one event loop each). Other requests, `/healthz` included, are served during a run; a further upload waits for the slot (`app/routes/process_audio.py:54-68, :222-224`). The request-time job sweep also runs in a worker thread (`process_audio.py:165`). How many runs a worker should allow, and whether an overloaded worker should answer 503, are open owner decisions ([DECISIONS.md](DECISIONS.md) #29).
 
 There is no container image for `app.main`. The Dockerfile header calls the full-pipeline image a deferred task (`Dockerfile:8-11`).
 
@@ -74,9 +79,9 @@ One service, `voiceiq-app`:
 
 ### Things to know when running the container
 
-- **`.env` overrides the image defaults.** `.env.example` sets `VOICEIQ_ENVIRONMENT=development` (`.env.example:12`). If you copy it to `.env` unchanged, compose runs the container in development mode: `/docs` is visible, and with `VOICEIQ_API_KEYS` empty, API-key checks are off with a logged warning (`app/security/api_key.py:65-85`). For anything beyond local use, set `VOICEIQ_ENVIRONMENT=production` and at least one key.
+- **`.env` overrides the image defaults.** `.env.example` sets `VOICEIQ_ENVIRONMENT=development` (`.env.example:12`). If you copy it to `.env` unchanged, compose runs the container in development mode: `/docs` is visible, and with `VOICEIQ_API_KEYS` empty, API-key checks are off with a logged warning (`app/security/api_key.py:64-75, :107-114`). For anything beyond local use, set `VOICEIQ_ENVIRONMENT=production` and at least one key.
 - **The database still lands in the volume.** The `.env.example` value `sqlite:///./data/insights.db` resolves to `/app/data/insights.db`, because the working directory is `/app` (`Dockerfile:65`).
-- **The healthcheck does not test auth.** With `VOICEIQ_ENVIRONMENT=production` and no keys, the protected routes return 503 (`app/security/api_key.py:68-77`). `/healthz` takes no API key, so it still returns 200 and the container still reports healthy. Check that keys are set as a separate step.
+- **The healthcheck does not test auth.** With `VOICEIQ_ENVIRONMENT=production` and no keys, the protected routes return 503 (`app/security/api_key.py:65-74`). `/healthz` takes no API key, so it still returns 200 and the container still reports healthy. Check that keys are set as a separate step.
 
 ---
 
@@ -88,7 +93,7 @@ One service, `voiceiq-app`:
 - **Agent Brain settings** (`app/agent_brain/config/settings.py:11-14`) use the prefix `VOICEIQ_AGENT_` and the same `.env` file.
 - **Pyannote token.** Two variables have no prefix and are read with `os.getenv` (`app/services/diarization_service.py:90`). `load_dotenv()` copies `.env` into the environment so that this read also sees values in `.env`.
 - **Restart to apply changes.** Each settings object is built once per process and cached with `lru_cache` (`settings.py:241-249`; `agent_brain/config/settings.py:31-33`). Some values are also copied into module constants when the module is imported (marked "at import" below).
-- **Invalid values stop startup.** Both entrypoints build the insight settings when they are imported (`app/main.py:25`, `app/insight_main.py:38`). An enum value outside its list (`VOICEIQ_ENVIRONMENT`, `VOICEIQ_LOG_LEVEL`, `VOICEIQ_THRESHOLD_PROFILE`) or a number outside its bounds raises a pydantic `ValidationError`, and the process does not start. Checked on 2026-10-16 with an invalid value for each of the three enums, and with `VOICEIQ_API_MAX_UPLOAD_MB=0`, `VOICEIQ_API_MAX_SESSION_PAYLOAD_KB=0` and `VOICEIQ_JOB_RETENTION_HOURS=-1`.
+- **Invalid values stop startup.** Both entrypoints build the insight settings when they are imported (`app/main.py:27`, `app/insight_main.py:39`). An enum value outside its list (`VOICEIQ_ENVIRONMENT`, `VOICEIQ_LOG_LEVEL`, `VOICEIQ_THRESHOLD_PROFILE`) or a number outside its bounds raises a pydantic `ValidationError`, and the process does not start. Checked on 2026-10-16 with an invalid value for each of the three enums, and with `VOICEIQ_API_MAX_UPLOAD_MB=0`, `VOICEIQ_API_MAX_SESSION_PAYLOAD_KB=0` and `VOICEIQ_JOB_RETENTION_HOURS=-1`.
 - **Agent Brain values are checked late.** These settings are read only when the Agent Brain stage of `/v1/process-audio` has produced recommendations and is about to dispatch the Java callback (`app/pipeline/orchestrator.py:779, :807-811`). A bad `VOICEIQ_AGENT_*` value therefore shows up at that point, not at startup.
 
 ### Environment variables the code reads
@@ -97,27 +102,27 @@ This table lists names and defaults only. Templates for all of them are in [`.en
 
 | Variable | Default | Read in | Notes |
 |---|---|---|---|
-| `VOICEIQ_SERVICE_NAME` | `VoiceIQ Insight Service` | `app/main.py:47, :75`; `app/insight_main.py:58, :86` | OpenAPI title and `/version` |
-| `VOICEIQ_SERVICE_VERSION` | `1.0.0` | `app/main.py:54`; `app/insight_main.py:66` | App version and `/version` |
-| `VOICEIQ_ENVIRONMENT` | `development` | `app/main.py:41`; `app/insight_main.py:52`; `app/security/api_key.py:66` | One of `development`, `staging`, `production`, `test`. `production` hides the docs routes, and with no keys set every protected request gets 503. The image sets `production` |
+| `VOICEIQ_SERVICE_NAME` | `VoiceIQ Insight Service` | `app/main.py:49, :80`; `app/insight_main.py:59, :90` | OpenAPI title and `/version` |
+| `VOICEIQ_SERVICE_VERSION` | `1.0.0` | `app/main.py:56`; `app/insight_main.py:67` | App version and `/version` |
+| `VOICEIQ_ENVIRONMENT` | `development` | `app/main.py:43`; `app/insight_main.py:53`; `app/security/api_key.py:66` | One of `development`, `staging`, `production`, `test`. `production` hides the docs routes, and with no keys set every protected request gets 503. The image sets `production` |
 | `VOICEIQ_LOG_LEVEL` | `INFO` | nothing reads it | **Validated but not applied.** The root level is fixed at INFO (`app/utils/logger.py:13`) |
-| `VOICEIQ_DATABASE_URL` | `sqlite:///./data/insights.db` | `app/insights/repository/db.py:69`; `db.py:200` (command-line bootstrap, via `os.environ`) | The path is relative to the working directory. The image sets `sqlite:////app/data/insights.db` |
-| `VOICEIQ_DATABASE_ECHO` | `false` | `db.py:63` | `true` makes SQLAlchemy log every statement |
-| `VOICEIQ_DATABASE_AUTO_CREATE` | `true` | `db.py:120` | `false` means startup creates no tables |
-| `VOICEIQ_THRESHOLD_PROFILE` | `default` | nothing reads it | **Validated but not applied.** Accepts `default`, `strict`, `lenient`. `InsightService` uses its own constant `"default"` (`app/insights/service.py:31`) |
-| `VOICEIQ_API_MAX_SESSION_PAYLOAD_KB` | `2048` (≥ 1) | `app/insights/api/insight_routes.py:27`; `factcheck_routes.py:40`; `app/agent_brain/api/agent_routes.py:22` | JSON body cap. Read at import |
-| `VOICEIQ_API_MAX_UPLOAD_MB` | `200` (≥ 1) | `app/routes/process_audio.py:27` | Audio upload cap. Read at import. Full pipeline only |
-| `VOICEIQ_FFMPEG_TIMEOUT_SEC` | `120.0` (1–600) | `app/utils/audio_utils.py:60` | Full pipeline only |
-| `VOICEIQ_JOB_RETENTION_HOURS` | `24.0` (≥ 0) | `app/main.py:35`; `app/insight_main.py:46`; `process_audio.py:33` (at import) | `0` turns off the job-folder purge |
-| `VOICEIQ_RATE_LIMIT_ENABLED` | `true` | `app/security/rate_limit.py:57` | Master switch |
-| `VOICEIQ_RATE_LIMIT_PROCESS_AUDIO` | `30/minute` | `rate_limit.py:79` | |
-| `VOICEIQ_RATE_LIMIT_FACTCHECK` | `60/minute` | `rate_limit.py:74` | |
-| `VOICEIQ_RATE_LIMIT_AGENT_BRAIN` | `60/minute` | `rate_limit.py:84` | |
-| `VOICEIQ_API_KEYS` | empty | `app/security/api_key.py:65` | Comma-separated list (`settings.py:179-190`). Empty means auth is off outside production and every protected request gets 503 in production |
+| `VOICEIQ_DATABASE_URL` | `sqlite:///./data/insights.db` | `app/insights/repository/db.py:55, :64`; `db.py:195` (command-line bootstrap, via `os.environ`) | The path is relative to the working directory. The image sets `sqlite:////app/data/insights.db` |
+| `VOICEIQ_DATABASE_ECHO` | `false` | `db.py:58` | `true` makes SQLAlchemy log every statement |
+| `VOICEIQ_DATABASE_AUTO_CREATE` | `true` | `db.py:115` | `false` means startup creates no tables |
+| `VOICEIQ_THRESHOLD_PROFILE` | `default` | nothing reads it | **Validated but not applied.** Accepts `default`, `strict`, `lenient`. `InsightService` uses its own constant `"default"` (`app/insights/service.py:32`) |
+| `VOICEIQ_API_MAX_SESSION_PAYLOAD_KB` | `2048` (≥ 1) | `app/insights/api/insight_routes.py:28`; `factcheck_routes.py:40`; `app/agent_brain/api/agent_routes.py:22`; `app/security/request_guard.py:40` | JSON body cap, for the router dependencies and the request guard. Read at import |
+| `VOICEIQ_API_MAX_UPLOAD_MB` | `200` (≥ 1) | `app/routes/process_audio.py:30` | Audio upload cap, also passed to the request guard (`app/main.py:68`). Read at import. Full pipeline only |
+| `VOICEIQ_FFMPEG_TIMEOUT_SEC` | `120.0` (1–600) | `app/utils/audio_utils.py:61` | Full pipeline only. ffmpeg runs with `-nostdin`, and a partial output file is deleted on a timeout or error (`audio_utils.py:65, :85, :93`) |
+| `VOICEIQ_JOB_RETENTION_HOURS` | `24.0` (≥ 0) | `app/main.py:37`; `app/insight_main.py:47`; `process_audio.py:36` (at import) | `0` turns off the job-folder purge |
+| `VOICEIQ_RATE_LIMIT_ENABLED` | `true` | `app/security/rate_limit.py:62` | Master switch. A request is counted under its API key only when keys are configured and the header holds one of them; otherwise under the client IP (`rate_limit.py:43-52`) |
+| `VOICEIQ_RATE_LIMIT_PROCESS_AUDIO` | `30/minute` | `rate_limit.py:84` | |
+| `VOICEIQ_RATE_LIMIT_FACTCHECK` | `60/minute` | `rate_limit.py:79` | |
+| `VOICEIQ_RATE_LIMIT_AGENT_BRAIN` | `60/minute` | `rate_limit.py:89` | |
+| `VOICEIQ_API_KEYS` | empty | `app/security/api_key.py:64`; `app/security/rate_limit.py:50` | Comma-separated list (`settings.py:179-190`). Empty means auth is off outside production and every protected request gets 503 in production |
 | `VOICEIQ_FACTCHECK_AUTO_ENRICH` | `false` | `app/utils/factcheck_gate.py:38` | A per-request `?fact_check=` value takes priority |
-| `VOICEIQ_OPENWEATHER_API_KEY` | empty | `app/insights/core/factcheck/factcheck_engine.py:81` | Empty turns off the weather client |
-| `VOICEIQ_ALPHAVANTAGE_API_KEY` | empty | `factcheck_engine.py:80` | Empty turns off the stock-price client |
-| `VOICEIQ_FACTCHECK_HTTP_TIMEOUT_SEC` | `5.0` (0.5–30) | `factcheck_engine.py:75` | Applies to all fact-check source clients |
+| `VOICEIQ_OPENWEATHER_API_KEY` | empty | `app/insights/core/factcheck/factcheck_engine.py:82` | Empty turns off the weather client |
+| `VOICEIQ_ALPHAVANTAGE_API_KEY` | empty | `factcheck_engine.py:81` | Empty turns off the stock-price client |
+| `VOICEIQ_FACTCHECK_HTTP_TIMEOUT_SEC` | `5.0` (0.5–30) | `factcheck_engine.py:76` | Applies to all fact-check source clients |
 | `VOICEIQ_AGENT_BRAIN_AUTO_RUN` | `false` | `app/pipeline/orchestrator.py:741` | An insight setting despite the name. Adds `recommendations` to the `/v1/process-audio` response |
 | `VOICEIQ_AGENT_CALLBACK_URL` | empty | `app/agent_brain/integrations/java_callback_client.py:71, :98` | The callback is off unless both URL and secret are set |
 | `VOICEIQ_AGENT_CALLBACK_SECRET` | empty | `java_callback_client.py:78` | HMAC signing key |
@@ -134,9 +139,9 @@ The repository does not set or read `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE` or 
 
 ### SQLite database
 
-- **Default file:** `./data/insights.db`, relative to the working directory. In the image it is `/app/data/insights.db`. The parent folder is created if it is missing (`app/insights/repository/db.py:36-55`).
-- **Schema management:** there is no migrations tool. Startup calls `Base.metadata.create_all()` (`db.py:110-130`), which creates missing tables and never alters an existing one. `app/insights/tests/test_db_schema_evolution.py` pins this behaviour.
-- **Retention:** no sweep touches the database. Rows stay until they are deleted. The only delete route is `DELETE /v1/insights/{session_id}` (`app/insights/api/insight_routes.py:199`), which removes one insight record; `fact_check_results` rows have no delete route.
+- **Default file:** `./data/insights.db`, relative to the working directory. In the image it is `/app/data/insights.db`. The parent folder of the file SQLAlchemy opens is created if it is missing; the path is taken from `make_url(...).database`, so relative, absolute and `sqlite+pysqlite` URLs all work (`app/insights/repository/db.py:35-50`, `718d763`).
+- **Schema management:** there is no migrations tool. Startup calls `Base.metadata.create_all()` (`db.py:105-125`), which creates missing tables and never alters an existing one. `app/insights/tests/test_db_schema_evolution.py` pins this behaviour.
+- **Retention:** no sweep touches the database. Rows stay until they are deleted. The only delete route is `DELETE /v1/insights/{session_id}` (`app/insights/api/insight_routes.py:202`), which removes one insight record; `fact_check_results` rows have no delete route.
 
 | Table | Model | Holds |
 |---|---|---|
@@ -146,9 +151,9 @@ The repository does not set or read `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE` or 
 ### Job folders (full pipeline only)
 
 - Each `/v1/process-audio` request gets its own folder, `data/jobs/<job_id>/`, relative to the working directory (`app/utils/job_io.py:36-50`). It contains `input/` (the uploaded audio), `artifacts/` (audio, ASR, diarization, alignment, NLP, insights, report and, when enabled, Agent Brain output; see the paths in `app/pipeline/orchestrator.py`), `logs/` and `meta.json`.
-- **Retention:** a folder is deleted once it is older than `VOICEIQ_JOB_RETENTION_HOURS`. Age is taken from the time `meta.json` was last modified, or from the folder itself if `meta.json` is missing (`job_io.py:127-163`).
-- **When the sweep runs:** at startup in both entrypoints, and at most once an hour during `/v1/process-audio` requests (`app/routes/process_audio.py:30-48`).
-- **Failures:** the sweep never raises. Removal errors are ignored (`shutil.rmtree(..., ignore_errors=True)`), and a folder whose age cannot be read is logged and skipped (`job_io.py:150-160`). The request-time call is also wrapped in a logged `try/except` (`process_audio.py:45-48`).
+- **Retention:** a folder is deleted once it is older than `VOICEIQ_JOB_RETENTION_HOURS`. Age is taken from the time `meta.json` was last modified, or from the folder itself if `meta.json` is missing (`job_io.py:127-168`).
+- **When the sweep runs:** at startup in both entrypoints, and at most once an hour during `/v1/process-audio` requests, in a worker thread (`app/routes/process_audio.py:33-51, :165`).
+- **Failures:** the sweep never raises. Removal uses `shutil.rmtree(..., ignore_errors=True)`; a folder still there afterwards is logged and not counted in the returned total, and a folder whose age cannot be read is logged and skipped (`job_io.py:151-165`). The request-time call is also wrapped in a logged `try/except` (`process_audio.py:48-51`).
 
 ### Model caches (full pipeline only)
 
@@ -156,7 +161,7 @@ The light image loads no models.
 
 | Model | Where it is cached |
 |---|---|
-| Whisper `base` (`app/routes/process_audio.py:205`) | Whisper's default download folder; the code passes no `download_root` (`app/services/asr_service.py:37`). [DATA-FLOW.md](DATA-FLOW.md) §3 gives the path as `~/.cache/whisper`. Each process also keeps loaded models in memory (`asr_service.py:7`) |
+| Whisper `base` (`app/routes/process_audio.py:237`) | Whisper's default download folder; the code passes no `download_root` (`app/services/asr_service.py:37`). [DATA-FLOW.md](DATA-FLOW.md) §3 gives the path as `~/.cache/whisper`. Each process also keeps loaded models in memory (`asr_service.py:7`) |
 | Hugging Face models: `pyannote/speaker-diarization`, `cardiffnlp/twitter-roberta-base-sentiment-latest`, `facebook/bart-large-mnli`, `sshleifer/distilbart-cnn-12-6`, `sentence-transformers/all-MiniLM-L6-v2` | The Hugging Face libraries' default cache. The repository sets no cache path (`diarization_service.py:47`, `sentiment_service.py:31`, `topic_service.py:34-36`, `summary_service.py:27-29`, `keyword_service.py:26`) |
 | spaCy `en_core_web_sm` | Loaded with `spacy.load`, which does not download it (`app/services/keyword_service.py:20`). It must be installed separately as a Python package; no requirements file declares it |
 
@@ -179,9 +184,10 @@ There is one line per service below. [DATA-FLOW.md](DATA-FLOW.md) has the full d
 | Behaviour | Where | Since |
 |---|---|---|
 | The root logger is set to INFO with the format `%(asctime)s - %(levelname)s - %(message)s`, and the application logger is named `voiceiq` | `app/utils/logger.py:12-21` | — |
-| Setup runs on the first import of `app.utils.logger`. `app.main` also calls it explicitly. `app.insight_main` reaches it through its imports, for example `app/utils/job_io.py:11` | `logger.py:18`; `app/main.py:23` | — |
+| Setup runs on the first import of `app.utils.logger`. `app.main` also calls it explicitly. `app.insight_main` reaches it through its imports, for example `app/utils/job_io.py:11` | `logger.py:18`; `app/main.py:25` | — |
 | The `httpx` and `httpcore` loggers are pinned to WARNING whatever the root level is, so outbound request URLs are not logged | `logger.py:4-15` | `c1b35d9` |
 | A failed Java callback logs only the exception class and HTTP status, never the exception text or the payload | `app/pipeline/orchestrator.py:836-846` | `cedfe96` |
+| A failed insight run, a failed fact-check enrichment in `/v1/process-audio` and a failed fact-check save log only the exception class, never its text | `app/insights/service.py:89`; `app/routes/process_audio.py:120-124, :129-133` | `0011dd7` |
 
 - `VOICEIQ_LOG_LEVEL` changes none of the behaviour above.
 - `VOICEIQ_DATABASE_ECHO=true` adds SQLAlchemy statement logging.
@@ -196,10 +202,10 @@ CI is defined in `.github/workflows/test.yml` and runs on pushes to `main` and o
 
 | Job | Python | What it runs |
 |---|---|---|
-| `lint` ("Lint, types, secrets") | 3.11 | Installs `requirements-insight.txt`, ruff 0.7.4 and mypy 1.13.0. Then runs `ruff check .`, `mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/`, and gitleaks 8.21.2 as `gitleaks dir . --no-banner --redact` (`:10-47`) |
-| `test` ("Run Insight Service unit tests") | 3.10 and 3.11 (matrix) | Installs `requirements-insight.txt` only, then runs `pytest -v app/insights/tests/ app/agent_brain/tests/` with `PYTHONPATH=.`. On failure, the end of the output is posted as an `::error::` annotation (`:49-93`) |
+| `lint` ("Lint, types, secrets") | 3.11 | Installs `requirements-insight.txt`, ruff 0.7.4 and mypy 1.13.0. Then runs `ruff check .` and `mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/`. It downloads the gitleaks 8.21.2 archive and the release's checksums file, checks the archive with `sha256sum --check` and installs it only on a match, in a step that runs with `set -euo pipefail` (`:37-48`, `c661bad`). It then runs `gitleaks dir . --no-banner --redact` (`:53-54`). Job: `:10-54` |
+| `test` ("Run Insight Service unit tests") | 3.10 and 3.11 (matrix) | Installs `requirements-insight.txt` only, then runs `pytest -v app/insights/tests/ app/agent_brain/tests/` with `PYTHONPATH=.`. On failure, the end of the output is posted as an `::error::` annotation (`:56-100`) |
 
-- **Expected test result:** 1501 passed and 1 skipped on the light stack, measured 2026-10-16 at `1dbfac7`. The skipped item is `app/insights/tests/test_model_load_concurrency.py`, a 3-test module that needs the ML libraries ([CLAUDE.md](../CLAUDE.md), "One test lane").
+- **Expected test result:** 1579 passed and 1 skipped on the light stack, measured 2026-10-17 at `3bf7506`. The skipped item is `app/insights/tests/test_model_load_concurrency.py`, a 3-test module that needs the ML libraries ([CLAUDE.md](../CLAUDE.md), "One test lane").
 - **Not in CI:** a Docker build, the heavy ML stack, and the legacy top-level `tests/` folder.
 - **Tool settings:** ruff and mypy are configured in `pyproject.toml`: line length 120, target `py310`, and the pydantic mypy plugin.
 - **Python versions in use:** Docker 3.11, CI 3.10 and 3.11, README "Python 3.10+" (`README.md:66`).

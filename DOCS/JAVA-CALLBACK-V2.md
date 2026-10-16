@@ -33,7 +33,7 @@ timestamp you can range-check.
 | `X-VoiceIQ-Signature` | `9f86d0…` | **v1, legacy** — body only |
 | `X-VoiceIQ-Signature-V2` | `4c8a2b…` | **v2** — timestamp-bound |
 | `X-VoiceIQ-Timestamp` | `1769342461` | **Unix seconds**, decimal string, UTC |
-| `X-VoiceIQ-Trace-Id` | `9b1f…` | per-send id, use for de-duplication |
+| `X-VoiceIQ-Trace-Id` | `9b1f…` | per-send id for correlation; not covered by either signature (de-duplication: §4 step 5) |
 
 Both signatures are lowercase hex SHA-256 (64 chars).
 

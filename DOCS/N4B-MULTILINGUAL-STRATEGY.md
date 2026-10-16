@@ -84,7 +84,7 @@ it — and **nothing anywhere reads it.** Grepping `.language` across
 unconditionally English.
 
 **Language is already detected, and already thrown away.** Whisper
-auto-detects (`process_audio.py:200` passes `language=None`), `ASRService`
+auto-detects (`process_audio.py:238` passes `language=None`), `ASRService`
 records it in `meta["language"]`, and the orchestrator's `_final_response`
 already surfaces it on the response as **`result["asr_meta"]["language"]`**. It simply never
 reaches Agent Brain. Phase 1 is therefore a wiring job with a known source

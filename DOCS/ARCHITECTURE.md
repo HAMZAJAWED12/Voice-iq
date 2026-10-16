@@ -1,7 +1,7 @@
-Last verified: 2026-10-16, 1dbfac7
+Last verified: 2026-10-17, 3bf7506
 # Architecture
 
-This document describes the code structure of VoiceIQ at commit `1dbfac7`
+This document describes the code structure of VoiceIQ at commit `3bf7506`
 (branch `sprint7/doc-sync`). It shows how the packages fit together, how data
 moves between them, where faults are contained, what is stored, and how to
 extend the system without breaking it.
@@ -25,15 +25,16 @@ Brain. Only one of them can process audio.
 | | `app/main.py` | `app/insight_main.py` |
 |---|---|---|
 | Purpose | Full pipeline: audio in, analysis out | Insight Service and Agent Brain only, no audio stack |
-| Routers mounted | process-audio and insights/fact-check under `/v1`, plus the Agent Brain router (`main.py:58-63`) | insights/fact-check under `/v1`, plus the Agent Brain router (`insight_main.py:70-74`) |
+| Routers mounted | process-audio and insights/fact-check under `/v1`, plus the Agent Brain router (`main.py:60-65`) | insights/fact-check under `/v1`, plus the Agent Brain router (`insight_main.py:71-75`) |
+| Middleware | `RequestGuardMiddleware`, including the upload cap for `/v1/process-audio` (`main.py:68`) | `RequestGuardMiddleware`, without `/v1/process-audio` (`insight_main.py:78`) |
 | Python dependencies | `requirements.txt` (includes whisper, torch, pyannote.audio, transformers) | `requirements-insight.txt` (FastAPI, SQLAlchemy, httpx, slowapi, fpdf; no ML libraries) |
-| Startup (`lifespan`) | `init_db()`, then a sweep of expired job folders (`main.py:28-36`) | the same (`insight_main.py:41-47`) |
+| Startup (`lifespan`) | `init_db()`, then a sweep of expired job folders (`main.py:30-38`) | the same (`insight_main.py:42-48`) |
 | Run by | no bundled config; start it when `/v1/process-audio` is needed | the bundled `Dockerfile` (`Dockerfile:89`) |
 
 Both apps serve `/healthz` and `/version` directly on the app, outside the
-protected routers (`main.py:66-77`, `insight_main.py:77-88`). Both turn off
+protected routers (`main.py:71-82`, `insight_main.py:81-92`). Both turn off
 `/docs`, `/redoc` and `/openapi.json` when `environment` is `production`
-(`main.py:41-46`, `insight_main.py:52-57`).
+(`main.py:43-48`, `insight_main.py:53-58`).
 
 ## 2. Package map
 
@@ -44,7 +45,7 @@ app/main.py ─┬─ app/routes/process_audio.py ── app/pipeline/orchestrat
              ├─ app/insights/api      (insights + fact-check routers, under /v1)
              └─ app/agent_brain/api   (internal router, /internal/v1/agent-brain)
 
-app/security  guards that every router declares as FastAPI dependencies
+app/security  request guard middleware on both apps, plus the guards every router declares as FastAPI dependencies
 app/utils     per-job workspace, logging, audio helpers, upload and fact-check gates
 ```
 
@@ -56,7 +57,7 @@ app/utils     per-job workspace, logging, audio helpers, upload and fact-check g
 | `app/insights/core` | Insight engines: analytics, signal aggregation, rule engine, timeline, escalation, inconsistency, scoring, summary, normalizer, validator; shared `clamp` in `_math.py` | `rule_engine.py`, `_math.py` |
 | `app/insights/core/factcheck` | Rule-based fact-check engine: claim detector, classifier, comparator, scorer, engine, and five source clients | `factcheck_engine.py`, `claim_detector.py`, `source_clients/` |
 | `app/insights/models` | Pydantic models, one file per concern | `input_models.py`, `insight_models.py`, `factcheck_models.py`, … |
-| `app/insights/api` | Insight and fact-check routers, combined into one router (`api/__init__.py:10-12`) | `insight_routes.py`, `factcheck_routes.py` |
+| `app/insights/api` | Insight and fact-check routers, combined into one router (`api/__init__.py:10-12`); the insight router parses JSON bodies with finite numbers only | `insight_routes.py`, `factcheck_routes.py`, `finite_json.py` |
 | `app/insights/repository` | SQLAlchemy engine, ORM models and two repositories | `db.py`, `orm_models.py`, `factcheck_orm_models.py`, `insight_repository.py`, `factcheck_repository.py` |
 | `app/insights/config` | `InsightSettings` (env prefix `VOICEIQ_`, `settings.py:28-38`) and default insight thresholds (`defaults.py`) | `settings.py`, `defaults.py` |
 | `app/insights/adapters` | Turns orchestrator output into a `SessionInput` (`voiceiq_adapter.py:52`) | `voiceiq_adapter.py` |
@@ -67,7 +68,7 @@ app/utils     per-job workspace, logging, audio helpers, upload and fact-check g
 | `app/agent_brain/adapters` | Builds an `AgentContext` from `SessionInput`, `InsightBundle` and an optional `FactCheckResponse` | `pipeline_adapter.py` |
 | `app/agent_brain/integrations` | HMAC-signed callback to the Java Action Layer | `java_callback_client.py` |
 | `app/agent_brain/api`, `config`, `service.py` | Internal route, `AgentBrainSettings` (env prefix `VOICEIQ_AGENT_`, `config/settings.py:14`), `AgentBrainService` | |
-| `app/security` | API-key check, Content-Length cap, rate limits | `api_key.py`, `payload_size.py`, `rate_limit.py` |
+| `app/security` | API-key check, Content-Length cap, rate limits, and the middleware that runs the key and size checks before a body is read | `api_key.py`, `payload_size.py`, `rate_limit.py`, `request_guard.py` |
 | `app/utils` | `JobIO` per-job workspace, logging setup, ffmpeg normalisation, audio-quality check, magic-byte sniff, upload filename check, fact-check opt-in gate | `job_io.py`, `logger.py`, `audio_utils.py`, `audio_quality.py`, `audio_sniff.py`, `upload.py`, `factcheck_gate.py` |
 
 Two modules sit outside the request path: `app/evaluation/evaluator.py` is
@@ -78,33 +79,65 @@ used by the repository-root script `run_eval_dev.py` (line 8), and
 
 | Route | Declared at | Mounted by |
 |---|---|---|
-| `POST /v1/process-audio` | `app/routes/process_audio.py:118` | `main.py` only |
-| `POST /v1/insights/generate` | `app/insights/api/insight_routes.py:54` | both apps |
-| `POST /v1/insights/generate-from-raw` | `insight_routes.py:74` | both apps |
-| `GET /v1/insights/{session_id}` | `insight_routes.py:94` | both apps |
-| `GET /v1/insights/{session_id}/summary` | `insight_routes.py:112` | both apps |
-| `GET /v1/insights/{session_id}/speakers` | `insight_routes.py:137` | both apps |
-| `GET /v1/insights/{session_id}/timeline` | `insight_routes.py:165` | both apps |
-| `GET /v1/insights/` | `insight_routes.py:188` | both apps |
-| `DELETE /v1/insights/{session_id}` | `insight_routes.py:199` | both apps |
+| `POST /v1/process-audio` | `app/routes/process_audio.py:140` | `main.py` only |
+| `POST /v1/insights/generate` | `app/insights/api/insight_routes.py:57` | both apps |
+| `POST /v1/insights/generate-from-raw` | `insight_routes.py:77` | both apps |
+| `GET /v1/insights/{session_id}` | `insight_routes.py:97` | both apps |
+| `GET /v1/insights/{session_id}/summary` | `insight_routes.py:115` | both apps |
+| `GET /v1/insights/{session_id}/speakers` | `insight_routes.py:140` | both apps |
+| `GET /v1/insights/{session_id}/timeline` | `insight_routes.py:168` | both apps |
+| `GET /v1/insights/` | `insight_routes.py:191` | both apps |
+| `DELETE /v1/insights/{session_id}` | `insight_routes.py:202` | both apps |
 | `POST /v1/fact-check` | `app/insights/api/factcheck_routes.py:79` | both apps |
 | `GET /v1/fact-check/{conversation_id}` | `factcheck_routes.py:117` | both apps |
 | `POST /internal/v1/agent-brain/recommendations/generate` | `app/agent_brain/api/agent_routes.py:38` | both apps (mounted in `df8eec3`, added to the light app in `1774209`) |
-| `GET /healthz`, `GET /version` | `main.py:66,71`; `insight_main.py:77,82` | each app |
+| `GET /healthz`, `GET /version` | `main.py:71,76`; `insight_main.py:81,86` | each app |
 
 Each router declares its guards as FastAPI dependencies from `app/security`
-(for example `process_audio.py:54-59`, `insight_routes.py:33-40`,
-`agent_routes.py:25-33`). What the guards do, and their limits, is covered in
-[SECURITY.md](SECURITY.md). Request and response fields: [05-api-reference.md](05-api-reference.md)
-(historical) and the route code.
+(for example `process_audio.py:74-79`, `insight_routes.py:35-43`,
+`agent_routes.py:25-33`). FastAPI reads and parses a request body before it
+resolves those dependencies (`app/security/request_guard.py:3-5`), so both
+apps also install `RequestGuardMiddleware`, which runs before routing:
+
+```
+request ─► RequestGuardMiddleware ─► routing ─► body parsing ─► router dependencies ─► handler
+           (POST/PUT/PATCH under                (insights:      (API key, Content-Length,
+            a guarded prefix)                    finite only)    then any rate limit)
+```
+
+- **Guarded prefixes** (`request_guard.py:38-48`): `/v1/insights`,
+  `/v1/fact-check` and `/internal/v1/agent-brain`, capped by
+  `api_max_session_payload_kb` (default 2048 KB), and on `app.main` only
+  `/v1/process-audio`, capped by the upload limit.
+- **Checks** (`request_guard.py:65-81`): the API-key check, then the
+  Content-Length check, before the body reaches the app. They share
+  `api_key_error` and `content_length_error` with the router dependencies
+  (`app/security/api_key.py:58-90`, `app/security/payload_size.py:63-95`), so
+  the status and detail are the same. A refusal carries `Connection: close`.
+- **Passing requests** (`request_guard.py:83-101`): the body bytes are
+  counted, and a body longer than its declared length gets 413.
+- **Effect of running before routing:** an unauthenticated request with an
+  invalid body gets the auth error instead of 422, and a body-method request
+  to an unknown path under a guarded prefix gets the auth or size error
+  instead of 404 or 405 (`request_guard.py:13-15`).
+
+`app/insights/tests/test_request_guard.py` pins this (`ff874de`). The router
+dependencies stay in place: they cover GET and DELETE and keep the OpenAPI
+security scheme. The `/v1/insights` router also uses `FiniteJSONRoute`
+(`insight_routes.py:38`, `app/insights/api/finite_json.py:32-49`): a JSON
+body with `NaN`, `Infinity` or a number that overflows to infinity gets the
+standard 422 `json_invalid` error while parsing. What the guards do, and their
+limits, is covered in [SECURITY.md](SECURITY.md). Request and response fields:
+[05-api-reference.md](05-api-reference.md) (historical) and the route code.
 
 ## 4. Data flow: `POST /v1/process-audio`
 
 ```mermaid
 flowchart TD
-    C["Client"] -->|"POST /v1/process-audio"| R["routes/process_audio.py"]
+    C["Client"] -->|"POST /v1/process-audio"| M["RequestGuardMiddleware: API key, Content-Length"]
+    M --> R["routes/process_audio.py"]
     R -->|"extension check, magic-byte sniff, streamed write"| IN[("data/jobs/ID/input/original.ext")]
-    R --> O["VoiceIQOrchestrator.run"]
+    R -->|"worker thread, one run at a time"| O["VoiceIQOrchestrator.run"]
     O --> G{"4 hard-fail gates"}
     G -->|"_HardFail"| F["status failed: HTTP 400, or 422 on ffmpeg timeout"]
     G --> S["fail-soft stages: ASR to PDF"]
@@ -118,22 +151,33 @@ flowchart TD
 
 ### 4.1 Route, before the pipeline
 
-`process_audio()` (`app/routes/process_audio.py:118-231`) does this, in order:
+Before the handler runs, `RequestGuardMiddleware` has checked the API key and
+the declared Content-Length against the upload cap, and the router
+dependencies and the rate limit have run (§3). Then `process_audio()`
+(`app/routes/process_audio.py:140-224`) and `_run_pipeline()` (`:227-263`) do
+this, in order:
 
-1. Creates a request id (a UUID) that is also the job id (`:132`).
+1. Creates a request id (a UUID) that is also the job id (`:154`).
 2. Checks the filename extension against `.mp3`, `.wav`, `.m4a`, `.flac`
-   (`app/utils/upload.py:15-36`); a bad or missing name is HTTP 400 (`:137-140`).
-3. Runs the hourly, fail-soft sweep of expired job folders (`:38-48`, `:143`)
-   and creates the job workspace `data/jobs/<job_id>/` (`app/utils/job_io.py:32-72`).
+   (`app/utils/upload.py:15-36`); a bad or missing name is HTTP 400 (`:159-162`).
+3. Runs the hourly, fail-soft sweep of expired job folders in a worker thread
+   (`:41-51`, `:165`) and creates the job workspace `data/jobs/<job_id>/`
+   (`:166`, `app/utils/job_io.py:32-72`).
 4. Streams the upload to `input/original<ext>` in 1 MB chunks, checks the
    first bytes for a known audio signature (`app/utils/audio_sniff.py:15`) and
-   counts bytes against the upload cap (`:153-198`). Results: 415 for
+   counts bytes against the upload cap (`:175-220`). Results: 415 for
    non-audio content, 413 when the cap is passed mid-stream, 500 with a fixed
    message when the write fails.
-5. Calls `VoiceIQOrchestrator(job_io=io).run(...)` (`:200-207`).
-6. If `pipeline_meta.status` is `failed`, raises 422 when the warnings
-   contain `AUDIO_NORMALIZATION_TIMEOUT`, otherwise 400 (`:209-222`).
-7. Adds `fact_checks_v2` (see 4.4) and returns the result (`:226-231`).
+5. Hands the rest to `_run_pipeline` in a worker thread, behind a one-slot
+   limiter per event loop (`_pipeline_slot`, `:54-68`, `:222-224`). The event
+   loop keeps serving other requests, `/healthz` included, during a run; a
+   second upload to the same worker waits for the slot. How many runs a
+   worker allows, and whether an overloaded worker should answer 503, are
+   open owner decisions ([DECISIONS.md](DECISIONS.md) #29).
+6. `_run_pipeline` calls `VoiceIQOrchestrator(job_io=io).run(...)` (`:232-239`).
+7. If `pipeline_meta.status` is `failed`, raises 422 when the warnings
+   contain `AUDIO_NORMALIZATION_TIMEOUT`, otherwise 400 (`:241-254`).
+8. Adds `fact_checks_v2` (see 4.4) and returns the result (`:256-263`).
 
 ### 4.2 Orchestrator and `_PipelineState`
 
@@ -212,7 +256,10 @@ How the stages connect:
   [JAVA-CALLBACK-V2.md](JAVA-CALLBACK-V2.md).
 - `_run_pdf` renders the legacy `fact_checks` list from stage 15
   (`orchestrator.py:865`). The PDF does not include `fact_checks_v2` or the
-  Agent Brain recommendations.
+  Agent Brain recommendations. Report text goes through `safe_text`, which
+  maps characters outside Latin-1 to a near Latin-1 form or to "?"
+  (`app/services/pdf_service.py:29-58`, `61-71`), so such text no longer
+  fails the stage (`dc9caf3`); the JSON response keeps the original text.
 
 `_final_response` (`orchestrator.py:882-965`) builds the response from the
 saved artifacts, not from memory. The `recommendations` key is present only
@@ -222,18 +269,21 @@ when the Agent Brain stage wrote its artifact (`orchestrator.py:910-913`,
 ### 4.4 Fact-check enrichment, after the pipeline
 
 The route, not the orchestrator, runs the Sprint 5 fact-check engine, and
-only after `run()` returns:
+only after `run()` returns, in the same worker thread as the pipeline
+(`process_audio.py:256-263`):
 
 - `factcheck_requested(fact_check)` decides whether to run it. The per-request
   `?fact_check=` value wins; otherwise the `factcheck_auto_enrich` setting
   decides, and it defaults to off (`app/utils/factcheck_gate.py:24-38`,
   `app/insights/config/settings.py:193`).
 - When it is off, `fact_checks_v2` is a `disabled` stub (`factcheck_gate.py:18-21`).
-- When it is on, `_auto_run_factcheck` (`process_audio.py:62-115`) cuts the
+- When it is on, `_auto_run_factcheck` (`process_audio.py:82-137`) cuts the
   transcript to `MAX_TRANSCRIPT_CHARS` (10,000, `factcheck_models.py:155`),
   runs the shared engine, checks the payload as strict JSON (no NaN or
   Infinity), saves the rows on a best-effort basis, and sets `fact_checks_v2`.
-  An empty transcript gives a `skipped` stub.
+  An empty transcript gives a `skipped` stub. Any error gives a `failed` stub
+  with the fixed reason `fact-check enrichment failed`; the warning log
+  carries the exception class only (`:126-137`).
 
 The response therefore has two fact-check keys: `fact_checks` (legacy
 candidate scan, made inside the pipeline) and `fact_checks_v2` (Sprint 5
@@ -242,16 +292,19 @@ engine, added by the route). Egress for each is listed in
 
 ## 5. Data flow: standalone routes
 
-**Insights** (`app/insights/api/insight_routes.py`). `POST /generate` takes a
-validated `SessionInput`; `POST /generate-from-raw` takes a loose dict that
-`InsightService.generate_from_raw` validates and normalises first
-(`service.py:108-160`). Both call `InsightService.generate` and save the
-response through `InsightRepository.save` (`insight_routes.py:43-51`). The
+**Insights** (`app/insights/api/insight_routes.py`). Bodies are parsed with
+finite numbers only (`FiniteJSONRoute`, §3), so these routes store nothing
+non-finite; the input models' number fields also refuse non-finite values
+from in-process callers (`input_models.py:10-12`, `78-79`). `POST /generate`
+takes a validated `SessionInput`; `POST /generate-from-raw` takes a loose
+dict that `InsightService.generate_from_raw` validates and normalises first
+(`service.py:111-163`). Both call `InsightService.generate` and save the
+response through `InsightRepository.save` (`insight_routes.py:46-54`). The
 `GET` and `DELETE` routes only read or delete stored records. Unlike the
 fact-check routes, saving here is not wrapped in a `try/except`, so a
 repository error reaches the caller.
 
-Inside `InsightService.generate` (`service.py:34-105`):
+Inside `InsightService.generate` (`service.py:35-108`):
 
 ```
 parse / validate input ─► InsightAnalyticsEngine.run
@@ -269,26 +322,34 @@ before escalation, because escalation reads the timeline markers
 
 **Fact-check** (`app/insights/api/factcheck_routes.py`). `POST /v1/fact-check`
 runs one process-wide `FactCheckEngine`, built once from settings
-(`factcheck_routes.py:61-66`, `factcheck_engine.py:68-84`). The engine runs:
+(`factcheck_routes.py:61-66`, `factcheck_engine.py:69-85`). The engine runs:
 
 ```
 ClaimDetector.detect (regex; _keep_match drops names, counts and non-USD prices before overlaps,
                       claim_detector.py:352, 385-467; drops a claim whose number has over 15 digits, :193, 478)
   → ClaimClassifier.classify
-  → per claim: SourceRouter.client_for(claim_type) → client.fetch (TTL cache)
+  → per claim: SourceRouter.client_for(claim_type) → client.fetch (TTL cache; a subject whose
+               fetch failed earlier in the same run is not fetched again, factcheck_engine.py:183-185, 203-209)
                → FactCheckComparator.compare → FactCheckScorer.score
   → FactCheckResponse + stats
 ```
 
+All five clients fetch through `_get_json`, which streams the reply and reads
+at most `MAX_REPLY_BYTES` (1 MiB, counted after decompression); a longer
+reply gives no evidence, so the claim ends as `SOURCE_UNAVAILABLE`
+(`base_client.py:38-57`, `155-160`).
+
 Claim types map to clients as follows: `CURRENCY_RATE` to exchangerate.host,
 `CRYPTO_PRICE` to CoinGecko, `STOCK_PRICE` to Alpha Vantage, `WEATHER` to
 OpenWeather, `STATIC_FACT` to the Wikipedia REST client. `COMMODITY_PRICE` has
-no client, so it gets `UNSUPPORTED_CLAIM_TYPE` (`factcheck_engine.py:68-84`,
-`172-185`). The currency client sends no access key, and the provider now
+no client, so it gets `UNSUPPORTED_CLAIM_TYPE` (`factcheck_engine.py:69-85`,
+`188-201`). The currency client sends no access key, and the provider now
 requires one, so currency claims end as `SOURCE_UNAVAILABLE` with the reason
 stated (`forex_client.py:1-8`, `dc03a44`). Provider status:
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
-`GET /v1/fact-check/{conversation_id}` lists stored rows (`factcheck_routes.py:117-131`).
+`GET /v1/fact-check/{conversation_id}` lists stored rows (`factcheck_routes.py:117-131`);
+a stored non-finite number, at any depth and in the evidence too, is returned
+as `null` (`factcheck_repository.py:210-241`).
 
 **Agent Brain** (`app/agent_brain/api/agent_routes.py`). The route takes a
 camelCase `AgentContext` and returns `AgentBrainService.generate(context)`
@@ -296,8 +357,12 @@ camelCase `AgentContext` and returns `AgentBrainService.generate(context)`
 agents (Task, Follow-Up, Email Draft, Escalation, Fact-Check Review;
 `agent_runner.py:19-26`), refines each confidence, removes near-duplicates
 and ranks by priority, then confidence (`agent_runner.py:42-50`,
-`ranker.py`). This route never calls the Java callback; only the pipeline
-stage does ([DATA-FLOW.md](DATA-FLOW.md)).
+`ranker.py`). Recommendations linked to different fact-check claims are
+never duplicates; a fact-check recommendation with no claim id is compared
+by its claim text (`deduplication.py:86-91`). A non-finite confidence in the
+context counts as missing (`agent_context.py:23-26`, `44-47`, `65-69`). This
+route never calls the Java callback; only the pipeline stage does
+([DATA-FLOW.md](DATA-FLOW.md)).
 
 ## 6. Fault boundaries
 
@@ -312,14 +377,16 @@ reasoning; do not harmonise the two.
 |---|---|---|---|
 | Four hard-fail gates | `orchestrator.py:67-76`, `183-188` | Only `MISSING_INPUT_AUDIO`, `AUDIO_NORMALIZATION_TIMEOUT`, `AUDIO_NORMALIZATION_FAILED` and `AUDIO_SILENT_OR_NEAR_SILENT` stop the run. Each gate sets `status="failed"`, saves `meta.json` and raises `_HardFail`; `run()` catches it once. | `test_exactly_four_hard_fail_gates` (`test_orchestrator.py:1003`) |
 | Fail-soft stages | every other `_run_<stage>` | Catch, record a warning code and a status file, continue. A late failure never changes `status` from `ok`. | `test_late_stage_exception_never_flips_status` (`test_orchestrator.py:959`) |
-| `InsightService` | `service.py:63-105` | The single boundary for the insight engines. One `try/except` around analytics → rule → summary turns any engine fault into a `status="error"` response that keeps the validation result. `InsightRuleEngine.run` deliberately has no `try/except` (`rule_engine.py:23-98`). | — |
+| `InsightService` | `service.py:64-108` | The single boundary for the insight engines. One `try/except` around analytics → rule → summary turns any engine fault into a `status="error"` response that keeps the validation result. The error carries the fixed message "Insight pipeline failed." (code `pipeline_execution_error`), and the warning log names the exception class only (`service.py:87-99`, `0011dd7`). `InsightRuleEngine.run` deliberately has no `try/except` (`rule_engine.py:23-98`). | `test_a_failed_insight_run_does_not_return_the_exception_text` (`app/insights/tests/test_error_text.py:62`) |
 | `AgentRunner` | `agent_runner.py:52-59` | Per-agent `try/except`: a failing agent is logged and skipped, and the other agents' recommendations are still returned. | `test_per_agent_fault_isolation` (`app/agent_brain/tests/test_agent_runner.py:41`) |
-| Fact-check, per claim | `factcheck_engine.py:228-247`, `187-194` | A client fault, an unusable reply or a non-finite value means no evidence. The comparator then returns `SOURCE_UNAVAILABLE` for that claim only, and the run continues. Clients return `None`, or raise only `SourceUnavailable` with a short reason (`base_client.py:48-58`). Hardened in `9aff207`. | `test_one_bad_reply_affects_only_its_own_claim`, `test_engine_contains_a_client_that_breaks_its_contract`, `test_fact_check_api_never_500s_on_a_bad_reply` (`test_factcheck_source_replies.py:338`, `365`, `406`) |
+| Fact-check, per claim | `factcheck_engine.py:250-269`, `203-216` | A client fault, an unusable reply, a reply over 1 MiB or a non-finite value means no evidence. The comparator then returns `SOURCE_UNAVAILABLE` for that claim only, and the run continues. Clients return `None`, or raise only `SourceUnavailable` with a short reason (`base_client.py:71-80`); `_get_json` stops reading a reply past `MAX_REPLY_BYTES` (`base_client.py:38-57`, `155-160`). A subject whose fetch failed is remembered for the rest of that run, so a repeated claim gets the same reason without a second fetch (`factcheck_engine.py:183-185`, `203-209`). Hardened in `9aff207` and `83803b5`. | `test_one_bad_reply_affects_only_its_own_claim`, `test_engine_contains_a_client_that_breaks_its_contract`, `test_fact_check_api_never_500s_on_a_bad_reply` (`test_factcheck_source_replies.py:338`, `365`, `406`); `test_an_oversized_reply_is_not_read_to_the_end`, `test_a_failed_subject_is_fetched_once_per_run` (`app/insights/tests/test_factcheck_reply_limits.py:33`, `72`) |
+| Fact-check evidence cache | `factcheck_engine.py:99-135` | One cache per engine, shared by every request in the process, and used from worker threads. A lock guards the dictionary operations only and is never held across a provider call. When the cache is full, expired entries are removed before the oldest live one (`1d967c5`). | `test_many_threads_keep_the_cache_consistent_and_bounded`, `test_expired_entries_are_swept_before_the_oldest_live_one_is_evicted` (`app/insights/tests/test_factcheck_cache_threads.py:71`, `99`) |
 | Fact-check persistence on `/v1/fact-check` | `factcheck_routes.py:105-112` | A `FactCheckRepositoryError` is logged; the verdicts are still returned. | — |
-| Fact-check inside process-audio | `process_audio.py:62-115` | Never fails the audio response. An engine error, or a payload that is not strict JSON, gives a `failed` stub in `fact_checks_v2`, and an unrenderable payload is not saved. A save failure is logged and the payload is still returned. The strict-JSON check came in `8e51a94`. | `test_process_audio_degrades_fact_checks_v2_instead_of_failing`, `test_process_audio_never_500s_on_an_unrenderable_fact_check`, `test_process_audio_never_saves_an_unrenderable_fact_check` (`test_factcheck_source_replies.py:458`, `775`, `793`) |
+| Pipeline run in process-audio | `process_audio.py:54-68`, `222-263` | The pipeline and the fact-check enrichment run in a worker thread, one run at a time per event loop. The loop keeps serving other requests during a run; a second upload waits for the slot. A failed run still maps to the same 400 or 422 (`2bb6593`). | `test_other_requests_are_served_while_the_pipeline_runs`, `test_a_second_upload_waits_for_the_first_run`, `test_a_failed_run_still_maps_to_the_same_error` (`app/insights/tests/test_process_audio_concurrency.py:89`, `112`, `137`) |
+| Fact-check inside process-audio | `process_audio.py:82-137` | Never fails the audio response. An engine error, or a payload that is not strict JSON, gives a `failed` stub in `fact_checks_v2` with the fixed reason `fact-check enrichment failed`, and an unrenderable payload is not saved. A save failure is logged and the payload is still returned. Both warnings name the exception class only (`0011dd7`). The strict-JSON check came in `8e51a94`. | `test_process_audio_degrades_fact_checks_v2_instead_of_failing`, `test_process_audio_never_500s_on_an_unrenderable_fact_check`, `test_process_audio_never_saves_an_unrenderable_fact_check` (`test_factcheck_source_replies.py:458`, `775`, `793`); `test_a_failed_fact_check_enrichment_gives_a_fixed_reason` (`test_error_text.py:78`) |
 | Java callback | `orchestrator.py:789-850` | Fire-and-forget daemon thread. A failure is logged with the error class and HTTP status only, never the URL or the payload (`cedfe96`). | `test_callback_failure_never_propagates` (`app/agent_brain/tests/test_pipeline_callback.py:163`); the Java callback section of `app/insights/tests/test_logging_hygiene.py` |
 | Outbound request logging | `app/utils/logger.py:4-15` | The `httpx` and `httpcore` loggers are pinned to WARNING, so request URLs (which can carry keys and claim subjects) stay out of INFO logs (`c1b35d9`). | `test_logging_hygiene.py` |
-| Job retention | `job_io.py:127-163`, `process_audio.py:38-48` | The sweep never raises into the caller: folders are removed with `ignore_errors=True`, and an `OSError` on a folder is logged and that folder skipped (`job_io.py:153-160`). | `test_removal_error_is_fail_soft` (`app/insights/tests/test_job_retention.py:82`) |
+| Job retention | `job_io.py:127-168`, `process_audio.py:41-51` | The sweep never raises into the caller: folders are removed with `ignore_errors=True`, a folder still there afterwards is logged and not counted, and an `OSError` on a folder is logged and that folder skipped (`job_io.py:154-165`, `3bf7506`). The request-time sweep runs in a worker thread (`process_audio.py:165`). | `test_removal_error_is_fail_soft`, `test_a_directory_that_could_not_be_removed_is_not_counted` (`app/insights/tests/test_job_retention.py:82`, `95`) |
 
 ## 7. Persistence
 
@@ -329,7 +396,8 @@ There are two kinds of storage.
 `data/jobs/<job_id>/`: `input/`, `artifacts/<stage>/…`, `logs/`, `meta.json`
 (`job_io.py:32-72`). `purge_expired(job_retention_hours)` deletes old job
 folders at startup and at most once an hour from the audio route
-(`main.py:35`, `process_audio.py:30-48`).
+(`main.py:37`, `process_audio.py:33-51`). It returns the number of folders
+actually removed (`job_io.py:157-163`).
 
 **Database.** SQLAlchemy, by default SQLite at `./data/insights.db`
 (`settings.py:62`). There are exactly two tables:
@@ -343,10 +411,10 @@ folders at startup and at most once an hour from the audio route
 goes only to the job folder (`orchestrator.py:681`).
 
 **No migrations.** `init_db()` calls `Base.metadata.create_all()`
-(`db.py:110-130`), which creates missing tables and never alters an existing
+(`db.py:105-125`), which creates missing tables and never alters an existing
 one. There is no Alembic or other migration tool in the repository. Setting
 `VOICEIQ_DATABASE_AUTO_CREATE=false` skips table creation entirely
-(`db.py:120-121`, `settings.py:73`). `app/insights/tests/test_db_schema_evolution.py`
+(`db.py:115-116`, `settings.py:73`). `app/insights/tests/test_db_schema_evolution.py`
 (`ff84664`) pins this: an existing table is not widened, the mismatch is
 silent, and missing tables are created.
 
@@ -376,7 +444,7 @@ silent, and missing tables are created.
    and `tests/test_<feature>.py` ([CLAUDE.md](../CLAUDE.md), standard 1).
 2. Call it from `InsightRuleEngine.run` (`rule_engine.py:23-98`), respecting
    data dependencies. Do not add a `try/except` there: `InsightService` is
-   the single fault boundary (`service.py:63-105`).
+   the single fault boundary (`service.py:64-108`).
 3. Handle missing upstream data (empty sessions, no sentiment) with safe
    defaults. That is different from catching engine faults.
 4. Clamp every score with `app/insights/core/_math.py:clamp`, and give every
@@ -405,17 +473,18 @@ silent, and missing tables are created.
 
 ### 8.4 Adding a fact-check source client
 
-1. Subclass `BaseSourceClient` (`base_client.py:60`), set `name`, and
+1. Subclass `BaseSourceClient` (`base_client.py:83`), set `name`, and
    implement `fetch(claim) -> Evidence | None`.
 2. Never raise from `fetch`, except `SourceUnavailable(reason)`. Keep the
    reason short, with no URLs, keys, response bodies or claim text
-   (`base_client.py:48-58`, `80-87`).
+   (`base_client.py:71-80`, `103-110`).
 3. Fetch through `self._get_json(...)`, which handles retries and rejects
-   non-finite, non-object or undecodable replies (`base_client.py:107-176`).
-   Read values with `_finite_float` and `_as_dict`. Accept an injected
-   `httpx.Client` so tests can mock the transport (`base_client.py:66-74`).
+   non-finite, non-object, undecodable or over-1-MiB replies
+   (`base_client.py:130-205`). Read values with `_finite_float` and
+   `_as_dict`. Accept an injected `httpx.Client` so tests can mock the
+   transport (`base_client.py:89-97`).
 4. Register it in `SourceRouter.from_settings` under an existing `ClaimType`
-   (`factcheck_engine.py:68-84`). PHASE-0 §2.1 sets the rules for changing
+   (`factcheck_engine.py:69-85`). PHASE-0 §2.1 sets the rules for changing
    `ClaimType` or `Verdict`; read it before adding a member
    ([FACTCHECK-AGENT-PHASE-0.md](FACTCHECK-AGENT-PHASE-0.md)).
 5. Add any API-key or timeout setting to `app/insights/config/settings.py`
@@ -423,12 +492,12 @@ silent, and missing tables are created.
    [DATA-FLOW.md](DATA-FLOW.md) in the same change.
 6. Never log the request URL or claim text. The engine's warnings carry
    only the client name, the claim id and, for an unexpected exception, the
-   error class (`factcheck_engine.py:192`, `242`, `245`).
+   error class (`factcheck_engine.py:214`, `264`, `267`).
 
 ## 9. Sprint 7 fact-check agent — planned, not built
 
 **Everything in this section is planned, not built.** No Sprint 7
-application code exists at `1dbfac7`. A search of `app/` at that commit finds
+application code exists at `3bf7506`. A search of `app/` at that commit finds
 no `/v2` route, no `fact_check_report` key and no `factcheck_agent_*` table.
 For progress and the next milestone, see
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For each
@@ -438,9 +507,9 @@ decision and its status, see the
 | Planned element (planned, not built) | Described in | Part of today's code it would touch |
 |---|---|---|
 | New routes `POST /v2/fact-check` and `GET /v2/fact-check/{runId}`, with their own models; v1 routes and models unchanged | PHASE-0 §2.1, §2.2 | a new router beside `factcheck_routes.py` |
-| Job-based run: `/v1/process-audio` returns before the agent finishes | PHASE-0 §D2 | `process_audio.py`, after `orch.run` |
+| Job-based run: `/v1/process-audio` returns before the agent finishes | PHASE-0 §D2 | `process_audio.py`, after `orch.run` in `_run_pipeline` |
 | New `fact_check_report` response key, a state envelope (`pending`, `complete`, `failed`, `disabled`, `skipped`), next to the unchanged `fact_checks` and `fact_checks_v2` | PHASE-0 §2.3 | the process-audio response |
-| Four new tables: `factcheck_agent_runs`, `factcheck_agent_claims`, `factcheck_agent_evidence`, `factcheck_agent_citations`; existing tables not altered | PHASE-0 §4 | `create_all()` in `db.py:130` would create them |
+| Four new tables: `factcheck_agent_runs`, `factcheck_agent_claims`, `factcheck_agent_evidence`, `factcheck_agent_citations`; existing tables not altered | PHASE-0 §4 | `create_all()` in `db.py:125` would create them |
 | When the job ends, re-run the Agent Brain, then the PDF, with the Java callback sent exactly once, on the final pass | PHASE-0 §D10 | `_run_agent_brain`, `_dispatch_agent_callback`, `_run_pdf` |
 | New egress destinations: a model server and a search backend | PHASE-0 §3 | [DATA-FLOW.md](DATA-FLOW.md) would change |
 

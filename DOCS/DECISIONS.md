@@ -1,4 +1,4 @@
-Last verified: 2026-10-16, 8f09739
+Last verified: 2026-10-17, 3bf7506
 # Decisions
 
 This file lists the decisions already taken in this repository. A decision is
@@ -47,6 +47,10 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 | 25 | M5: a price claim needs a number that stands alone; names need price context | 2026-10-16 | `1dbfac7` |
 | 26 | Claim detector: no new heuristics until Phase 3 | 2026-10-16 | — (owner) |
 | 27 | Size rule for milestones and security fixes | 2026-10-16 | — (owner) |
+| 28 | Request checks run before the body is read | 2026-10-16 | `ff874de` |
+| 29 | One pipeline run at a time per worker, off the event loop | 2026-10-16 | `2bb6593` |
+| 30 | Insight routes accept only finite numbers | 2026-10-16 | `93dda14` |
+| 31 | M6: the PDF prints Latin-1 and substitutes the rest | 2026-10-17 | `dc9caf3` |
 
 ---
 
@@ -97,7 +101,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 - **Decision:**
   - `InsightRuleEngine.run` (`app/insights/core/rule_engine.py`) has no
     internal `try/except`, so a sub-engine fault propagates. The single fault
-    boundary is `InsightService.generate` (`app/insights/service.py:63-105`),
+    boundary is `InsightService.generate` (`app/insights/service.py:64-108`),
     which turns any engine failure into a `status="error"` response and keeps
     the validation result.
   - `AgentRunner._collect` (`app/agent_brain/core/agent_runner.py:52-59`)
@@ -207,7 +211,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 - **Context:** `/docs`, `/redoc` and `/openapi.json` showed every route's
   schema in every environment.
 - **Decision:** With `VOICEIQ_ENVIRONMENT=production`, both entrypoints turn
-  all three off (`app/main.py:44-46`, `app/insight_main.py:55-57`). Other
+  all three off (`app/main.py:46-48`, `app/insight_main.py:56-58`). Other
   environments are unchanged, and `/healthz` stays public.
 - **Consequence:** `app/insights/tests/test_docs_gating.py` pins this.
 - **Date:** 2026-07-25 · **Commit:** `c7c34db`
@@ -275,9 +279,9 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
   directories older than `VOICEIQ_JOB_RETENTION_HOURS` (default 24; `0` turns
   purging off). A directory's age is the modification time of its
   `meta.json`, or of the directory itself when there is none. The sweep runs
-  at startup in both entrypoints (`app/main.py:35`, `app/insight_main.py:46`)
+  at startup in both entrypoints (`app/main.py:37`, `app/insight_main.py:47`)
   and at most once an hour at request time
-  (`app/routes/process_audio.py:30-48`). If one directory fails, the sweep
+  (`app/routes/process_audio.py:33-51`). If one directory fails, the sweep
   skips it and carries on.
 - **Consequence:** Job artifacts last only as long as the retention window.
   The sweep covers `data/jobs/` directories only, not database rows.
@@ -293,7 +297,7 @@ in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
 ### 14. D1: new tables only
 
 - **Context:** The repo has no Alembic. `init_db()` ends with
-  `Base.metadata.create_all()` (`app/insights/repository/db.py:130`), which
+  `Base.metadata.create_all()` (`app/insights/repository/db.py:125`), which
   creates missing tables and never alters an existing one. A column added to
   an existing table appears on a fresh database but is silently missing on a
   database that already has rows. Every fresh-database test still passes.
@@ -439,7 +443,7 @@ in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
   `app/agent_brain/tests/test_language_seam.py` covers this.
 - **Date:** 2026-09-20 · **Commit:** `359cd5f`, `404de5b`, `c2fadaa`
 
-## Prerequisite fixes (M1–M5)
+## Prerequisite fixes (M1–M6)
 
 Working rule, recorded in the status doc (`6c8c89b`, 2026-10-11): until Phase
 0 lets a phase start, no Sprint 7 application code is written. The only work
@@ -471,11 +475,11 @@ next milestone is in
   non-finite numbers, JSON that is not an object, wrong nested types, and
   bodies that cannot be decoded or are nested too deeply.
 - **Decision:** `BaseSourceClient._get_json` rejects these replies
-  (`app/insights/core/factcheck/source_clients/base_client.py:107-176`).
+  (`app/insights/core/factcheck/source_clients/base_client.py:130-205`).
   Clients read nested values through the `_as_dict` and `_finite_float`
-  helpers (`base_client.py:94-105`), and copy only scalar metadata.
+  helpers (`base_client.py:116-128`), and copy only scalar metadata.
   `FactCheckEngine._fetch_usable`
-  (`app/insights/core/factcheck/factcheck_engine.py:228-248`) isolates each
+  (`app/insights/core/factcheck/factcheck_engine.py:250-269`) isolates each
   claim the way the AgentRunner fan-out isolates agents. If a client fails or
   returns a non-finite value, that claim ends as the existing
   `SOURCE_UNAVAILABLE` with a short reason, and the run continues. Logs carry
@@ -498,7 +502,7 @@ next milestone is in
   access key". A reply with no `rates` is reported the same way
   (`app/insights/core/factcheck/source_clients/forex_client.py:25-32, 49-59, 73-84`).
   `SourceUnavailable` is the one exception the client contract allows
-  (`base_client.py:48`), and the engine maps it to `SOURCE_UNAVAILABLE` with
+  (`base_client.py:71`), and the engine maps it to `SOURCE_UNAVAILABLE` with
   that reason, for that claim only. The provider did not change.
 - **Consequence:** Currency-rate claims still cannot be verified, but the
   result now says why. Which provider to use is open (see
@@ -516,7 +520,7 @@ next milestone is in
   claim ids stay sequential. As a second layer, `/v1/process-audio` checks the
   fact-check payload with `json.dumps(payload, allow_nan=False)` before saving
   or returning it, and falls back to the failed stub if the check fails
-  (`app/routes/process_audio.py:91-95`).
+  (`app/routes/process_audio.py:111-115`).
 - **Consequence:** `POST /v1/fact-check` returns 200 with that claim
   dropped. `/v1/process-audio` cannot return 500 because of fact-check, and
   a payload that cannot be rendered is never stored. The v1 models did not
@@ -574,6 +578,69 @@ next milestone is in
   [CLAUDE.md](../CLAUDE.md).
 - **Date:** 2026-10-16 · **Decided by:** project owner (no code change)
 
+### 28. Request checks run before the body is read
+
+- **Context:** FastAPI parses a request body before it resolves route
+  dependencies, so the API-key and size checks, both dependencies, ran only
+  after the whole body had arrived.
+- **Decision:** A pure ASGI middleware (`app/security/request_guard.py`,
+  installed in `app/main.py` and `app/insight_main.py`) runs the same API-key
+  check, then the same Content-Length check, for POST, PUT and PATCH requests
+  to the guarded route prefixes, with the same status and detail, and counts
+  the body bytes that arrive. The router dependencies stay as the second
+  layer and for GET and DELETE.
+- **Consequence:** A refused request's body is never passed to the app. An
+  unauthenticated request with an invalid body now gets the authentication
+  error instead of 422, and a body-method request to an unknown path under a
+  guarded prefix gets the authentication or size error instead of 404 or 405.
+  Response shapes did not change. `app/insights/tests/test_request_guard.py`
+  pins this.
+- **Date:** 2026-10-16 · **Commit:** `ff874de`
+
+### 29. One pipeline run at a time per worker, off the event loop
+
+- **Context:** `POST /v1/process-audio` is an async route, but it ran the
+  whole pipeline synchronously, so a worker answered nothing else during a
+  run.
+- **Decision:** The pipeline and its fact-check enrichment run in a worker
+  thread behind a one-slot limiter per event loop
+  (`app/routes/process_audio.py`). A further upload waits for the slot.
+  How many runs a worker allows, and whether an overloaded worker should
+  answer 503, are open owner decisions.
+- **Consequence:** Health checks and other routes are served during a run;
+  runs stay one at a time per worker, as before.
+  `app/insights/tests/test_process_audio_concurrency.py` pins both.
+- **Date:** 2026-10-16 · **Commit:** `2bb6593`
+
+### 30. Insight routes accept only finite numbers
+
+- **Context:** JSON parsing accepts `NaN`, `Infinity` and numbers that
+  overflow to infinity. Such a value could be stored and then fail every
+  response that rendered it, including the 422 meant to reject it.
+- **Decision:** The `/v1/insights` router uses `FiniteJSONRoute`
+  (`app/insights/api/finite_json.py`): such bodies get the standard 422
+  `json_invalid` error while parsing. The insight input models refuse
+  non-finite numbers for in-process callers; the raw-session normalizer
+  treats them like invalid values; a non-finite Agent Brain confidence
+  counts as missing.
+- **Consequence:** Nothing non-finite is stored from these routes;
+  `/v1/insights/generate-from-raw` refuses such tokens rather than
+  correcting them. `app/insights/tests/test_non_finite_inputs.py` pins this.
+- **Date:** 2026-10-16 · **Commit:** `93dda14`
+
+### 31. M6: the PDF prints Latin-1 and substitutes the rest
+
+- **Context:** The report's core Helvetica font covers Latin-1 only, and one
+  character outside it failed the whole PDF.
+- **Decision:** `to_latin1` (`app/services/pdf_service.py`) maps common
+  punctuation to its nearest Latin-1 form, drops zero-width spaces and
+  byte-order marks, and turns every other character into "?",
+  in `safe_text`, which all report text passes through.
+- **Consequence:** The report is produced for any text; Urdu, Arabic and
+  emoji print as "?" until Phase 6 adds a Unicode font. The JSON response
+  keeps the original text. `app/insights/tests/test_pdf_unicode.py` pins this.
+- **Date:** 2026-10-17 · **Commit:** `dc9caf3`
+
 ---
 
 ## Open decisions
@@ -621,3 +688,10 @@ them is in force.
   `VOICEIQ_DATABASE_AUTO_CREATE=false`.
 - How the D10 re-run rebuilds its inputs, how the regenerated PDF and
   recommendations are delivered, and how run rows age out.
+
+**Other open owner decisions**
+
+- How many `/v1/process-audio` runs a worker allows, and what an
+  overloaded worker answers (see #29).
+- Further security and reliability items from the review, each waiting
+  for an owner or partner-team decision (tracked privately).

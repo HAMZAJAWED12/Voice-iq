@@ -50,7 +50,8 @@ route dependencies over slowapi's engine (the `limits` library), *not* the
 `@limiter.limit` decorator — the decorator wraps the endpoint and, with this
 package's `from __future__ import annotations`, made FastAPI mis-read Pydantic
 body models as query params. Defaults: process-audio `30/minute`, fact-check
-`60/minute`; keyed on X-API-Key (IP fallback); `VOICEIQ_RATE_LIMIT_ENABLED`
+`60/minute`; keyed on an accepted X-API-Key, else the client IP (narrowed in
+`702d23d`); `VOICEIQ_RATE_LIMIT_ENABLED`
 master switch. In-memory storage (per process) — a multi-worker deploy needing
 shared counters swaps in Redis.
 

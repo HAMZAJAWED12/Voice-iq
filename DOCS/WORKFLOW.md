@@ -1,11 +1,11 @@
-Last verified: 2026-10-16, 8f09739
+Last verified: 2026-10-17, 3bf7506
 # Workflow
 
 How work gets done in this repository: branches, the local Python environment, the checks, the commit rules and the milestone loop. AI assistants read [CLAUDE.md](../CLAUDE.md) first. For where Sprint 7 stands, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For what the project is, see [CONTEXT.md](CONTEXT.md).
 
 ## Before every commit
 
-Run these from the repository root. All of them passed at `1dbfac7` on 2026-10-16.
+Run these from the repository root. All of them passed at `3bf7506` on 2026-10-17.
 
 ```powershell
 .venv\Scripts\python.exe -m pytest -v app/insights/tests/ app/agent_brain/tests/
@@ -22,7 +22,7 @@ Then stage files by explicit path and commit. The pre-commit hooks run on their 
 | Rule | Detail |
 |---|---|
 | Base branch | `main`. |
-| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/doc-sync`, cut from `main` at `8fd3972`. It holds the 2026-10-11 documentation sync, milestones M1 to M5 and the project knowledge set: 24 commits beyond `main` (`git rev-list --count main..HEAD`). |
+| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/doc-sync`, cut from `main` at `8fd3972`. It holds the 2026-10-11 documentation sync, milestones M1 to M6, the project knowledge set and a set of security and reliability fixes: 43 commits beyond `main` at `3bf7506` (`git rev-list --count main..HEAD`). |
 | `main` | Never commit to `main` directly. |
 | Push | Never push without the owner's go-ahead. `sprint7/doc-sync` has no upstream yet: `git rev-parse --abbrev-ref sprint7/doc-sync@{upstream}` fails. |
 | CI trigger | CI runs on a push to `main` and on a pull request into `main`, nothing else ([.github/workflows/test.yml](../.github/workflows/test.yml), lines 3-7). Until a pull request is open, nothing checks a branch except the local checks. |
@@ -41,7 +41,7 @@ The repository sits in a synced OneDrive folder, which sometimes causes `index.l
 | `ruff==0.7.4`, `mypy==1.13.0` | the pins CI installs (test.yml, line 29) |
 | `pre-commit==4.0.1` | the pin in [requirements-dev.txt](../requirements-dev.txt). The rest of that file is evaluation extras, which routine work does not need. |
 
-The current `.venv` runs CPython 3.12.10 (`.venv/pyvenv.cfg`). CI tests on 3.10 and 3.11 and lints on 3.11 (test.yml, lines 21 and 55). Ruff targets `py310` ([pyproject.toml](../pyproject.toml), line 3), so code must run on 3.10. Commit `e55d46c` is an example of a 3.10 compatibility fix.
+The current `.venv` runs CPython 3.12.10 (`.venv/pyvenv.cfg`). CI tests on 3.10 and 3.11 and lints on 3.11 (test.yml, lines 21 and 62). Ruff targets `py310` ([pyproject.toml](../pyproject.toml), line 3), so code must run on 3.10. Commit `e55d46c` is an example of a 3.10 compatibility fix.
 
 To rebuild `.venv`, use any CPython from 3.10 to 3.12:
 
@@ -54,14 +54,14 @@ To rebuild `.venv`, use any CPython from 3.10 to 3.12:
 ### Rules
 
 - **Do not install `requirements.txt` for routine work.** It pulls the heavy ML stack: torch, torchaudio, transformers, pyannote.audio, openai-whisper, librosa, sentence-transformers and spaCy ([requirements.txt](../requirements.txt)). The whole test suite runs without it. Only one 3-test module skips on the light stack (see [Tests](#tests)). Ask the owner before installing it.
-- **Run every tool as `.venv\Scripts\python.exe -m <tool>`.** A bare `python` or `pytest` on PATH may be a different interpreter that lacks the project's dependencies ([CLAUDE.md](../CLAUDE.md), line 275). On some Windows machines, Application Control also blocks the unsigned `.exe` console-script launchers that pre-commit generates, while the venv's `python.exe` is not blocked (`7b25b3f`). `python.exe -m` avoids both problems.
+- **Run every tool as `.venv\Scripts\python.exe -m <tool>`.** A bare `python` or `pytest` on PATH may be a different interpreter that lacks the project's dependencies ([CLAUDE.md](../CLAUDE.md), line 316). On some Windows machines, Application Control also blocks the unsigned `.exe` console-script launchers that pre-commit generates, while the venv's `python.exe` is not blocked (`7b25b3f`). `python.exe -m` avoids both problems.
 - **Never open, read, print or search `.env`.** It holds live secrets and git ignores it. Take environment variable names and defaults from [app/insights/config/settings.py](../app/insights/config/settings.py), [app/agent_brain/config/settings.py](../app/agent_brain/config/settings.py) and [.env.example](../.env.example). Exclude `.env` from every search, for example `rg --glob '!.env'` or `grep --exclude=.env`.
 
 ## Tests
 
 ### The command
 
-CI runs this command (test.yml, line 85, with `PYTHONPATH: .` at line 93):
+CI runs this command (test.yml, line 92, with `PYTHONPATH: .` at line 100):
 
 ```bash
 pytest -v app/insights/tests/ app/agent_brain/tests/
@@ -77,15 +77,15 @@ Locally it passes with or without `PYTHONPATH` set.
 
 ### Current count
 
-On the light stack, at `1dbfac7`: **1501 passed, 1 skipped**, measured on 2026-10-16 on `.venv` (CPython 3.12.10).
+On the light stack, at `3bf7506`: **1579 passed, 1 skipped**, measured on 2026-10-17 on `.venv` (CPython 3.12.10).
 
-The skip is `app/insights/tests/test_model_load_concurrency.py`. It holds 3 tests and calls `pytest.importorskip` on torch, transformers, soundfile, huggingface_hub and pyannote.audio at module level (lines 25-29). The full reconciliation (1504 on the heavy stack, derived rather than measured) lives in [CLAUDE.md](../CLAUDE.md), section *One test lane*. Update it there, not here.
+The skip is `app/insights/tests/test_model_load_concurrency.py`. It holds 3 tests and calls `pytest.importorskip` on torch, transformers, soundfile, huggingface_hub and pyannote.audio at module level (lines 25-29). The full reconciliation (1582 on the heavy stack, derived rather than measured) lives in [CLAUDE.md](../CLAUDE.md), section *One test lane*. Update it there, not here.
 
 ### Why a bare `pytest` at the root fails
 
 | Invocation | pytest rootdir and config | Result |
 |---|---|---|
-| `pytest app/insights/tests/ app/agent_brain/tests/` | rootdir `app/`, config `app/pytest.ini` | 1501 passed, 1 skipped |
+| `pytest app/insights/tests/ app/agent_brain/tests/` | rootdir `app/`, config `app/pytest.ini` | 1579 passed, 1 skipped |
 | `pytest` (no paths, from the root) | rootdir is the repository root. The config is `pyproject.toml`, which has no pytest settings, so `app/pytest.ini` (`testpaths = app/insights/tests`) does not apply. | pytest walks the whole tree, collects the legacy `tests/` folder and stops: `Interrupted: 2 errors during collection` |
 
 The two errors come from the legacy folder. `tests/test_diarization.py` imports `app.services.diarization_service`, which needs `soundfile`. `tests/test_diarization_load.py` imports `huggingface_hub`. The light stack includes neither. Always pass the two paths.
@@ -99,7 +99,7 @@ CI job logs cannot be read without repository admin rights. The workflow surface
 | Ruff lint | `.venv\Scripts\python.exe -m ruff check .` | Yes (test.yml, line 32) |
 | Ruff format | `.venv\Scripts\python.exe -m ruff format --check .` | No. The `ruff-format` pre-commit hook enforces it. |
 | Mypy | `.venv\Scripts\python.exe -m mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/` | Yes, as a hard gate (test.yml, line 35; made required in `a094120`) |
-| Gitleaks | Runs through the pre-commit hook (see below) | Yes, as `gitleaks dir . --no-banner --redact`, a scan of the working tree (test.yml, line 47). |
+| Gitleaks | Runs through the pre-commit hook (see below) | Yes, as `gitleaks dir . --no-banner --redact`, a scan of the working tree (test.yml, line 54). CI installs gitleaks only after checking the archive against the release checksums (lines 37-48; `c661bad`). |
 
 Tool versions are pinned: ruff 0.7.4 and mypy 1.13.0 in CI (test.yml, line 29), and ruff v0.7.4 in the hook config.
 
@@ -108,7 +108,7 @@ Configuration lives in [pyproject.toml](../pyproject.toml):
 - **Ruff:** line length 120, target `py310`, rule sets E, F, I, B and UP, with `B008` ignored for the FastAPI `Depends` idiom. It excludes `.venv`, `samples`, `DOCS`, `data`, `tmp`, `uploads` and `outputs` (lines 1-9).
 - **Mypy:** pydantic plugin, `ignore_missing_imports`, `check_untyped_defs`. Test directories are excluded (lines 11-18).
 
-At `1dbfac7`, ruff reported "All checks passed!" with 178 files already formatted, and mypy found no issues in 83 source files.
+At `3bf7506`, ruff reported "All checks passed!" with 192 files already formatted, and mypy found no issues in 84 source files.
 
 ## Pre-commit hooks
 
@@ -156,22 +156,22 @@ The body says what was wrong, what changed, which tests pin it, the red-check re
 
 ### Staging and content rules
 
-- **Stage explicit paths only:** `git add <path> <path>`. Never use `git add .` or `git add -A`: `git add .` once staged the whole `.venv`, more than 10,000 files ([CLAUDE.md](../CLAUDE.md), line 277). Check `git status --short` before staging and `git diff --cached --stat` before committing.
-- **Keep docs separate from code.** First commit the fix, then a separate `docs(sprint7)` commit that records it. M1 went `c1b35d9` then `b1054be`, M2 went `9aff207` then `b370390`, and M4 went `8e51a94` then `793e02e`. A docs commit may correct a docstring but never changes behaviour (`3d970bf`).
-- **Never commit these untracked files** unless the owner says so: `AGENTS.md`, `postman/`, `.postman/` and `VoiceIQ-Manual-Test-Guide.pdf` (`git status` at `1dbfac7`).
+- **Stage explicit paths only:** `git add <path> <path>`. Never use `git add .` or `git add -A`: `git add .` once staged the whole `.venv`, more than 10,000 files ([CLAUDE.md](../CLAUDE.md), line 318). Check `git status --short` before staging and `git diff --cached --stat` before committing.
+- **Keep docs separate from code.** First commit the fix, then a separate `docs(sprint7)` commit that records it. M1 went `c1b35d9` then `b1054be`, M2 went `9aff207` then `b370390`, M4 went `8e51a94` then `793e02e`, and M5 went `1dbfac7` then `10b0039`. A docs commit may correct a docstring but never changes behaviour (`3d970bf`).
+- **Never commit these untracked files** unless the owner says so: `AGENTS.md`, `postman/`, `.postman/` and `VoiceIQ-Manual-Test-Guide.pdf` (`git status` at `3bf7506`).
 - **Never commit ignored material:** `.env`, `.venv/`, `data/`, `*.db`, logs, uploads and archives such as `*.zip` ([.gitignore](../.gitignore)).
 
 ## The milestone loop
 
-Each Sprint 7 prerequisite fix is one milestone: the smallest first, and only fixes that need no pending decision ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *In progress*). M1 to M5 followed this loop. M6 (PDF Latin-1 containment) is the next milestone and is planned.
+Each Sprint 7 prerequisite fix is one milestone: the smallest first, and only fixes that need no pending decision ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *In progress*). M1 to M6 followed this loop; M6 landed in one batch with security fixes and shares their docs commit. M7 (keyword rules match whole words only) is the next milestone and is planned. It is a tech-debt fix that comes after the prerequisites and follows the same loop ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *Remaining* and *Next milestone*).
 
 | Step | What happens | Evidence |
 |---|---|---|
-| 1. Plan | Set the scope, the files, the tests and the acceptance evidence. Record them under *Next milestone* and *Acceptance evidence* in the status doc. Implementation starts only after the owner approves the plan. | Status doc: M6 is "planned, awaiting approval" |
-| 2. Red-check | Write the new tests first and run them against the current code. They must fail for the stated reason, apart from deliberate controls that pin behaviour that must not change. Record the counts. | `c1b35d9`: 10 of 14 fail. `9aff207`: 212 failed, 11 controls passed. `8e51a94`: 25 failed, 10 at-bound controls passed. `1dbfac7`: 352 of 433 fail against the previous detector. |
+| 1. Plan | Set the scope, the files, the tests and the acceptance evidence. Record them under *Next milestone* and *Acceptance evidence* in the status doc. Implementation starts only after the owner approves the plan. | Status doc: M7 is "planned, awaiting approval" |
+| 2. Red-check | Write the new tests first and run them against the current code. They must fail for the stated reason, apart from deliberate controls that pin behaviour that must not change. Record the counts. | `c1b35d9`: 10 of 14 fail. `9aff207`: 212 failed, 11 controls passed. `8e51a94`: 25 failed, 10 at-bound controls passed. `1dbfac7`: 352 of 433 fail against the previous detector. `dc9caf3`: `UnicodeEncodeError` and `PDF_FAILED` before the fix. |
 | 3. Implement | Make the smallest change that turns the tests green. Follow the rules in [CLAUDE.md](../CLAUDE.md): the engineering standards, the Sprint 7 hard constraints (for example, v1 is frozen) and, under *Testing requirements*, no heavy imports at the orchestrator's module scope. | `9aff207`: "no v1 model or literal changes" |
 | 4. Verify | In one session: the full light suite, ruff check, ruff format check and mypy, all as in [Before every commit](#before-every-commit). Record the new test count. | Full-suite counts in each fix commit body |
-| 5. Adversarial review | An independent review pass tries to break the change, looking for secrets or URLs in logs, new 500 paths, missed input shapes and contract drift. Fix every valid finding, with its own red-checked test. Before any push that touches auth, secrets or external calls, run `/security-review` ([CLAUDE.md](../CLAUDE.md), line 322). | `cedfe96` is a review finding on `c1b35d9` |
+| 5. Adversarial review | An independent review pass tries to break the change, looking for secrets or URLs in logs, new 500 paths, missed input shapes and contract drift. Fix every valid finding, with its own red-checked test. Before any push that touches auth, secrets or external calls, run `/security-review` ([CLAUDE.md](../CLAUDE.md), line 363). | `cedfe96` is a review finding on `c1b35d9` |
 | 6. Checkpoint | Commit the code, then commit the docs (no push). Report the evidence to the owner and stop. The next milestone starts on the owner's approval. | Docs commits "record Mn as done; promote Mn+1" |
 
 **Size rule** (project owner, 2026-10-16): if a milestone or a security fix grows past roughly twice its planned size, or needs a second rework round after review, stop and ask the owner before continuing ([DECISIONS #27](DECISIONS.md#27-size-rule-for-milestones-and-security-fixes)).

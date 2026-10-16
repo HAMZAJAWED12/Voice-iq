@@ -1,6 +1,6 @@
 # Fact-Check Agent — Live Status
 
-Owner: engineering · Status: **Phase 0 in sign-off** · Created: 2026-10-11 · Updated: 2026-10-16
+Owner: engineering · Status: **Phase 0 in sign-off** · Created: 2026-10-11 · Updated: 2026-10-17
 
 The one place that says where Sprint 7 stands. Update it with every
 milestone. Decision status is **not** kept here — it lives only in the
@@ -14,8 +14,8 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 
 | | |
 |---|---|
-| Date | 2026-10-16 |
-| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7` |
+| Date | 2026-10-17 |
+| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3` |
 | Current phase | **Phase 0 — Contract and scope lock: partially complete.** Phases 1–7 not started (no Sprint 7 application code exists). |
 | Overall progress | **0.83 %** |
 
@@ -39,7 +39,7 @@ plan deliverables and do not move the percentage.
 
 ## Completed
 
-Verified against the repository on 2026-10-11.
+Verified against the repository on 2026-10-17 (`3bf7506`).
 
 - **Phase 0: 3 of 10 register decisions signed** — see
   [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)
@@ -103,6 +103,38 @@ Verified against the repository on 2026-10-11.
     previous detector (352 of 433 fail there); two adversarial review
     rounds. Light suite 1501 passed, 1 skipped. Remaining limits:
     [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector).
+  - `dc9caf3` — **M6: text outside Latin-1 no longer fails the PDF.** Common
+    punctuation maps to its nearest Latin-1 form (curly quotes, dashes,
+    ellipsis, the euro sign as "EUR") and any other character prints as "?",
+    so the report is produced and `PDF_FAILED` no longer fires for it; the
+    JSON response keeps the original text. 6 new tests, red-checked first
+    (`UnicodeEncodeError`, `PDF_FAILED`). Readable Urdu and Arabic need a
+    Unicode font (Phase 6).
+  - `a712146` — **Stored rows with non-finite numbers read back as null**
+    (the approved old-rows fix). Re-checking showed the route already
+    rendered them as null through its serializer; the repository now returns
+    None for every non-finite number itself. 2 new tests.
+  - **Security and reliability hardening** (2026-10-16 to 2026-10-17), from a
+    review whose detailed list is tracked privately; fixed in small commits,
+    each code fix with its own regression tests:
+    - `ff874de` — API key and declared size are checked before a request
+      body is read; the bytes that arrive are counted.
+    - `2bb6593` — `/v1/process-audio` runs the pipeline in a worker thread,
+      one run at a time per worker (the event-loop part of the process-audio concurrency prerequisite).
+    - `1d967c5` — the fact-check evidence cache is safe across threads.
+    - `93dda14` — insight routes and models accept only finite numbers.
+    - `702d23d`, `395f6ff` — rate-limit buckets use only accepted keys; the
+      staging recipe sets a key.
+    - `8103360` — Agent Brain keeps one review per fact-check claim
+      (the Agent Brain dedup prerequisite).
+    - `0011dd7` — fixed public error messages; logs carry the exception class.
+    - `83803b5` — provider replies are read up to 1 MiB; a failed subject is
+      fetched once per run.
+    - `718d763`, `5696e32`, `98a319a`, `3bf7506`, `c661bad` — SQLite
+      directory path, partial ffmpeg output removed, faster title
+      comparison, accurate purge count, CI checks the gitleaks checksum.
+
+    Light suite 1579 passed, 1 skipped.
 - **2026-10-11 audit and documentation sync** (this branch): stale
   operational docs corrected, PHASE-0 wording made consistent with its own
   register, this status document created.
@@ -114,9 +146,9 @@ Verified against the repository on 2026-10-11.
   changes (per-phase gate reading, `ClaimSpan` in the v1 freeze list).
 - **Prerequisite fixes** — until Phase 0 lets a phase start, no Sprint 7
   application code is written; only fixes that need no pending decision, one
-  per milestone, smallest first. M1–M5 are done. M6 and the old-rows fix are
-  approved and scheduled together with security and reliability hardening
-  found by a review (tracked privately; fixed in small commits).
+  per milestone, smallest first. M1–M6, the old-rows fix and the
+  decision-free hardening items are done. The remaining hardening items
+  each need an owner decision (tracked privately).
 - **Working rules** (project owner, 2026-10-16): the claim detector gets no
   new heuristics until Phase 3, only crash, security or performance fixes
   ([DECISIONS #26](DECISIONS.md#26-claim-detector-no-new-heuristics-until-phase-3));
@@ -134,15 +166,12 @@ Ordered backlog. Phase numbers are the plan's.
    to §1. Until the per-phase gate reading is confirmed, every register
    decision must be signed before Phase 1; once confirmed, those due later
    (before Phase 1 ends, Phase 5 or Phase 6 — see PHASE-0 §8) can follow.
-2. **Decision-independent prerequisite fixes**, smallest first (earliest
-   phase each one gates in brackets):
-   1. PDF fails entirely on any non-Latin-1 character — contain it [6] — M6, *approved*.
-   2. `/v1/process-audio` is `async def` but runs blocking work on the event loop [6].
-   3. Agent Brain dedup merges distinct fact-check reviews [6].
-   4. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test [6].
-   5. Rows saved before M4 may hold an infinite claimed value — sanitise on read, a small milestone, *approved* [none].
-   6. Claim-detector limits left after M5 — past prices read as current ("I bought ETH at 1200"), capitalised acronyms read as tickers, any number after a coin, ticker or commodity read as a price ("Gold is 29.99 with free shipping"); listed in [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector). *Wait for Phase 3* (DECISIONS #26) [3].
-   7. After the prerequisites, a separate tech-debt milestone: keyword matching in `flag_service` and the intent rules matches inside longer words [none].
+2. **Prerequisite fixes**, smallest first (earliest phase each one gates
+   in brackets):
+   1. `/v1/process-audio` concurrency: the event-loop part is done (`2bb6593`); how many runs a worker allows and what an overloaded worker answers — *waits for an owner decision* [6].
+   2. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test; lands with Phase 6, which adds the re-run [6].
+   3. Claim-detector limits left after M5 — past prices read as current ("I bought ETH at 1200"), capitalised acronyms read as tickers, any number after a coin, ticker or commodity read as a price ("Gold is 29.99 with free shipping"); listed in [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector). *Wait for Phase 3* (DECISIONS #26) [3].
+   4. With the decision-free prerequisites done, a separate tech-debt milestone — *next milestone* (M7): keyword matching in `flag_service`, the intent rules and the email-draft triggers matches inside longer words [none].
 3. **Phase 1** — gold set, model server, bake-off, pinned model.
 4. **Phase 2** — typed v2 models, OpenAI-compatible client, `VOICEIQ_FACTCHECK_*` settings, stubbed boundary.
 5. **Phase 3** — claim extraction with segment/speaker/timestamp traceability, checkability gate, dedup, claim cap.
@@ -207,34 +236,30 @@ Real blockers only.
 
 ## Next milestone
 
-**M6 — A report whose text has any character outside Latin-1 still gets a
-PDF.** A decision-independent prerequisite fix (gates Phase 6, whose cited
-report must be Unicode-safe). Status: **approved (2026-10-16)**, scheduled with
-the security and reliability hardening.
+**M7 — Keyword rules match whole words only.** A tech-debt milestone after
+the prerequisites (owner decision, 2026-10-16). Status: **planned, awaiting
+approval**.
 
-The report uses the Helvetica core font, which covers Latin-1 only. One
-curly apostrophe, a euro sign, or any Urdu or Arabic script in the text the
-report prints makes the whole PDF fail: the run records `PDF_FAILED` and
-`report_pdf_base64` is null (`app/services/pdf_service.py:111, 272`;
-`app/pipeline/orchestrator.py:852-880`). M6 contains the failure; it does
-not add Unicode output. Common punctuation maps to its nearest Latin-1 form,
-any other character the font cannot show gets a visible placeholder, and
-the JSON response keeps the original text. A Unicode font, which readable
-Urdu and Arabic need, stays Phase 6 work.
+Several rule-based extractors test keywords with a plain substring check, so
+a keyword inside a longer word matches: "um" and "er" (hesitation markers)
+are found in "number", the greeting rule's "hi" starts "his order", the
+agreement rule's "ok" is found in "okayed by the bookkeeper", and the
+email-draft trigger "send a" in "send all" (`app/services/flag_service.py:36,
+50, 64-65`; `app/services/intent_service.py:17-38`;
+`app/agent_brain/core/email_draft_agent.py:25`). M7 makes these checks
+match whole words and phrases, with no change to the vocabularies.
 
 ## Acceptance evidence
 
-M6 is done when all of the following ran in the same session and passed:
+M7 is done when all of the following ran in the same session and passed:
 
-- Tests: report text with curly quotes, an en dash, a euro sign and Urdu or
-  Arabic script still yields a PDF (no `PDF_FAILED`, `report_pdf_base64`
-  set); Latin-1-only text prints as before — red-checked against the
-  current code first.
+- Tests: each rule fires on its keyword as a whole word or phrase and does
+  not fire when the keyword is only part of a longer word — red-checked
+  against the current code first.
 - The full light suite —
   `.venv\Scripts\python.exe -m pytest app/insights/tests/ app/agent_brain/tests/ -q` —
-  passes with the new tests added to the 1501 + 1 skipped baseline.
+  passes with the new tests added to the 1579 + 1 skipped baseline.
 - `ruff==0.7.4 check .` and
   `mypy==1.13.0 --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/`
   are clean.
-- This document is updated: M6 moved to *Completed*, the next prerequisite
-  promoted.
+- This document is updated: M7 moved to *Completed*, the next item promoted.
