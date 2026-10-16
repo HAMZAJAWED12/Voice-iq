@@ -14,10 +14,9 @@ import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import urlparse
 
 from sqlalchemy import create_engine
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.insights.config.settings import InsightSettings, get_settings
@@ -40,19 +39,15 @@ def _ensure_sqlite_directory(database_url: str) -> None:
     if the parent directory is missing. This guard keeps the failure mode loud
     and obvious.
     """
-    if not database_url.startswith("sqlite"):
+    url = make_url(database_url)
+    if url.get_backend_name() != "sqlite":
         return
-    parsed = urlparse(database_url)
-    # urlparse on `sqlite:///./data/insights.db` puts the path on .path
-    raw_path = parsed.path or ""
-    if raw_path.startswith("/") and database_url.startswith("sqlite:///"):
-        # `sqlite:///./data/insights.db` -> path == "/./data/insights.db"
-        # Strip the leading slash so we treat it as a relative path.
-        raw_path = raw_path.lstrip("/")
-    if not raw_path or raw_path == ":memory:":
+    # The same file SQLAlchemy opens: `sqlite:///./data/x.db` is relative,
+    # `sqlite:////app/data/x.db` absolute, `sqlite+pysqlite:///...` alike.
+    path = url.database or ""
+    if not path or path == ":memory:" or path.startswith("file:"):
         return
-    parent = Path(raw_path).resolve().parent
-    parent.mkdir(parents=True, exist_ok=True)
+    Path(path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
 
 
 def _build_engine(settings: InsightSettings) -> Engine:
