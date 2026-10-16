@@ -167,6 +167,7 @@ docker run -d --name voiceiq-insight \
   -p 8888:8888 \
   -v voiceiq-data:/app/data \
   -e VOICEIQ_ENVIRONMENT=staging \
+  -e VOICEIQ_API_KEYS=<staging-key> \
   -e VOICEIQ_LOG_LEVEL=INFO \
   -e VOICEIQ_THRESHOLD_PROFILE=default \
   --restart unless-stopped \
