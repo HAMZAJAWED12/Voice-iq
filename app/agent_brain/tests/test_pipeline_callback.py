@@ -193,4 +193,4 @@ def test_payload_carries_session_and_timestamp(monkeypatch: pytest.MonkeyPatch) 
     payload, trace_id = captured[0]
     assert payload.session_id == "sess-42"
     assert payload.generated_at.endswith("+00:00"), "generated_at must be explicit UTC"
-    assert len(trace_id) == 32, "trace id is what Java de-duplicates on"
+    assert len(trace_id) == 32, "trace id is a per-send uuid4 hex that identifies the send for correlation"
