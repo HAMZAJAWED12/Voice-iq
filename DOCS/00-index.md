@@ -8,6 +8,15 @@ Files 01–10 below are the frozen Sprint 1–4 handoff. These are kept current:
 
 | File | Purpose |
 |------|---------|
+| [`CONTEXT.md`](CONTEXT.md) | Background for humans: purpose, stakeholders by role, history and timeline, current phase, what is blocked and why. |
+| [`EXPLANATION.md`](EXPLANATION.md) | Plain-English guide for a business reader: one example call from upload to report, what each output means, glossary of internal codes. |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Current code structure: components, data flow, fault boundaries, extension points (Sprint 7 parts marked planned, not built). `02-architecture.md` is the historical view. |
+| [`SYSTEM.md`](SYSTEM.md) | Runtime view: entry points, ports, Docker and compose, every setting and its default, data stores, external services, logging, CI. |
+| [`FEATURES.md`](FEATURES.md) | Feature catalogue: shipped / partial / planned, with endpoint or flag, default and known limits. |
+| [`SECURITY.md`](SECURITY.md) | Security controls in place, how to report a vulnerability, secrets handling, known limitations in general terms. |
+| [`DECISIONS.md`](DECISIONS.md) | Every decision taken so far, with context, consequence, date and commit; open decisions link to the register. |
+| [`WORKFLOW.md`](WORKFLOW.md) | How work is done: branch, venv, tests, lint, pre-commit hooks, commit rules, the milestone loop, what to update after each milestone. |
+| [`CHANGES.md`](CHANGES.md) | Changelog backfilled from git, newest first, grouped by sprint, tier and milestone. |
 | [`FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md) | Live status of the Sprint 7 fact-check agent: phase, progress, blockers, next milestone. |
 | [`FACTCHECK-AGENT-PHASE-0.md`](FACTCHECK-AGENT-PHASE-0.md) | Sprint 7 Phase 0 contract and the decision register (§1) — the only place decision status is recorded. |
 | [`D3-GOLD-SET-BRIEF.md`](D3-GOLD-SET-BRIEF.md) | Scoping brief for decision D3 (gold-set owner and resourcing). |

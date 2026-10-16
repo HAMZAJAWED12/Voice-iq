@@ -164,6 +164,37 @@ all done.
 >    `sessionId` with no rule for which wins. Test for *exactly* one
 >    dispatch, not "at least one".
 
+## Project knowledge set (DOCS/)
+
+Human-facing reference docs, each verified against code and git (first line
+names the commit): [CONTEXT](DOCS/CONTEXT.md) (background, stakeholders,
+timeline, blockers) · [EXPLANATION](DOCS/EXPLANATION.md) (plain English) ·
+[ARCHITECTURE](DOCS/ARCHITECTURE.md) (current code structure) ·
+[SYSTEM](DOCS/SYSTEM.md) (runtime, settings, CI) ·
+[FEATURES](DOCS/FEATURES.md) · [SECURITY](DOCS/SECURITY.md) ·
+[DECISIONS](DOCS/DECISIONS.md) · [WORKFLOW](DOCS/WORKFLOW.md) ·
+[CHANGES](DOCS/CHANGES.md). This file stays the AI brief; those docs are the
+human view. The repo is public: keep them public-safe (roles, not names; no
+internal URLs, credentials or exploit-level security detail — the detailed
+security gap list is tracked privately).
+
+**Rule — what every milestone must update** (full table: [WORKFLOW.md](DOCS/WORKFLOW.md#what-to-update-after-each-milestone)):
+
+- Always: [FACT-CHECK-AGENT-STATUS.md](DOCS/FACT-CHECK-AGENT-STATUS.md)
+  (milestone to *Completed* with commit and test evidence, next one promoted,
+  date row) and [CHANGES.md](DOCS/CHANGES.md) (new commits, counts from git).
+- When the test count changes: the *One test lane* table below and
+  `README.md` line 34 (re-measured, never derived for the light lane).
+- When the change touches them: [DECISIONS.md](DOCS/DECISIONS.md) (a decision
+  signed or implemented), [FEATURES.md](DOCS/FEATURES.md) (user-visible
+  behaviour), [SECURITY.md](DOCS/SECURITY.md) (a control or limitation, in
+  general terms), [ARCHITECTURE.md](DOCS/ARCHITECTURE.md) (structure, routes,
+  fault boundaries), [SYSTEM.md](DOCS/SYSTEM.md) (settings, runtime, CI),
+  [DATA-FLOW.md](DOCS/DATA-FLOW.md) (anything leaving the host),
+  [EXPLANATION.md](DOCS/EXPLANATION.md), [CONTEXT.md](DOCS/CONTEXT.md),
+  [WORKFLOW.md](DOCS/WORKFLOW.md) and [00-index.md](DOCS/00-index.md).
+- Refresh the `Last verified: <date>, <commit>` line of every doc you change.
+
 ## Engineering standards (STRICT)
 
 These are non-negotiable. Violations have cost time before — uphold them.

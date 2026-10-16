@@ -1,6 +1,6 @@
 # Fact-Check Agent — Live Status
 
-Owner: engineering · Status: **Phase 0 in sign-off** · Created: 2026-10-11 · Updated: 2026-10-11
+Owner: engineering · Status: **Phase 0 in sign-off** · Created: 2026-10-11 · Updated: 2026-10-16
 
 The one place that says where Sprint 7 stands. Update it with every
 milestone. Decision status is **not** kept here — it lives only in the
@@ -14,7 +14,7 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 
 | | |
 |---|---|
-| Date | 2026-10-11 |
+| Date | 2026-10-16 |
 | Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94` |
 | Current phase | **Phase 0 — Contract and scope lock: partially complete.** Phases 1–7 not started (no Sprint 7 application code exists). |
 | Overall progress | **0.83 %** |
@@ -151,7 +151,7 @@ Real blockers only.
   each gates a phase:
   - the job runner behind D2 (in-process thread, DB-polled worker or queue) —
     Phase 6, and the Phase 2 run/status models; today there is no runner, a
-    single uvicorn worker, and per-process rate-limit and cache state;
+    single uvicorn worker, and in-memory state that other workers would not share;
   - supported languages for the agent and its report — Phases 1, 3 and 6;
   - local development model server (Ollama or llama.cpp) — Phase 1;
   - who hosts SearXNG, and the robots.txt / terms-of-service position for
