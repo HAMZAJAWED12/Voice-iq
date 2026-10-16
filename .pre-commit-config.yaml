@@ -8,12 +8,36 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+  # pre-commit-hooks v5.0.0, run through `python -m` instead of the .exe
+  # console-script launchers pre-commit generates for the remote repo:
+  # Windows Application Control blocks those unsigned launchers on some dev
+  # machines. Ids, names, file types and stages match the upstream hooks;
+  # only the entry differs. Bump the pin here (not via autoupdate).
+  - repo: local
     hooks:
       - id: trailing-whitespace
+        name: trim trailing whitespace
+        description: trims trailing whitespace.
+        entry: python -m pre_commit_hooks.trailing_whitespace_fixer
+        language: python
+        additional_dependencies: [pre-commit-hooks==5.0.0]
+        types: [text]
+        stages: [pre-commit, pre-push, manual]
       - id: end-of-file-fixer
+        name: fix end of files
+        description: ensures that a file is either empty, or ends with one newline.
+        entry: python -m pre_commit_hooks.end_of_file_fixer
+        language: python
+        additional_dependencies: [pre-commit-hooks==5.0.0]
+        types: [text]
+        stages: [pre-commit, pre-push, manual]
       - id: check-merge-conflict
+        name: check for merge conflicts
+        description: checks for files that contain merge conflict strings.
+        entry: python -m pre_commit_hooks.check_merge_conflict
+        language: python
+        additional_dependencies: [pre-commit-hooks==5.0.0]
+        types: [text]
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.2
