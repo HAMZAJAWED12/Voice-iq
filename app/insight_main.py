@@ -33,6 +33,7 @@ from app.insights.api import router as insight_router
 from app.insights.config.settings import get_settings
 from app.insights.repository.db import init_db
 from app.security.request_guard import RequestGuardMiddleware, guarded_limits
+from app.utils.logger import configure_logging
 from app.utils.readiness import database_ready, readiness
 from app.utils.retention import run_retention
 
@@ -43,6 +44,7 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    configure_logging(settings)
     init_db(settings)
     # Purges expired stored records; the job-directory purge is a no-op
     # unless job dirs exist (this image doesn't process audio), but kept for

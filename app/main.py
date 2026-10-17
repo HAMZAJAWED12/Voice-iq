@@ -19,7 +19,7 @@ from app.insights.repository.db import init_db
 from app.routes.process_audio import MAX_UPLOAD_BYTES
 from app.routes.process_audio import router as process_router
 from app.security.request_guard import RequestGuardMiddleware, guarded_limits
-from app.utils.logger import setup_logging
+from app.utils.logger import configure_logging, setup_logging
 from app.utils.readiness import database_ready, ffmpeg_ready, readiness
 from app.utils.retention import run_retention
 
@@ -31,6 +31,7 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    configure_logging(settings)
     # Ensure the Insight Service schema exists before serving traffic.
     # init_db() respects VOICEIQ_DATABASE_AUTO_CREATE=false for environments
     # where migrations are managed externally.

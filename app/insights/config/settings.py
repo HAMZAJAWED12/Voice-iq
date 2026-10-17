@@ -55,7 +55,10 @@ class InsightSettings(BaseSettings):
     )
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         default="INFO",
-        description="Root log level applied at startup.",
+        description=(
+            "Root log level applied at startup. The httpx and httpcore loggers "
+            "stay at WARNING whatever this is set to."
+        ),
     )
 
     # --- Persistence ------------------------------------------------------ #
@@ -82,8 +85,9 @@ class InsightSettings(BaseSettings):
     threshold_profile: Literal["default", "strict", "lenient"] = Field(
         default="default",
         description=(
-            "Named threshold profile applied to the rule engines. "
-            "Engines fall back to DEFAULT_THRESHOLDS if no override is wired."
+            "Not implemented: the rule engines always use their default "
+            "thresholds, and responses report the profile as 'default'. "
+            "Setting this logs a warning at startup."
         ),
     )
 
