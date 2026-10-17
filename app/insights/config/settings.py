@@ -106,6 +106,24 @@ class InsightSettings(BaseSettings):
             "a lying Content-Length header cannot bypass it."
         ),
     )
+    process_audio_max_running: int = Field(
+        default=1,
+        ge=1,
+        description="Pipeline runs a worker process executes at once on /v1/process-audio.",
+    )
+    process_audio_max_waiting: int = Field(
+        default=2,
+        ge=0,
+        description=(
+            "Uploads that may wait for a pipeline slot per worker process. "
+            "Beyond running + waiting, /v1/process-audio answers 503."
+        ),
+    )
+    process_audio_retry_after_sec: int = Field(
+        default=30,
+        ge=1,
+        description="Retry-After (seconds) sent with that 503.",
+    )
     ffmpeg_timeout_sec: float = Field(
         default=120.0,
         ge=1.0,

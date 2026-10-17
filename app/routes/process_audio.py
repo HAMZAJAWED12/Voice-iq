@@ -4,6 +4,7 @@ import json
 import time
 import uuid
 import weakref
+from dataclasses import dataclass
 
 import anyio
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -51,21 +52,30 @@ def _maybe_purge(io: JobIO) -> None:
         logger.exception("opportunistic job purge failed")
 
 
-# One pipeline run at a time per event loop (one loop per worker process),
-# as when the run blocked the loop, but in a worker thread so the loop keeps
-# serving other requests. A further upload waits for the slot. Keyed by loop
-# because a limiter belongs to the loop it was created on.
-_PIPELINE_SLOTS: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, anyio.CapacityLimiter]" = (
-    weakref.WeakKeyDictionary()
-)
+@dataclass
+class _Admission:
+    """Pipeline slots and admitted uploads for one event loop (one worker)."""
+
+    slots: anyio.CapacityLimiter
+    inflight: int = 0  # admitted uploads: running or waiting for a slot
 
 
-def _pipeline_slot() -> anyio.CapacityLimiter:
+# Pipeline runs execute in a worker thread so the event loop keeps serving
+# other requests. At most `process_audio_max_running` run at once per event
+# loop (one loop per worker process) and `process_audio_max_waiting` more
+# wait; a further upload gets 503 with Retry-After. Keyed by loop because a
+# limiter belongs to the loop it was created on; the counter changes only on
+# that loop, so it needs no lock.
+_ADMISSIONS: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, _Admission]" = weakref.WeakKeyDictionary()
+
+
+def _admission() -> _Admission:
     loop = asyncio.get_running_loop()
-    slot = _PIPELINE_SLOTS.get(loop)
-    if slot is None:
-        slot = _PIPELINE_SLOTS[loop] = anyio.CapacityLimiter(1)
-    return slot
+    admission = _ADMISSIONS.get(loop)
+    if admission is None:
+        slots = anyio.CapacityLimiter(get_settings().process_audio_max_running)
+        admission = _ADMISSIONS[loop] = _Admission(slots=slots)
+    return admission
 
 
 # Every route on this router requires a valid X-API-Key header (see
@@ -161,6 +171,30 @@ async def process_audio(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+    settings = get_settings()
+    admission = _admission()
+    if admission.inflight >= settings.process_audio_max_running + settings.process_audio_max_waiting:
+        raise HTTPException(
+            status_code=503,
+            detail="Audio processing is at capacity. Retry later.",
+            headers={"Retry-After": str(settings.process_audio_retry_after_sec)},
+        )
+    admission.inflight += 1
+    try:
+        return await _admitted_request(request_id, file, ext, expected_speakers, fact_check, admission)
+    finally:
+        admission.inflight -= 1
+
+
+async def _admitted_request(
+    request_id: str,
+    file: UploadFile,
+    ext: str,
+    expected_speakers: int | None,
+    fact_check: bool | None,
+    admission: _Admission,
+) -> dict:
+    """Save the upload, then run the pipeline in a slot."""
     io = JobIO()
     await anyio.to_thread.run_sync(_maybe_purge, io)
     job = io.init_job(request_id)
@@ -220,7 +254,7 @@ async def process_audio(
         )
 
     return await anyio.to_thread.run_sync(
-        _run_pipeline, request_id, io, expected_speakers, fact_check, limiter=_pipeline_slot()
+        _run_pipeline, request_id, io, expected_speakers, fact_check, limiter=admission.slots
     )
 
 

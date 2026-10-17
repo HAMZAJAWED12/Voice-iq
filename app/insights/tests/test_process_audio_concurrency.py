@@ -153,3 +153,55 @@ def test_a_failed_run_still_maps_to_the_same_error(warnings, status, tmp_path, m
     detail = response.json()["detail"]
     assert set(detail) == {"request_id", "warnings", "pipeline_meta"}
     assert detail["warnings"] == warnings
+
+
+def _admitted() -> int:
+    return sum(a.inflight for a in process_audio._ADMISSIONS.values())
+
+
+def _wait_until(predicate, timeout: float = _TIMEOUT) -> bool:
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def test_beyond_one_running_and_two_waiting_an_upload_gets_503(client, gate):
+    results: list = [None, None, None]
+    threads = [threading.Thread(target=_upload, args=(client, results, i)) for i in range(3)]
+    threads[0].start()
+    assert gate.entered.wait(_TIMEOUT)
+    threads[1].start()
+    threads[2].start()
+    try:
+        assert _wait_until(lambda: _admitted() == 3), "the two waiting uploads were not admitted"
+
+        refused = client.post("/v1/process-audio", files={"file": ("call.wav", _WAV_BYTES, "audio/wav")})
+
+        assert refused.status_code == 503
+        assert refused.headers["Retry-After"] == "30"
+        assert gate.runs == 1
+    finally:
+        gate.release.set()
+        for t in threads:
+            t.join(_TIMEOUT)
+
+    assert [r.status_code for r in results] == [200, 200, 200]
+    assert (gate.runs, gate.max_running) == (3, 1)
+    assert _admitted() == 0
+
+
+def test_the_admission_defaults():
+    from app.insights.config.settings import InsightSettings
+
+    settings = InsightSettings(_env_file=None)
+
+    assert (
+        settings.process_audio_max_running,
+        settings.process_audio_max_waiting,
+        settings.process_audio_retry_after_sec,
+    ) == (1, 2, 30)
