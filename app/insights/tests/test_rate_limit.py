@@ -50,7 +50,7 @@ def test_an_unknown_key_is_not_a_bucket() -> None:
 
 def test_rotating_the_header_does_not_escape_the_limit_while_auth_is_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VOICEIQ_API_KEYS", "")
-    monkeypatch.setenv("VOICEIQ_ENVIRONMENT", "staging")
+    monkeypatch.setenv("VOICEIQ_ENVIRONMENT", "development")
     monkeypatch.setenv("VOICEIQ_RATE_LIMIT_ENABLED", "true")
     monkeypatch.setenv("VOICEIQ_RATE_LIMIT_FACTCHECK", "2/minute")
     get_settings.cache_clear()

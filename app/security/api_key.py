@@ -9,8 +9,10 @@ Behaviour matrix:
 | Keys configured | Environment    | Result                                  |
 | --------------- | -------------- | --------------------------------------- |
 | 1 or more       | any            | enforce; 401 missing, 403 invalid       |
-| empty           | != production  | warn + allow (developer convenience)    |
-| empty           | == production  | fail closed with 503 (loud misconfig)   |
+| empty           | development,   | warn + allow (developer convenience)    |
+|                 | test           |                                         |
+| empty           | staging,       | fail closed with 503 (loud misconfig)   |
+|                 | production     |                                         |
 
 Health probes (`/healthz`, `/version`) live on the FastAPI app itself
 and not on the routers protected by this dependency, so they remain
@@ -29,6 +31,9 @@ from fastapi.security import APIKeyHeader
 
 from app.insights.config.settings import InsightSettings, get_settings
 from app.utils.logger import logger
+
+# Environments that refuse every protected request when no key is configured.
+_FAIL_CLOSED_ENVIRONMENTS: frozenset[str] = frozenset({"production", "staging"})
 
 # Public so tests and middleware can reference the exact header name.
 API_KEY_HEADER = "X-API-Key"
@@ -63,10 +68,11 @@ def api_key_error(presented: str | None, settings: InsightSettings) -> HTTPExcep
     """
     configured = settings.api_keys
     if not configured:
-        if settings.environment == "production":
+        if settings.environment in _FAIL_CLOSED_ENVIRONMENTS:
             logger.critical(
-                "API auth misconfigured: no api_keys configured in production. "
-                "Refusing every request until VOICEIQ_API_KEYS is set."
+                "API auth misconfigured: no api_keys configured in %s. "
+                "Refusing every request until VOICEIQ_API_KEYS is set.",
+                settings.environment,
             )
             return HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
