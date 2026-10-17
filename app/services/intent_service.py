@@ -1,10 +1,13 @@
 # app/services/intent_service.py
 
+from app.utils.text_match import contains_phrase, starts_with_phrase
+
 
 class IntentService:
     """
     Simple intent classifier.
     You can later swap this with a transformer / Rasa / etc.
+    Keywords match whole words only ("ok" is not found in "book").
     """
 
     @staticmethod
@@ -14,28 +17,31 @@ class IntentService:
         if not t:
             return "other"
 
-        if any(t.startswith(x) for x in ["hi", "hello", "hey"]):
+        if any(starts_with_phrase(t, x) for x in ["hi", "hello", "hey"]):
             return "greeting"
 
-        if t.endswith("?") or any(w in t for w in ["?", "could you", "would you", "can you"]):
+        if t.endswith("?") or any(contains_phrase(t, w) for w in ["?", "could you", "would you", "can you"]):
             return "question"
 
-        if any(w in t for w in ["sorry", "apologize", "my fault"]):
+        if any(contains_phrase(t, w) for w in ["sorry", "apologize", "my fault"]):
             return "apology"
 
-        if any(w in t for w in ["angry", "mad", "upset", "frustrated", "terrible", "horrible"]):
+        if any(contains_phrase(t, w) for w in ["angry", "mad", "upset", "frustrated", "terrible", "horrible"]):
             return "complaint"
 
-        if any(w in t for w in ["story", "when i was", "i remember", "i tell you", "basically what this is about"]):
+        if any(
+            contains_phrase(t, w)
+            for w in ["story", "when i was", "i remember", "i tell you", "basically what this is about"]
+        ):
             return "storytelling"
 
-        if any(w in t for w in ["thanks", "thank you", "appreciate it"]):
+        if any(contains_phrase(t, w) for w in ["thanks", "thank you", "appreciate it"]):
             return "gratitude"
 
-        if any(w in t for w in ["okay", "ok", "that works", "sounds good"]):
+        if any(contains_phrase(t, w) for w in ["okay", "ok", "that works", "sounds good"]):
             return "agreement"
 
-        if any(w in t for w in ["bye", "goodbye", "talk to you later"]):
+        if any(contains_phrase(t, w) for w in ["bye", "goodbye", "talk to you later"]):
             return "closing"
 
         # default: info sharing

@@ -2,6 +2,7 @@
 
 
 from app.utils.logger import logger
+from app.utils.text_match import contains_phrase
 
 HESITATION_MARKERS = ["um", "uh", "you know", "er", "ah", "kind of", "sort of", "..."]
 AGGRESSION_WORDS = ["crap", "stupid", "idiot", "hate", "dumb", "aggressive", "angry"]
@@ -16,6 +17,7 @@ class FlagService:
       - lie_risk (very rough / NOT reliable)
 
     These are *not* truth detectors – just pattern-based hints for analysts.
+    Keywords match whole words only ("um" is not found in "number").
     """
 
     @staticmethod
@@ -33,7 +35,7 @@ class FlagService:
             end = turn.get("end", 0.0)
 
             # Hesitation
-            if any(h in text for h in HESITATION_MARKERS):
+            if any(contains_phrase(text, h) for h in HESITATION_MARKERS):
                 flags.append(
                     {
                         "type": "hesitation",
@@ -47,7 +49,7 @@ class FlagService:
                 )
 
             # Aggression
-            if any(w in text for w in AGGRESSION_WORDS):
+            if any(contains_phrase(text, w) for w in AGGRESSION_WORDS):
                 flags.append(
                     {
                         "type": "aggression",
@@ -61,8 +63,8 @@ class FlagService:
                 )
 
             # Lie risk (very soft heuristic!)
-            if any(a in text for a in ABSOLUTE_WORDS) and any(
-                h in text for h in ["i think", "maybe", "probably", "i guess"]
+            if any(contains_phrase(text, a) for a in ABSOLUTE_WORDS) and any(
+                contains_phrase(text, h) for h in ["i think", "maybe", "probably", "i guess"]
             ):
                 flags.append(
                     {

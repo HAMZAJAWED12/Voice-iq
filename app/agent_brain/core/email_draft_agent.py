@@ -54,7 +54,7 @@ class EmailDraftAgent(BaseAgent):
 
         for segment in context.transcript:
             text = (segment.text or "").strip()
-            if not text or not find_signals(text, _EMAIL_SIGNALS, language=context.language):
+            if not text or not find_signals(text, _EMAIL_SIGNALS, language=context.language, whole_words=True):
                 continue
 
             obj = self._object(text)

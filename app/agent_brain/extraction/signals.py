@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from app.agent_brain.extraction.language import vocabulary_for
+from app.utils.text_match import contains_phrase
 
 # Either the legacy flat list, or a table keyed by language code.
 SignalSource = Mapping[str, Sequence[str]] | Sequence[str]
@@ -29,11 +30,19 @@ def _resolve(signals: SignalSource, language: str | None) -> Sequence[str]:
     return signals
 
 
-def find_signals(text: str, signals: SignalSource, *, language: str | None = None) -> list[str]:
-    """Return the signal phrases present in `text` (case-insensitive)."""
+def find_signals(
+    text: str, signals: SignalSource, *, language: str | None = None, whole_words: bool = False
+) -> list[str]:
+    """Return the signal phrases present in `text` (case-insensitive).
+
+    With `whole_words`, a phrase counts only where it is not part of a longer
+    word ("send a" is not found in "send all").
+    """
     if not text:
         return []
     lowered = text.lower()
+    if whole_words:
+        return [s for s in _resolve(signals, language) if contains_phrase(lowered, s.lower())]
     return [s for s in _resolve(signals, language) if s.lower() in lowered]
 
 
