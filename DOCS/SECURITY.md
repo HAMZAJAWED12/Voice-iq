@@ -49,9 +49,11 @@ pipeline (`app/main.py:60-82`).
 
 The Docker image serves plain HTTP (`Dockerfile:89` starts uvicorn with no
 TLS options), and the repository has no TLS configuration for either entry
-point. Put the service behind a trusted reverse proxy that terminates TLS
-([08-deployment.md](08-deployment.md) line 194). The limitations below assume
-this setup.
+point. TLS terminates at the ingress: a trusted reverse proxy or load
+balancer in front of the service holds the certificate, and only it talks to
+the container, over a private network. `docker-compose.yml` publishes the
+port on the loopback interface only and sets CPU and memory limits for the
+container. The limitations below assume this setup.
 
 ---
 

@@ -57,3 +57,13 @@ def test_compose_publishes_ports_on_loopback_only():
     published = re.findall(r"-\s*\"?([^\"\n]+)\"?", block.group(1))
 
     assert published and all(p.startswith("127.0.0.1:") for p in published), published
+
+
+def test_compose_limits_the_container_cpu_and_memory():
+    text = (REPO / "docker-compose.yml").read_text(encoding="utf-8")
+    limits = re.search(r"^\s*limits:\s*\n((?:\s+\w+:\s*.+\n)+)", text, re.M)
+    assert limits, "no resource limits block"
+    values = dict(re.findall(r"(\w+):\s*\"?([^\"\n]+)\"?", limits.group(1)))
+
+    assert float(values["cpus"]) > 0
+    assert re.fullmatch(r"\d+[kmg]", values["memory"]), values
