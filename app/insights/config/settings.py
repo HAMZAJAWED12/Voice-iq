@@ -271,6 +271,24 @@ class InsightSettings(BaseSettings):
         le=30.0,
         description="Per-call HTTP timeout for fact-check source clients.",
     )
+    factcheck_max_claims: int = Field(
+        default=25,
+        ge=1,
+        le=1000,
+        description=(
+            "Most claims one fact-check run checks. Claims past the limit are " "counted as skipped and get no result."
+        ),
+    )
+    factcheck_run_deadline_sec: float = Field(
+        default=20.0,
+        gt=0.0,
+        le=300.0,
+        description=(
+            "A fact-check run starts no new check after this many seconds; the "
+            "remaining claims are counted as skipped. A call already running "
+            "finishes within factcheck_http_timeout_sec."
+        ),
+    )
 
     @property
     def is_sqlite(self) -> bool:

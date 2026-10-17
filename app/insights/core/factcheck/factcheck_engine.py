@@ -18,6 +18,11 @@ production code calls `SourceRouter.from_settings()` to build the real one.
 
 A small in-memory TTL cache de-duplicates identical claim signatures
 within a short window — protects scarce free-tier quotas (Alpha Vantage).
+
+A run checks at most `max_claims` claims and starts no new check once
+`deadline_sec` has passed; the claims left over are counted as skipped and
+get no result. A provider call already running at the deadline finishes
+within its own per-call timeout.
 """
 
 from __future__ import annotations
@@ -25,6 +30,7 @@ from __future__ import annotations
 import math
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.insights.core.factcheck.claim_detector import ClaimDetector
@@ -156,9 +162,15 @@ class FactCheckEngine:
         router: SourceRouter,
         *,
         cache_ttl_sec: float = 60.0,
+        max_claims: int = 25,
+        deadline_sec: float = 20.0,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._router = router
         self._cache = _TTLCache(ttl_sec=cache_ttl_sec)
+        self._max_claims = max_claims
+        self._deadline_sec = deadline_sec
+        self._clock = clock
 
     # ------------------------------------------------------------------ #
     # Public API                                                         #
@@ -180,11 +192,23 @@ class FactCheckEngine:
         results: list[FactCheckResult] = []
         verified_count = 0
         skipped_count = 0
+        unchecked = 0
         # Subjects whose fetch failed in this run, with the reason: a repeated
         # claim about the same subject is not fetched again in the same run.
         failed: dict[tuple[str, str], str | None] = {}
+        started = self._clock()
 
-        for claim in claims:
+        for index, claim in enumerate(claims):
+            if index >= self._max_claims or self._clock() - started >= self._deadline_sec:
+                unchecked = len(claims) - index
+                logger.warning(
+                    "fact-check: %d of %d claims not checked (limit %d claims, %.0f s)",
+                    unchecked,
+                    len(claims),
+                    self._max_claims,
+                    self._deadline_sec,
+                )
+                break
             client = self._router.client_for(claim.claim_type)
             if client is None:
                 results.append(
@@ -234,7 +258,7 @@ class FactCheckEngine:
         stats = FactCheckStats(
             claims_detected=len(claims),
             verified=verified_count,
-            skipped=skipped_count,
+            skipped=skipped_count + unchecked,
         )
         return FactCheckResponse(
             conversation_id=conversation_id,
