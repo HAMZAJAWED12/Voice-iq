@@ -1,4 +1,4 @@
-Last verified: 2026-10-17, 3bf7506
+Last verified: 2026-10-17, dbae452
 # VoiceIQ in Plain English
 
 This guide is for readers who do not write code: product owners, managers,
@@ -43,7 +43,7 @@ also exist: fact-check a piece of text, analyse a conversation that has
 already been transcribed, and generate action suggestions from data the
 platform supplies. This guide follows the full audio route.
 
-*Source:* `app/routes/process_audio.py:140`;
+*Source:* `app/routes/process_audio.py:129`;
 `app/insights/api/factcheck_routes.py`; `app/insights/api/insight_routes.py`;
 `app/agent_brain/api/agent_routes.py:26-38`; CUSTOMER/AGENT labels in
 `app/services/alignment_service.py:446-455`; approval flag in
@@ -69,7 +69,7 @@ a customer whose internet has stopped working talks to a support agent.
 
 **How the example results were produced.** The rule-based stages (intents,
 flags, emotions, statistics, insights and action suggestions) were run on
-this script using the service's own code. Two inputs were assumed rather
+this script using the service's own code, most recently at `dbae452`. Two inputs were assumed rather
 than measured: the sentiment readings (turn by turn: positive, negative,
 neutral, negative, neutral, positive) and the voice labels (customer
 SPEAKER_00, agent SPEAKER_01). The speech-recognition and AI (artificial
@@ -97,8 +97,8 @@ recorded, and the remaining stages carry on. Fact-check runs last, after
 the report is built. Its verdicts therefore appear in the response but not
 in the PDF or the action suggestions.
 
-*Source:* `app/pipeline/orchestrator.py:180-228` (stage order; the four
-stop conditions); `app/routes/process_audio.py:232-263` (fact-check after
+*Source:* `app/pipeline/orchestrator.py:183-231` (stage order; the five
+stop conditions); `app/routes/process_audio.py:244-281` (fact-check after
 the pipeline).
 
 ### Step 1: Upload checks
@@ -106,9 +106,14 @@ the pipeline).
 VoiceIQ checks the request before it analyses anything:
 
 - The caller must present a valid access key (an API key) once the operator
-  has set keys up. A production server with no keys set refuses every
-  request ([SECURITY.md](SECURITY.md) has the details). Each caller may send
-  only a limited number of uploads per minute (default 30).
+  has set keys up. A production or staging server with no keys set refuses
+  every request ([SECURITY.md](SECURITY.md) has the details). Each caller may
+  send only a limited number of uploads per minute (default 30).
+- The server must have room for the recording. By default each running copy
+  of the service analyses one recording at a time and lets two more wait
+  their turn. When that queue is full, a further upload is turned away at
+  once with 503 (busy) and a "try again later" hint (by default, after 30
+  seconds).
 - The file must be MP3, WAV, M4A or FLAC, four common audio formats. The
   file name is checked first.
 - The first bytes of the file must look like real audio, so a document or
@@ -118,25 +123,27 @@ VoiceIQ checks the request before it analyses anything:
   the size the caller declares.
 
 An upload that fails a check is refused with a standard web error code and
-a short reason, such as 413 (too large) or 415 (not audio), and nothing else
-runs. In the example, `support-call.mp3` passes all four checks.
+a short reason, such as 413 (too large), 415 (not audio) or 503 (busy), and
+nothing else runs. In the example, `support-call.mp3` passes every check.
 
 An accepted call gets a random request ID (identifier) and its own folder on
 the server for the files it produces. These folders are deleted after 24
 hours by default.
 
-*Source:* `app/routes/process_audio.py:26-79, 154-220`;
+*Source:* `app/routes/process_audio.py:26-68, 143-232`;
 `app/security/request_guard.py:38-101` (key and declared size checked
-before the upload is read); `app/utils/upload.py:15-36`;
-`app/utils/audio_sniff.py`;
-`app/insights/config/settings.py:100-108, 123-133, 144-149, 169-178`.
+before the upload is read); `app/security/api_key.py:36`;
+`app/utils/upload.py:15-36`; `app/utils/audio_sniff.py`;
+`app/insights/config/settings.py:104-130, 153-163, 184-189, 223-232`.
 
 ### Step 2: Audio clean-up and quality check
 
 VoiceIQ converts the recording into one standard form: a single channel at
 16,000 samples per second. This means every later stage receives the same
 kind of audio. If the file cannot be converted, or the conversion takes
-longer than the time limit (default 120 seconds), the call is refused.
+longer than the time limit (default 120 seconds), the call is refused. A
+recording longer than the length limit, two hours by default, is refused
+with 413 (too long); VoiceIQ never cuts it short and analyses only part.
 
 VoiceIQ then measures the audio:
 
@@ -148,15 +155,16 @@ VoiceIQ then measures the audio:
   audio VoiceIQ skips the gender and emotion readings and treats speaker
   separation as less reliable.
 
-Once an upload has passed step 1, only four things can stop the analysis:
-no audio file, a failed conversion, a conversion that timed out, or
-silence.
+Once an upload has passed step 1, only five things can stop the analysis:
+no audio file, a failed conversion, a conversion that timed out, a
+recording over the length limit, or silence.
 
 Assume the example is a clear recording, so it passes with no warnings.
 
-*Source:* `app/pipeline/orchestrator.py:239-345, 549-589`;
+*Source:* `app/pipeline/orchestrator.py:242-340, 548-588`;
 `app/utils/audio_utils.py`; `app/utils/audio_quality.py:122-126`;
-`app/routes/process_audio.py:241-254`.
+`app/routes/process_audio.py:253-272`;
+`app/insights/config/settings.py:131-138`.
 
 ### Step 3: Speech-to-text
 
@@ -173,8 +181,8 @@ the warning `ASR_FAILED` (ASR stands for automatic speech recognition).
 Later stages that need text are then skipped.
 
 *Source:* `app/services/asr_service.py`;
-`app/routes/process_audio.py:232-239`;
-`app/pipeline/orchestrator.py:347-389`.
+`app/routes/process_audio.py:244-251`;
+`app/pipeline/orchestrator.py:342-384`.
 
 ### Step 4: Who spoke when
 
@@ -186,16 +194,18 @@ It does not know who anyone is. This step is called diarization.
   people are on the call.
 - It keeps at most eight speakers. A voice with less than 5% of the
   talking time (7% on noisy audio) is relabelled SPEAKER_UNKNOWN.
-- If the diarization model cannot be loaded, for example because the
-  operator has not supplied its access token, VoiceIQ treats the whole call
-  as one speaker and adds the warning `SINGLE_SPEAKER_MODE`.
+- If the diarization model cannot be loaded or fails, for example because
+  the operator has not supplied its access token, VoiceIQ treats the whole
+  call as one speaker and adds the warnings `SINGLE_SPEAKER_MODE` and
+  `MOCK_DIARIZATION_USED`. The second one says plainly that speaker
+  separation did not happen.
 
 For the example, assume the customer is labelled SPEAKER_00 and the agent
 SPEAKER_01.
 
 *Source:* `app/services/diarization_service.py:45-66, 76-128, 133-146,
-246-329`; `app/pipeline/orchestrator.py:391-441`;
-`app/routes/process_audio.py:143, 236`.
+246-329`; `app/pipeline/orchestrator.py:386-440`;
+`app/routes/process_audio.py:132, 248`.
 
 ### Step 5: Matching words to speakers
 
@@ -211,7 +221,7 @@ so the labels are correct. On a call where the agent talks longer, the labels
 come out the wrong way round.
 
 *Source:* `app/services/alignment_service.py:12-24, 430-490`;
-`app/pipeline/orchestrator.py:443-513`.
+`app/pipeline/orchestrator.py:442-512`.
 
 ### Step 6: Reading the words
 
@@ -227,8 +237,8 @@ separately, so if one fails the others still run.
 | Emotion | Neutral, happy, sad, angry or fear, per piece of text | Read from the words and the sentiment, not from the voice. No audio emotion model is installed. Skipped on noisy audio. |
 | Topic | One label for the whole call, chosen from a fixed list of eleven: sales, support, technical issue, billing, account management, personal development, health & wellness, product inquiry, customer success, complaint, general conversation | An AI model that reads only the first 512 characters |
 | Summary | A short paragraph | An AI summarisation model that reads only the first 4,000 characters |
-| Intent | One label per turn: greeting, question, apology, complaint, storytelling, gratitude, agreement, closing, information sharing, or other | Fixed word rules |
-| Flags | Hesitation, aggression or lie risk, attached to a turn | Fixed word lists. The lie-risk flag states that it is a weak hint and not proof of deception. |
+| Intent | One label per turn: greeting, question, apology, complaint, storytelling, gratitude, agreement, closing, information sharing, or other | Fixed word rules that match whole words only |
+| Flags | Hesitation, aggression or lie risk, attached to a turn | Fixed word lists, matched as whole words only. The lie-risk flag states that it is a weak hint and not proof of deception. |
 | Fact-check candidates | Every web address that starts with "http" and every number written in digits, marked "to verify" | A text scan on the server. Nothing is verified and nothing is sent anywhere. |
 
 **What the example gets:**
@@ -237,10 +247,10 @@ separately, so if one fails the others still run.
   information sharing, gratitude.
 - **Emotions**, turn by turn: happy, sad, sad (the agent's "I'm sorry"),
   sad, neutral, happy (the customer's "Thank you").
-- **Flags:** three hesitation flags, none of which reflects real hesitation.
-  The hesitation word list includes "er", and the rule finds it inside
-  other words, so "internet", "engineer" and "supervisor" each trigger a
-  flag.
+- **Flags:** none. The hesitation word list includes "er". Before
+  milestone M7 the rule also found it inside other words, so "internet",
+  "engineer" and "supervisor" each raised a false hesitation flag. The rules
+  now match whole words only, so they do not.
 - **Fact-check candidates:** none, because the script contains no digits and
   no web addresses.
 
@@ -250,9 +260,9 @@ separately, so if one fails the others still run.
 `app/services/emotion_service.py:17-80`;
 `app/services/topic_service.py:12-24, 59`;
 `app/services/summary_service.py:38-58`; `app/services/intent_service.py`;
-`app/services/flag_service.py:6-8, 26-79`;
+`app/services/flag_service.py:7-9, 28-81`; `app/utils/text_match.py`;
 `app/services/factcheck_service.py`;
-`app/pipeline/orchestrator.py:493-658`.
+`app/pipeline/orchestrator.py:492-662`.
 
 ### Step 7: Insights
 
@@ -272,6 +282,16 @@ evidence behind it, and every score lies between 0 and 1.
 The insights refer to speakers by their voice labels from step 4
 (SPEAKER_00, SPEAKER_01), not by the CUSTOMER and AGENT roles.
 
+The insight engines read each sentiment reading as a positivity score
+between 0 and 1: high for positive, low for negative, 0.5 for neutral, and
+further from 0.5 the surer the model is. Since 17 October 2026 the audio
+route converts its readings this way before the insights see them; before
+that, the engines read the model's confidence as if it were positivity.
+
+If the insight engines hit an error, the response says so under `insights`,
+the warning `INSIGHTS_FAILED` is added, and step 8 is skipped. The rest of
+the analysis still comes back.
+
 **What the example gets:**
 
 - **Escalation: moderate** (score about 0.50). It is driven by how much
@@ -284,8 +304,8 @@ The insights refer to speakers by their voice labels from step 4
 - **Flags:** the customer dominates the call with 60% of the talking time.
   There are also call-level flags for the moderate escalation and the low
   inconsistency.
-- **Scores:** dominance 0.60, engagement 0.81, conflict 0.00 (no
-  interruptions or overlaps), cooperation 0.74, emotion volatility 0.33.
+- **Scores:** dominance 0.60, engagement 0.76, conflict 0.00 (no
+  interruptions or overlaps), cooperation 0.73, emotion volatility 0.55.
 
 *Source:* `app/insights/service.py:59-108`;
 `app/insights/core/rule_engine.py`;
@@ -295,7 +315,7 @@ The insights refer to speakers by their voice labels from step 4
 `app/insights/core/scoring_engine.py`;
 `app/insights/core/summary_engine.py`;
 `app/insights/models/insight_models.py`;
-`app/pipeline/orchestrator.py:660-715`.
+`app/pipeline/orchestrator.py:664-732`.
 
 ### Step 8: Action suggestions (optional)
 
@@ -308,7 +328,7 @@ looking for one kind of action:
 |---|---|---|
 | Task | Commitments and assignments ("will", "need to", "make sure") | A task |
 | Follow-up meeting | Requests to meet or talk again ("let's meet", "schedule a call") | A calendar entry |
-| Email draft | Requests to send something ("email me", "send the") | An email with a draft subject and body |
+| Email draft | Requests to send something ("email me", "send the"), matched as whole words | An email with a draft subject and body |
 | Escalation | Anger, complaints and risk words ("frustrated", "refund", "cancel my") | A support escalation |
 | Fact-check review | Fact-check results that are false or unverified | A manual review |
 
@@ -326,7 +346,9 @@ as needing approval.** VoiceIQ never sends an email, books a meeting or
 raises a ticket itself.
 
 The fact-check review agent does nothing on this route, because fact-check
-runs later (step 10). The other four agents work normally.
+runs later (step 10). The other four agents work normally. If the insights
+in step 7 failed or were skipped, this whole step is skipped and the
+warning `AGENT_BRAIN_SKIPPED_NO_INSIGHTS` is added.
 
 The operator can also connect VoiceIQ to the platform's action layer. When
 that connection is set up, suggestions with a confidence of 0.50 or higher
@@ -335,7 +357,7 @@ with a signature the action layer can check to confirm they came from
 VoiceIQ. The response itself
 keeps every suggestion, so a reviewer can still see the low-confidence ones.
 
-**What the example gets** (five suggestions):
+**What the example gets** (four suggestions):
 
 | Suggestion | Triggered by | Priority | Confidence |
 |---|---|---|---|
@@ -343,20 +365,23 @@ keeps every suggestion, so a reviewer can still see the low-confidence ones.
 | Escalate a service issue | The customer's first turn ("frustrated", "not working") | HIGH | 0.885 |
 | Task: email today, supervisor to call (deadline "today") | "I will email you today…" | HIGH | 0.725 |
 | Task: send an engineer (deadline "on Friday") | "I will send an engineer on Friday." | MEDIUM | 0.725 |
-| A second email draft | "send an engineer", which the email rule's "send a" matched by mistake | HIGH | 0.925 |
 
 The supervisor's promise to "call you tomorrow to follow up" produced a task
 but no follow-up-meeting suggestion, because that wording is not on the
-follow-up agent's phrase list.
+follow-up agent's phrase list. Before milestone M7, the email rule's phrase
+"send a" also matched inside "send an engineer" and produced a fifth,
+mistaken email suggestion. The email rule now matches whole words only; the
+other agents still match their phrases anywhere in the text.
 
-*Source:* `app/pipeline/orchestrator.py:717-850`;
+*Source:* `app/pipeline/orchestrator.py:734-867`;
 `app/agent_brain/core/agent_runner.py`;
 `app/agent_brain/core/task_agent.py`, `followup_agent.py`,
 `email_draft_agent.py`, `escalation_agent.py`,
-`factcheck_review_agent.py`;
+`factcheck_review_agent.py`; `app/agent_brain/extraction/signals.py`
+(whole-word matching for the email rule);
 `app/agent_brain/models/recommendation.py:43-60`;
 `app/agent_brain/config/settings.py:16-28`;
-`app/insights/config/settings.py:205-216`.
+`app/insights/config/settings.py:259-270`.
 
 ### Step 9: PDF report
 
@@ -371,8 +396,8 @@ The report leaves out the insight results from step 7 (escalation,
 inconsistency, timeline markers and scores), the action suggestions, and the
 fact-check verdicts. Those appear only in the response.
 
-In the example, the PDF lists the three hesitation flags from step 6 under
-Flags and has no fact-check candidates section.
+In the example, the PDF has no Flags section and no fact-check candidates
+section, because the call produced neither.
 
 The PDF uses a basic font that covers only Latin-1, the Western European
 character set. Curly quotation marks, long dashes and similar punctuation
@@ -383,8 +408,9 @@ original text. A report that can print every character is planned for
 Sprint 7 (Phase 6).
 
 *Source:* `app/services/pdf_service.py:29-71` (character mapping),
-`119-303` (fixed Helvetica font, `fpdf==1.7.2` in `requirements.txt`);
-`app/pipeline/orchestrator.py:852-880`;
+`119-303` (fixed Helvetica font, `fpdf==1.7.2` in `requirements.txt`),
+`258-283` (the flags and fact-check sections appear only when there is
+something to list); `app/pipeline/orchestrator.py:869-897`;
 `app/insights/tests/test_pdf_unicode.py`; milestone M6 (`dc9caf3`) in
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) (*Completed*).
 
@@ -404,7 +430,7 @@ response says `disabled`.
 
 | Kind of claim | Example wording that is detected | Checked against |
 |---|---|---|
-| Exchange rate | "USD to PKR is 280" (US dollars to Pakistani rupees) | A currency-rate service (see below) |
+| Exchange rate | "USD to PKR is 280" (US dollars to Pakistani rupees) | A free public currency-rate service that needs no key (see below) |
 | Cryptocurrency price | "Bitcoin is at 95000 dollars" | A public crypto-price service |
 | Share price | "AAPL is at 175" (AAPL is a share symbol) | A stock-price service, only if the operator has supplied its key |
 | Weather | "The weather in Karachi is 30 degrees" | A weather service, only if the operator has supplied its key |
@@ -429,34 +455,41 @@ to 3% is TRUE, more than 3% and up to 10% is PARTIALLY_TRUE, and more than
 10% is FALSE. A country's capital is compared by name. Each verdict comes with a
 confidence label and a reason. Only the first 10,000 characters of the
 transcript are checked, and the results are also saved in the service's
-database.
+database, where they are kept for 30 days by default.
 
-At present every exchange-rate claim comes back `SOURCE_UNAVAILABLE`,
-because the currency service now requires an access key and none is
-configured. Which service to use instead is an open decision; see
-[FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
+Each fact-check stops after a set amount of work: by default it checks at
+most 25 claims, and starts no new check once 20 seconds have passed. Claims
+left over get no verdict and are counted as skipped.
+
+Exchange-rate claims are checked against ExchangeRate-API's free open
+service. Only the code of the currency being converted from (for example
+"USD") is sent, and each currency's rates are fetched at most once an hour.
+Until 17 October 2026 every exchange-rate claim came back
+`SOURCE_UNAVAILABLE`, because the previous service had started to require
+an access key; the owner chose the new service that day.
 
 **What the example gets:** the call contains nothing the fact-checker
 recognises, so with fact-check switched on the result lists zero claims. If
 the customer had said "USD to PKR is 280", that sentence would be detected as
-an exchange-rate claim and returned as `SOURCE_UNAVAILABLE`, with the reason
-that the provider requires an access key.
+an exchange-rate claim and compared with the current US dollar to rupee
+rate.
 
 If fact-check itself fails, the response says `failed` and gives a reason;
 the rest of the analysis is unaffected. A bad reply from an outside service
 affects only the claims in that call that ask about the same thing, such as
 the same coin.
 
-*Source:* `app/routes/process_audio.py:82-137, 256-261`;
+*Source:* `app/routes/process_audio.py:71-126, 274-279`;
 `app/utils/factcheck_gate.py`;
-`app/insights/core/factcheck/factcheck_engine.py:60-85, 167-269`;
+`app/insights/core/factcheck/factcheck_engine.py:66-91, 179-293`;
 `app/insights/core/factcheck/claim_detector.py:100-180, 385-467` (patterns and match filter; the
 example wordings were run through the detector);
 `app/insights/core/factcheck/comparator.py:34-35, 54-140`;
-`app/insights/core/factcheck/source_clients/forex_client.py:1-9, 24-30`;
+`app/insights/core/factcheck/source_clients/forex_client.py:1-10, 53-96`;
 `app/insights/models/factcheck_models.py:23-39, 155`;
-[DATA-FLOW.md](DATA-FLOW.md); commits `9aff207`, `dc03a44`, `8e51a94`,
-`83803b5`.
+`app/insights/config/settings.py:164-173, 288-305` (record retention, run
+caps); [DATA-FLOW.md](DATA-FLOW.md); [DECISIONS.md #48](DECISIONS.md);
+commits `9aff207`, `8e51a94`, `83803b5`, `da92ae4`, `45a5b22`.
 
 ---
 
@@ -475,12 +508,12 @@ The field names below are the labels a reader will see in the raw response.
 | `timeline` | A simpler list of the same turns: start, end, speaker, text, intent, overlap. This is different from the insight timeline markers. |
 | `speaker_stats` | For each speaker: talking time, words, words per minute, longest stretch, first and last time heard, share of talking time and of words |
 | `conversation_stats` | For the whole call: length, number of pieces, words, average turn length, number of speakers |
-| `topic` | The topic label and the model's confidence |
+| `topic` | The topic label and the model's confidence. If the topic step fails, the label is "unknown" with a short fixed error note. |
 | `summary` | The AI-written summary paragraph |
 | `intents_summary` | How many turns had each intent |
 | `flags` | Hesitation, aggression and lie-risk hints, each with speaker, time, a fixed score and a note |
 | `emotion_overview` | For each speaker, the share of their text read as each emotion |
-| `insights` | Everything from step 7, with reasons, evidence and a status. Empty if the step was skipped. If the insight engines hit an error, the status says `error` and the findings are blank. |
+| `insights` | Everything from step 7, with reasons, evidence and a status. Empty if the step was skipped. If the insight engines hit an error, the status says `error`, the findings are blank and the warning `INSIGHTS_FAILED` is added. |
 | `fact_checks` | The older "to verify" list of numbers and web addresses from step 6. These are not verified. |
 | `fact_checks_v2` | The fact-check result from step 10: verdicts and counts, or a status of `disabled`, `failed` or `skipped` |
 | `recommendations` | The action suggestions from step 8. Present only when that feature is on and the step succeeded. |
@@ -494,16 +527,16 @@ The field names below are the labels a reader will see in the raw response.
 
 | Group | Codes | Meaning |
 |---|---|---|
-| Call refused | `MISSING_INPUT_AUDIO`, `AUDIO_NORMALIZATION_FAILED`, `AUDIO_NORMALIZATION_TIMEOUT`, `AUDIO_SILENT_OR_NEAR_SILENT` | The call stopped before any analysis, and the code comes back with the error |
+| Call refused | `MISSING_INPUT_AUDIO`, `AUDIO_NORMALIZATION_FAILED`, `AUDIO_NORMALIZATION_TIMEOUT`, `AUDIO_TOO_LONG`, `AUDIO_SILENT_OR_NEAR_SILENT` | The call stopped before any analysis, and the code comes back with the error |
 | Audio quality | `LOW_SNR_AUDIO`, `HEAVY_NOISE_AUDIO`, `AUDIO_QUALITY_FAILED` | Noisy audio, or the quality check itself could not run |
-| Speakers | `SINGLE_SPEAKER_MODE`, `SPEAKER_CAP_APPLIED`, `LOW_SNR_DIARIZATION_UNRELIABLE`, `DIARIZATION_FAILED_FALLBACK`, `FLAGS_LIMITED_SINGLE_SPEAKER` | Only one voice, extra voices merged, or speaker separation unreliable or unavailable |
+| Speakers | `SINGLE_SPEAKER_MODE`, `MOCK_DIARIZATION_USED`, `SPEAKER_CAP_APPLIED`, `LOW_SNR_DIARIZATION_UNRELIABLE`, `DIARIZATION_FAILED_FALLBACK`, `FLAGS_LIMITED_SINGLE_SPEAKER` | Only one voice, speaker separation not done, extra voices merged, or speaker separation unreliable or unavailable |
 | No words | `EMPTY_TRANSCRIPT`, `ASR_FAILED` | Speech-to-text found no words, or failed |
 | Stage skipped | Codes containing `_SKIPPED_`, for example `GENDER_SKIPPED_LOW_SNR` | The stage did not run; the code says why |
 | Stage failed | Any other code ending `_FAILED`, for example `TOPIC_FAILED`, `INSIGHTS_FAILED`, `PDF_FAILED` | The stage broke and its part of the response is empty; everything else continued |
 
-*Source:* `app/pipeline/orchestrator.py:239-965` (every warning code and
+*Source:* `app/pipeline/orchestrator.py:242-982` (every warning code and
 the response fields); `app/insights/service.py:87-108, 313-342` (insight
-error status); `app/routes/process_audio.py:82-137, 256-263`
+error status); `app/routes/process_audio.py:71-126, 274-281`
 (`fact_checks_v2`); `app/utils/factcheck_gate.py:18-21`.
 
 ---
@@ -516,11 +549,13 @@ conversation or the people in it.
 
 - **Most labels come from simple rules, not from judgement.** Intents, flags,
   emotions and inconsistencies come from fixed word lists and thresholds.
-  These rules misfire. In the example, "internet" triggered a hesitation
-  flag, and "send an engineer" produced an email suggestion. The lie-risk
-  flag states that it is not proof of deception. Milestone M7, which is
-  planned, makes the flag, intent and email-suggestion word rules match
-  whole words only.
+  These rules misfire. Milestone M7 made the flag, intent and
+  email-suggestion word rules match whole words only, so "er" no longer
+  matches inside "internet" and "send a" no longer matches "send an
+  engineer"; before that, both raised false hits in the example. The rules
+  still see only words, not meaning, and the other suggestion agents still
+  match phrases inside longer words. The lie-risk flag states that it is not
+  proof of deception.
 - **Emotion is read from the words, not the voice.** No audio emotion model
   is installed, so the emotion label follows the wording and the sentiment.
 - **Gender is a guess from voice pitch.**
@@ -546,8 +581,9 @@ conversation or the people in it.
   failing the report; the response keeps the original text.
 - **Fact-check is narrow.** It recognises only exchange rates, crypto and
   share prices, weather, country capitals and (without a source) commodity
-  prices. Exchange-rate claims cannot be verified at present. Share-price and
-  weather claims need keys that the operator must supply. The claim detector
+  prices. Share-price and weather claims need keys that the operator must
+  supply. Each fact-check checks at most 25 claims and stops starting new
+  checks after 20 seconds by default. The claim detector
   can still misread some sentences: a price someone paid in the past ("I
   bought Ethereum at 1200") is checked against today's price, and a capitalised
   abbreviation that matches a coin or share symbol can be read as a price.
@@ -560,36 +596,42 @@ conversation or the people in it.
 - **It does not act.** Every action suggestion needs human approval, and
   VoiceIQ sends no emails and books nothing.
 - **The caller waits for the whole analysis.** There is no "submit now,
-  collect later" mode. Each running copy of the service analyses one
-  recording at a time; a further upload waits its turn, while other
-  requests are still answered. Sprint 7's plan moves fact-check, not the
-  whole analysis, into a background job (Phase 6; see D2 in the glossary).
-  That work is planned, not built.
+  collect later" mode. By default each running copy of the service analyses
+  one recording at a time and lets two more wait their turn; when that
+  queue is full, a further upload is refused at once with 503 and asked to
+  try again later. Other requests are still answered meanwhile. Sprint 7's
+  plan moves fact-check, not the whole analysis, into a background job
+  (Phase 6; see D2 in the glossary). That work is planned, not built.
+- **It does not take very long recordings.** A recording over two hours
+  (the default limit) is refused, not cut short.
 - **It is not an archive.** Each call's files are deleted after 24 hours by
-  default. When fact-check runs, its results stay in the service's database
-  until the operator removes them.
+  default. Results saved in the service's database (stored insights and
+  fact-check results) are deleted after 30 days by default.
 
 A round of security and reliability fixes landed in October 2026.
 [SECURITY.md](SECURITY.md) describes the security controls and, in general
 terms, the known limitations.
 
-*Source:* `app/services/flag_service.py:13-19, 62-79`;
+*Source:* `app/services/flag_service.py:14-21, 64-81`;
+`app/services/intent_service.py:6-51`; `app/utils/text_match.py`
+(milestone M7, `dbae452`);
 `app/services/emotion_service.py:17-24, 56-66`;
 `app/services/gender_service.py:9-17`;
 `app/services/alignment_service.py:446-455`;
 `app/services/diarization_service.py:49-51, 202, 264`;
 `app/agent_brain/extraction/language.py`;
-`app/agent_brain/core/email_draft_agent.py:19-34, 40-44`;
+`app/agent_brain/core/email_draft_agent.py:19-34, 57`;
 `app/services/sentiment_service.py:91`;
 `app/services/pdf_service.py:29-71`;
-`app/insights/core/factcheck/factcheck_engine.py:70-83`;
+`app/insights/core/factcheck/factcheck_engine.py:76-89`;
 `app/insights/core/factcheck/scorer.py:1-18`;
 `app/insights/core/scoring_engine.py`;
 `app/agent_brain/models/recommendation.py:44, 55`;
-`app/routes/process_audio.py:54-68, 222-239` (the caller waits; one run
-at a time per worker);
-`app/insights/config/settings.py:123-133`;
-[DATA-FLOW.md](DATA-FLOW.md) (*Data retention*);
+`app/routes/process_audio.py:34-57, 153-165, 234-251` (the caller waits;
+a bounded queue per worker, 503 beyond it);
+`app/utils/audio_utils.py:72-160` (length limit);
+`app/insights/config/settings.py:113-138, 153-173, 288-305`;
+`app/utils/retention.py` (deletion of old files and records);
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) (*Completed*,
 *Remaining*, *Next milestone*); [CHANGES.md](CHANGES.md) (*Security and
 reliability hardening*).
@@ -626,7 +668,7 @@ decision, see the decision register in
 | Phase 5 | Verdicts based only on the evidence found, checked citations, and consistent confidence scores |
 | Phase 6 | Running fact-check as a background job with its own version-2 routes and database tables, a status field in the response, and a PDF with citations that can print any character |
 | Phase 7 | Time limits, load limits, failure handling, metrics, and a staged rollout |
-| M1–M7 | Milestones: small fixes made one at a time while Sprint 7 work waits on Phase 0. M1 kept outbound request details out of the logs (`c1b35d9`, `cedfe96`). M2 made a bad reply from a data service produce `SOURCE_UNAVAILABLE` for that claim instead of a verdict or a crash (`9aff207`). M3 made currency-service errors say what went wrong (`dc03a44`). M4 stopped over-long numbers in a transcript from crashing the fact-check route or the audio route (`8e51a94`). M5 stopped the claim detector mistaking names, ages and counts for prices and taught it common price and currency phrasing (`1dbfac7`). M6 stopped characters outside Latin-1, the Western European character set the report font covers, from failing the PDF report; they now print as a close plain form or a question mark (`dc9caf3`). M7, which is planned, makes the keyword rules match whole words only, so that "er" no longer matches inside "internet". |
+| M1–M7 | Milestones: small fixes made one at a time while Sprint 7 work waits on Phase 0. M1 kept outbound request details out of the logs (`c1b35d9`, `cedfe96`). M2 made a bad reply from a data service produce `SOURCE_UNAVAILABLE` for that claim instead of a verdict or a crash (`9aff207`). M3 made currency-service errors say what went wrong (`dc03a44`). M4 stopped over-long numbers in a transcript from crashing the fact-check route or the audio route (`8e51a94`). M5 stopped the claim detector mistaking names, ages and counts for prices and taught it common price and currency phrasing (`1dbfac7`). M6 stopped characters outside Latin-1, the Western European character set the report font covers, from failing the PDF report; they now print as a close plain form or a question mark (`dc9caf3`). M7 made the keyword rules for flags, intents and email suggestions match whole words only, so that "er" no longer matches inside "internet" (`dbae452`). |
 | Tier 1, 2, 3 | Earlier production-readiness rounds: access keys, size limits and time limits (Tier 1), test coverage (Tier 2), clean-ups and stricter automated checks (Tier 3) |
 | Wave E (E1–E5) | Structural clean-ups from Tier 3, for example the audio content check (E4) and the faster speaker matching (E3) |
 | Tier S | Eight security-hardening items, S1–S8, such as per-caller request limits, automatic deletion of old call files, and making fact-check opt-in. Record: [SECURITY-HARDENING-PLAN.md](SECURITY-HARDENING-PLAN.md). Current controls: [SECURITY.md](SECURITY.md). |
@@ -681,7 +723,7 @@ decision, see the decision register in
 and git (`94f6479`, `592e8e7`, `ef5b5e8`–`ef005dd`, `c6284b6`); phases in
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) (*Remaining*);
 milestones in git (`c1b35d9`, `cedfe96`, `9aff207`, `dc03a44`, `8e51a94`,
-`1dbfac7`, `dc9caf3`) and
+`1dbfac7`, `dc9caf3`, `dbae452`) and
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) (*Next milestone*);
 Tier S in [SECURITY-HARDENING-PLAN.md](SECURITY-HARDENING-PLAN.md) and
 `ec8dc1e`; Tier N in [TIER-N-PLAN.md](TIER-N-PLAN.md); decisions in

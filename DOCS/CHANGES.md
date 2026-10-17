@@ -1,4 +1,4 @@
-Last verified: 2026-10-17, 3bf7506
+Last verified: 2026-10-17, dbae452
 # Changelog
 
 What changed in VoiceIQ, backfilled from git history. Newest first, grouped
@@ -22,21 +22,21 @@ Taken from git at write time.
 
 | Measure | Value | Command |
 |---|---|---|
-| Commits reachable from HEAD (`3bf7506`) | 184 | `git rev-list --count HEAD` |
-| Non-merge commits | 183 | `git rev-list --count --no-merges HEAD` |
+| Commits reachable from HEAD (`dbae452`) | 203 | `git rev-list --count HEAD` |
+| Non-merge commits | 202 | `git rev-list --count --no-merges HEAD` |
 | Merge commits | 1 (`032d822`) | `git rev-list --count --merges HEAD` |
 | Commits on `main` (`8fd3972`) | 141 | `git rev-list --count main` |
-| Commits on `sprint7/doc-sync` beyond `main` | 43 | `git rev-list --count main..HEAD` |
+| Commits on `sprint7/doc-sync` beyond `main` | 62 | `git rev-list --count main..HEAD` |
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse --format="%h %ad" --date=short` |
 
-Each of the 184 commits is listed in exactly one row below; a few hashes
+Each of the 203 commits is listed in exactly one row below; a few hashes
 also appear elsewhere as cross-references. Small commits of the same kind
 (wave-completion notes, a batch of stage extractions) share a row. Sections
 are ordered by their most recent commit. Dates are author dates.
 
 | Section | Dates | Commits |
 |---|---|---|
-| [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-17 | 43 |
+| [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-17 | 62 |
 | [Sprint 7 Phase 0 and prerequisites](#sprint-7-phase-0-and-prerequisites) | 2026-09-04 to 2026-09-20 | 7 |
 | [N4b multilingual and L5 pipeline wiring](#n4b-multilingual-and-l5-pipeline-wiring) | 2026-09-19 to 2026-09-20 | 10 |
 | [Tier 3 Wave E](#tier-3-wave-e) | 2026-06-21 to 2026-09-19 | 34 |
@@ -52,32 +52,33 @@ are ordered by their most recent commit. Dates are author dates.
 
 ## Sprint 7 on `sprint7/doc-sync`
 
-43 commits, 2026-10-11 to 2026-10-17: a documentation sync, prerequisite
-fixes that need no pending decision (one per milestone), and security and
-reliability fixes. Why
+62 commits, 2026-10-11 to 2026-10-17: a documentation sync, prerequisite
+fixes that need no pending decision (one per milestone), security and
+reliability fixes, and the owner-decided changes that followed them. Why
 the work is shaped this way: "In progress" in the
 [status doc](FACT-CHECK-AGENT-STATUS.md#in-progress).
 
-### Milestones M1 to M6
+### Milestones M1 to M7
 
 | Milestone | Date | Change | Commit |
 |---|---|---|---|
+| M7 | 2026-10-17 | Keyword rules match whole words only: the flag rules, the intent rules and the email-draft triggers no longer match a keyword inside a longer word ("um" in "number", "send a" in "send all"). New helper `app/utils/text_match.py`; the other Agent Brain agents keep substring matching; no vocabulary changed. 49 new tests. | `dbae452` |
 | M6 | 2026-10-17 | Text outside Latin-1 no longer fails the PDF: common punctuation maps to Latin-1, anything else prints as "?" (`app/services/pdf_service.py`, `to_latin1`). 6 new tests. Also listed under hardening below. | see below |
 | M5 | 2026-10-16 | The claim detector stops reading names, ages and counts as prices. A crypto, stock or commodity number followed by what it counts or measures, or by another currency, is dropped; a subject that is also a name or an everyday word, or a stock ticker not in capitals, needs price context (`_keep_match`, `app/insights/core/factcheck/claim_detector.py:385-467`). "1 USD = 280 PKR" is read as a rate; "95k", "24 hundred" and "1.2 million" scale the value. Every detector pattern scans in linear time. No v1 model change. 423 new tests. | `1dbfac7` |
-| M4 | 2026-10-16 | Over-long numbers in a transcript no longer cause a 500 on either endpoint. The claim detector drops a claim whose number has more than 15 digits (`MAX_VALUE_DIGITS`, now `app/insights/core/factcheck/claim_detector.py:193`). `/v1/process-audio` checks the fact-check payload as strict JSON before saving or returning it, and falls back to the failed stub (now `app/routes/process_audio.py:111-115`). 35 new tests. | `8e51a94` |
+| M4 | 2026-10-16 | Over-long numbers in a transcript no longer cause a 500 on either endpoint. The claim detector drops a claim whose number has more than 15 digits (`MAX_VALUE_DIGITS`, now `app/insights/core/factcheck/claim_detector.py:193`). `/v1/process-audio` checks the fact-check payload as strict JSON before saving or returning it, and falls back to the failed stub (now `app/routes/process_audio.py:101-104`). 35 new tests. | `8e51a94` |
 | Tooling | 2026-10-16 | The trailing-whitespace, end-of-file-fixer and check-merge-conflict hooks run through `python -m` in a `repo: local` block of `.pre-commit-config.yaml`, because Windows Application Control blocks the generated `.exe` launchers on some machines. Same hooks, same behaviour. | `7b25b3f` |
 | M3 | 2026-10-16 | exchangerate.host error replies are named instead of failing silently. The provider now requires an access key and none is configured, so currency-rate claims end as `SOURCE_UNAVAILABLE` with that reason; the log carries only the provider's error code and type. Provider unchanged. 11 new tests. | `dc03a44` |
 | M2 | 2026-10-11 | Bad provider replies (non-finite numbers, JSON that is not an object or cannot be decoded, wrong nested types, over-deep metadata) end that one claim as `SOURCE_UNAVAILABLE`, never a verdict or a 500. The engine isolates each claim. No v1 model change. Tests in `app/insights/tests/test_factcheck_source_replies.py`. | `9aff207` |
 | M1 | 2026-10-11 | Outbound request URLs kept out of the logs: `setup_logging()` pins the `httpx` and `httpcore` loggers to WARNING (`app/utils/logger.py`). Follow-up: a failed Java callback logs the exception class and HTTP status only. Tests in `app/insights/tests/test_logging_hygiene.py`. | `c1b35d9`, `cedfe96` |
 
-Next: **M7**, keyword rules match whole words only (tech debt).
-Planned, not built. See
-[Next milestone](FACT-CHECK-AGENT-STATUS.md#next-milestone).
+Next: no engineering milestone is ready; the Phase 1 gate is owner-side.
+See [Next milestone](FACT-CHECK-AGENT-STATUS.md#next-milestone).
 
 ### Status-document updates
 
 | Date | Change | Commit |
 |---|---|---|
+| 2026-10-17 | M6 and the security and reliability fixes recorded; M7 promoted; test counts refreshed. | `42382db` |
 | 2026-10-16 | Owner decisions recorded: M5 choices accepted, no new detector heuristics until Phase 3, size rule; M6 and the old-rows fix approved; reporting steps that work either way. | `43a9c1b` |
 | 2026-10-16 | M5 recorded as done; M6 promoted; detector limits documented; test counts refreshed. | `10b0039` |
 | 2026-10-16 | M4 recorded as done; M5 promoted to next milestone; test counts refreshed. | `793e02e` |
@@ -111,10 +112,41 @@ run. Each code fix is its own commit with its own regression tests.
 | 2026-10-16 | `/v1/process-audio` runs the pipeline in a worker thread, one run at a time per worker (the event-loop part of the process-audio concurrency prerequisite). | `2bb6593` |
 | 2026-10-16 | API key and declared size are checked before a request body is read; the bytes that arrive are counted. | `ff874de` |
 
+### Owner-decided security and reliability changes
+
+**Insight scores change for processed audio.** From `98730c3`, pipeline
+sentiment reaches the insight engines as positivity instead of the model's
+confidence in its label, so scores, sentiment-shift markers and summaries
+built from `/v1/process-audio` differ from earlier runs on the same audio.
+`/v1/insights` callers that send their own scores are unaffected.
+
+The project owner decided these on 2026-10-17. Each is its own commit with
+its own tests; they are DECISIONS #34 to #49 (#33 was recorded without code).
+
+| Date | Change | Commit |
+|---|---|---|
+| 2026-10-17 | Currency rates from open.er-api.com: keyless, only the base currency is sent, each base fetched at most hourly, attribution on every evidence record. DATA-FLOW.md and the PHASE-0 §6.4 source policy updated in the same commit. | `45a5b22` |
+| 2026-10-17 | `VOICEIQ_LOG_LEVEL` is applied at startup (`httpx` and `httpcore` stay at WARNING); `VOICEIQ_THRESHOLD_PROFILE` is marked not implemented and logs a startup warning when set. | `e25a3b2` |
+| 2026-10-17 | `docker-compose.yml` caps the container at 2 CPUs and 1 GB; TLS terminates at the ingress (SECURITY.md). | `fb56d7d` |
+| 2026-10-17 | `GET /readyz`: database reachable and, on the full service, ffmpeg present; 503 naming the failed check otherwise. `/healthz` unchanged. | `660558c` |
+| 2026-10-17 | A run that used mock diarization carries `MOCK_DIARIZATION_USED`; the two-speaker default is unchanged. | `2721a73` |
+| 2026-10-17 | Pipeline sentiment reaches the insight engines as positivity (see the note above). | `98730c3` |
+| 2026-10-17 | A stage whose package cannot be imported fails softly with its `*_FAILED` warning instead of the whole request. | `0f9c4c1` |
+| 2026-10-17 | An insight error result marks the pipeline stage failed, adds `INSIGHTS_FAILED` and skips the Agent Brain. | `c53c71d` |
+| 2026-10-17 | An error result never replaces a stored ok or warning insight record. | `f8bc3ed` |
+| 2026-10-17 | Insight and fact-check records are deleted after `VOICEIQ_DB_RETENTION_DAYS` (30); the retention sweep moved to the app lifespans, at startup and hourly. | `cbdafb4` |
+| 2026-10-17 | A fact-check run checks at most 25 claims and starts no check after 20 s; the rest are counted as skipped. | `da92ae4` |
+| 2026-10-17 | Insight writes 60/minute and reads 120/minute per caller, each route group with its own counter; `GET /v1/insights/` takes `limit` and `offset`. | `e802fcd` |
+| 2026-10-17 | Audio longer than `VOICEIQ_MAX_AUDIO_SECONDS` (7200) gets 413 `AUDIO_TOO_LONG`: ffprobe before decoding, an ffmpeg hard stop, never truncated. A fifth hard-fail gate. | `6c17c72` |
+| 2026-10-17 | `/v1/process-audio` admits one running and two waiting uploads per worker by default, then answers 503 with `Retry-After: 30`. | `948c49d` |
+| 2026-10-17 | Staging fails closed without API keys; compose publishes the port on loopback only. | `d7f9075` |
+| 2026-10-17 | A failed topic step returns a fixed message; the exception text stays in the job's status file. | `dc97a84` |
+
 ### Housekeeping
 
 | Date | Change | Commit |
 |---|---|---|
+| 2026-10-17 | A test comment describes the callback trace id accurately. No code change. | `427feed` |
 | 2026-10-16 | Stale code comments corrected (payload cap, callback trace id, rate-limit storage); notes about old git history reworded; `.git-blame-ignore-revs` points at the current hash of the bulk-format commit; DECISIONS entry 17 marked as followed in practice with formal approval pending. No code change. | `8f09739` |
 
 ### Project knowledge set
@@ -172,7 +204,7 @@ pipeline adapter a production caller.
 | 2026-09-20 | Docs: L5 closed in the N4b strategy; D10 added to the Phase 0 register; CLAUDE.md updated (L5-4). | `17606d6` |
 | 2026-09-20 | Tests prove `PipelineAdapter.to_context` is called from the production pipeline and the detected language reaches the agents (L5-3). | `1d8f2f6` |
 | 2026-09-20 | The pipeline's Agent Brain stage sends the signed Java callback without blocking the response (daemon thread); `min_confidence` filters the callback only, not the API response; off unless both callback URL and secret are set (L5-2). | `f619f7d` |
-| 2026-09-20 | The Agent Brain runs as an opt-in `/v1/process-audio` stage (`VOICEIQ_AGENT_BRAIN_AUTO_RUN`, default off, `app/insights/config/settings.py:205`); the `recommendations` key appears only when the stage produced output (L5-1). | `f5e4d84` |
+| 2026-09-20 | The Agent Brain runs as an opt-in `/v1/process-audio` stage (`VOICEIQ_AGENT_BRAIN_AUTO_RUN`, default off, `app/insights/config/settings.py:259`); the `recommendations` key appears only when the stage produced output (L5-1). | `f5e4d84` |
 | 2026-09-20 | AgentRunner's duplicate sweep is no longer quadratic. Output byte-identical; 2,308 ms to 95 ms on a 16-minute call (L5-0). | `1fff8aa` |
 | 2026-09-20 | Docs: N4b-1 Phase 1 recorded as done; Phase 2 (vocabulary entry) depends on decision L1. | `9ac7487` |
 | 2026-09-20 | 34 tests over the language seam, using a synthetic sentinel instead of real Urdu or Arabic words. | `c2fadaa` |
@@ -238,7 +270,7 @@ from the first Tier 3 pass.
 
 | Change | Commit |
 |---|---|
-| Agent Brain router also served from the lightweight image (`app/insight_main.py:75`). | `1774209` |
+| Agent Brain router also served from the lightweight image (`app/insight_main.py:80`). | `1774209` |
 | Agent Brain router mounted on `app/main.py` (it had never been mounted, so the route was unreachable), with a payload-size cap and its own rate limit. | `df8eec3` |
 | Docs: N4a done; Tier N tractable work complete, N4b deferred. | `3723efb` |
 | Agent Brain deadline phrases resolved to ISO-8601 dates with the standard library, no new dependency; additive `deadlineDate` field (N4a). 62 new tests. | `99dfc96` |
@@ -262,9 +294,9 @@ from the first Tier 3 pass.
 | Docs: Tier S closed, all eight items done. | `ec8dc1e` |
 | S8: interactive API docs (`/docs`, `/redoc`, `/openapi.json`) off in production; `/healthz` and `/version` stay public. | `c7c34db` |
 | S7: a timestamp-bound v2 callback signature sent alongside v1; the callback URL must use HTTPS (local development hosts excepted). | `a54944b` |
-| S3: fact-check enrichment on `/v1/process-audio` is opt-in (`?fact_check=` or `VOICEIQ_FACTCHECK_AUTO_ENRICH`, default off, `app/insights/config/settings.py:193`); [DATA-FLOW.md](DATA-FLOW.md) added. | `61fbf56` |
+| S3: fact-check enrichment on `/v1/process-audio` is opt-in (`?fact_check=` or `VOICEIQ_FACTCHECK_AUTO_ENRICH`, default off, `app/insights/config/settings.py:247`); [DATA-FLOW.md](DATA-FLOW.md) added. | `61fbf56` |
 | S1: per-endpoint rate limits on `/v1/process-audio` and `/v1/fact-check`; over the limit returns 429 with `Retry-After`. | `93f73b1` |
-| S2: job-artifact retention sweep (`VOICEIQ_JOB_RETENTION_HOURS`, default 24, `app/insights/config/settings.py:123`). | `3c3adb2` |
+| S2: job-artifact retention sweep (`VOICEIQ_JOB_RETENTION_HOURS`, default 24, `app/insights/config/settings.py:153`). | `3c3adb2` |
 | S6: country name percent-encoded in the Wikipedia request path. | `7b0c313` |
 | S5: an upload with no filename returns 400; the extension allowlist moved to `app/utils/upload.py`. | `525316d` |
 | S4: a failed upload no longer returns exception detail to the client. | `f7ecd55` |
@@ -328,9 +360,9 @@ gate. Labels in parentheses are the Tier 3 item ids from the commit subjects.
 |---|---|---|
 | 2026-05-23 | Model-loader cold start serialised with a lock in the diarization, sentiment and summary services. | `7c9f4fc` |
 | 2026-05-23 | `.env.example` documents `VOICEIQ_FFMPEG_TIMEOUT_SEC`. | `cdbab6c` |
-| 2026-05-23 | ffmpeg runs with a timeout (default 120 s, `app/insights/config/settings.py:109`); a timeout returns 422. | `80cd4f0` |
+| 2026-05-23 | ffmpeg runs with a timeout (default 120 s, `app/insights/config/settings.py:139`); a timeout returns 422. | `80cd4f0` |
 | 2026-05-23 | Fact-check repository: rows with the same `created_at` are ordered by id. | `c895a49` |
-| 2026-05-23 | Payload-size caps on the `/v1` routes (411, 400 or 413); uploads streamed to disk in 1 MB chunks under a size cap (default 200 MB, `app/insights/config/settings.py:100`). | `ce3cb82` |
+| 2026-05-23 | Payload-size caps on the `/v1` routes (411, 400 or 413); uploads streamed to disk in 1 MB chunks under a size cap (default 200 MB, `app/insights/config/settings.py:104`). | `ce3cb82` |
 | 2026-05-20 | `X-API-Key` authentication on `/v1/insights/*`, `/v1/fact-check` and `/v1/process-audio`; `/healthz` and `/version` stay public. | `bb6e61b` |
 
 ## Tooling, first CI and Docker

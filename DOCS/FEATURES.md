@@ -1,4 +1,4 @@
-Last verified: 2026-10-17, 3bf7506
+Last verified: 2026-10-17, dbae452
 # Feature Catalogue
 
 This is a list of what VoiceIQ can do today. For each feature it gives the status, how you reach it, its default, and its known functional limits. Every row cites the code or test it was checked against.
@@ -19,8 +19,8 @@ Defaults below come from `app/insights/config/settings.py` (`VOICEIQ_` prefix), 
 
 | Entry point | Serves | Notes |
 |---|---|---|
-| `app.main` | `/v1/process-audio`, `/v1/insights/*`, `/v1/fact-check`, `/internal/v1/agent-brain/*`, `/healthz`, `/version` | Full pipeline. Its pipeline stages need the heavy ML stack (`requirements.txt`). `app/main.py:60-82` |
-| `app.insight_main` | Everything above except `/v1/process-audio` | Lightweight. No ASR or diarization. `app/insight_main.py:71-92` |
+| `app.main` | `/v1/process-audio`, `/v1/insights/*`, `/v1/fact-check`, `/internal/v1/agent-brain/*`, `/healthz`, `/readyz`, `/version` | Full pipeline. Its pipeline stages need the heavy ML stack (`requirements.txt`). `app/main.py:64-91` |
+| `app.insight_main` | Everything above except `/v1/process-audio` | Lightweight. No ASR or diarization. `app/insight_main.py:76-102` |
 | Docker image | `app.insight_main` on port 8888 | Built from `requirements-insight.txt`. Sets `VOICEIQ_ENVIRONMENT=production`. `Dockerfile:45-49,60,83,89` |
 
 `/v1/fact-check` is mounted through the combined insight router, so both entry points serve it (`app/insights/api/__init__.py:10-12`).
@@ -32,62 +32,63 @@ Defaults below come from `app/insights/config/settings.py` (`VOICEIQ_` prefix), 
 | | |
 |---|---|
 | Status | shipped |
-| Reached by | `POST /v1/process-audio`, multipart field `file`. Optional query parameters: `expected_speakers` (int) and `fact_check` (bool). `app/routes/process_audio.py:140-153` |
+| Reached by | `POST /v1/process-audio`, multipart field `file`. Optional query parameters: `expected_speakers` (int) and `fact_check` (bool). `app/routes/process_audio.py:129-142` |
 | Served by | `app.main` only |
-| Guards | X-API-Key, upload size cap, rate limit (default `30/minute`, `VOICEIQ_RATE_LIMIT_PROCESS_AUDIO`). The key and the declared size are checked before the upload is read. See [§6](#6-security-features). |
-| Fixed values | Whisper model `base`, language auto-detect, speaker cap 8. The API cannot change these. `app/routes/process_audio.py:232-239` |
+| Guards | X-API-Key, upload size cap, rate limit (default `30/minute`, `VOICEIQ_RATE_LIMIT_PROCESS_AUDIO`), a bounded wait for a pipeline slot (503 when it is full, below) and an audio length limit (stage 1). The key and the declared size are checked before the upload is read. See [§6](#6-security-features). |
+| Fixed values | Whisper model `base`, language auto-detect, speaker cap 8. The API cannot change these. `app/routes/process_audio.py:244-251` |
 
-The call is synchronous. The response comes back only after every stage has run. The pipeline and the fact-check enrichment run in a worker thread, one run at a time per worker process. While a run is in progress the worker still serves other requests, health checks included. A second upload is received, then its run waits until the first run has finished (`app/routes/process_audio.py:54-68,222-263`; commit `2bb6593`; tests in `app/insights/tests/test_process_audio_concurrency.py`). Whether a worker should allow more than one run, or answer a busy worker's uploads differently, is an open owner decision ([DECISIONS.md #29](DECISIONS.md#29-one-pipeline-run-at-a-time-per-worker-off-the-event-loop)).
+The call is synchronous. The response comes back only after every stage has run. The pipeline and the fact-check enrichment run in a worker thread. Each worker process (one event loop) runs at most `VOICEIQ_PROCESS_AUDIO_MAX_RUNNING` pipelines at once (default 1) and lets up to `VOICEIQ_PROCESS_AUDIO_MAX_WAITING` more uploads wait for a slot (default 2). A further upload gets HTTP 503 "Audio processing is at capacity. Retry later." with a `Retry-After` header of `VOICEIQ_PROCESS_AUDIO_RETRY_AFTER_SEC` seconds (default 30). That check runs after the API key and the filename check, before the upload is saved. While a run is in progress the worker still serves other requests, health checks included (`_admission`, `process_audio` and `_admitted_request` in `app/routes/process_audio.py`; commits `2bb6593`, `948c49d`; tests in `app/insights/tests/test_process_audio_concurrency.py`; [DECISIONS.md #35](DECISIONS.md)).
 
-**Failure model.** Four gates can fail the whole request: missing input, ffmpeg timeout, ffmpeg failure, and silent audio. They return HTTP 400, or HTTP 422 for an ffmpeg timeout (`app/routes/process_audio.py:241-254`). Every later stage is fail-soft: on error it adds a warning code to `warnings`, records the error in the job folder, and the run continues (`app/pipeline/orchestrator.py:180-228`). Two tests pin this contract: `test_exactly_four_hard_fail_gates` and `test_late_stage_exception_never_flips_status` (`app/insights/tests/test_orchestrator.py:1003,959`).
+**Failure model.** Five gates can fail the whole request: missing input, ffmpeg timeout, audio longer than the limit, ffmpeg failure, and silent audio. They return HTTP 422 for an ffmpeg timeout, HTTP 413 for audio over the length limit, and HTTP 400 otherwise (`_run_pipeline`, `app/routes/process_audio.py:253-272`). Every later stage is fail-soft: on error it adds a warning code to `warnings`, records the error in the job folder, and the run continues (`app/pipeline/orchestrator.py:183-231`). The eight stages that import an ML package (audio quality, ASR, diarization, sentiment, keywords, gender, topic, summary) do so inside their `try`, so a package that cannot be imported gives that stage's usual `*_FAILED` warning (`DIARIZATION_FAILED_FALLBACK` for diarization), not an HTTP 500 (commit `0f9c4c1`; test `test_a_missing_stage_package_fails_only_that_stage`). Two tests pin this contract: `test_exactly_five_hard_fail_gates` and `test_late_stage_exception_never_flips_status` (`app/insights/tests/test_orchestrator.py:1079,1029`).
 
 ### 1.1 Stages, in run order
 
 | # | Stage | Status | Method | Switch / default | Warning codes | Code |
 |---|---|---|---|---|---|---|
-| 0 | Upload gate | shipped | Extension allowlist (`.mp3 .wav .m4a .flac`), magic-byte check on the first chunk, size count while streaming | `VOICEIQ_API_MAX_UPLOAD_MB` = 200 | HTTP 400 / 415 / 413 | `app/utils/upload.py:15-36`, `app/utils/audio_sniff.py:15-34`, `app/routes/process_audio.py:159-220` |
-| 1 | Normalisation | shipped | ffmpeg to mono 16 kHz WAV, with a wall-clock timeout | `VOICEIQ_FFMPEG_TIMEOUT_SEC` = 120 (range 1–600) | `AUDIO_NORMALIZATION_TIMEOUT` (422), `AUDIO_NORMALIZATION_FAILED` (400) | `app/pipeline/orchestrator.py:250-298`, `app/utils/audio_utils.py:37-97` |
-| 2 | Quality gate | shipped | RMS level and an estimated SNR (signal-to-noise ratio) | Silence at RMS ≤ -60 dB, near-silence at ≤ -45 dB, low SNR < 10 dB, very low < 5 dB | `AUDIO_SILENT_OR_NEAR_SILENT` (400), `LOW_SNR_AUDIO`, `HEAVY_NOISE_AUDIO`, `AUDIO_QUALITY_FAILED` | `app/pipeline/orchestrator.py:300-345`, `app/utils/audio_quality.py:38-44,122-126` |
-| 3 | Whisper ASR (speech to text) | shipped | openai-whisper, model `base`, cached per process | Always on | `EMPTY_TRANSCRIPT`, `ASR_FAILED` | `app/pipeline/orchestrator.py:347-389`, `app/services/asr_service.py:28-39` |
-| 4 | Diarization (who spoke when) | partial | pyannote `pyannote/speaker-diarization`. Falls back to a one-speaker mock. | Needs `PYANNOTE_AUTH_TOKEN` or `HUGGINGFACE_TOKEN` (empty by default) | `SINGLE_SPEAKER_MODE`, `DIARIZATION_FAILED_FALLBACK`, `SPEAKER_CAP_APPLIED`, `LOW_SNR_DIARIZATION_UNRELIABLE` | `app/pipeline/orchestrator.py:391-441`, `app/services/diarization_service.py:45-53,90-92,133-147,258-329` |
-| 5 | Alignment | shipped | Matches ASR segments to speaker turns. Gap merge 0.75 s, overlaps marked. | Always on | `ALIGNMENT_SKIPPED_MISSING_INPUT`, `ALIGNMENT_FAILED` | `app/pipeline/orchestrator.py:443-491` |
-| 6 | Stats | shipped | Per-speaker and per-conversation talk statistics | Always on | `STATS_FAILED` | `app/pipeline/orchestrator.py:493-513` |
-| 7 | Sentiment | shipped | Transformers model `cardiffnlp/twitter-roberta-base-sentiment-latest` | Always on | `SENTIMENT_SKIPPED_NO_SPEAKER_SEGMENTS`, `SENTIMENT_FAILED` | `app/pipeline/orchestrator.py:515-530`, `app/services/sentiment_service.py:31,175-197` |
-| 8 | Keywords | shipped | spaCy `en_core_web_sm` phrases ranked with sentence-transformers `all-MiniLM-L6-v2`. Top 5 per segment. | Always on | `KEYWORDS_SKIPPED_NO_SPEAKER_SEGMENTS`, `KEYWORDS_FAILED` | `app/pipeline/orchestrator.py:532-547`, `app/services/keyword_service.py:20,26,106` |
-| 9 | Gender | shipped | Pitch heuristic (librosa pyin) | Skipped on low SNR | `GENDER_SKIPPED_LOW_SNR`, `GENDER_SKIPPED_NO_SPEAKER_SEGMENTS`, `GENDER_FAILED` | `app/pipeline/orchestrator.py:549-567`, `app/services/gender_service.py:36-68` |
-| 10 | Emotion | partial | Text and sentiment rules only. No audio emotion model is wired in. | Skipped on low SNR | `EMOTION_SKIPPED_LOW_SNR`, `EMOTION_SKIPPED_NO_SPEAKER_SEGMENTS`, `EMOTION_FAILED` | `app/pipeline/orchestrator.py:569-589`, `app/services/emotion_service.py:29-79` |
-| 11 | Topic | shipped | Zero-shot `facebook/bart-large-mnli` over 11 fixed labels | Always on | `TOPIC_FAILED` | `app/pipeline/orchestrator.py:591-603`, `app/services/topic_service.py:12-24,56-62` |
-| 12 | Summary | shipped | `sshleifer/distilbart-cnn-12-6`, 60–180 tokens | Always on | `SUMMARY_FAILED` | `app/pipeline/orchestrator.py:605-616`, `app/services/summary_service.py:27-60` |
-| 13 | Intent | shipped | Keyword rules per turn: greeting, question, apology, complaint, storytelling, gratitude, agreement, closing, information_sharing, other | Always on | `INTENT_SKIPPED_NO_CONVERSATION`, `INTENT_FAILED` | `app/pipeline/orchestrator.py:618-634`, `app/services/intent_service.py:11-45` |
-| 14 | Legacy fact candidates | partial | Regex scan for URLs and digit sequences, each marked `TO_VERIFY`. Nothing is verified and no network call is made. | Always on (not behind the fact-check opt-in) | `FACTCHECK_FAILED` | `app/pipeline/orchestrator.py:636-645`, `app/services/factcheck_service.py:7-69` |
-| 15 | Flags | shipped | Heuristic hesitation, aggression and `lie_risk` flags per turn | Always on | `FLAGS_LIMITED_SINGLE_SPEAKER`, `FLAGS_FAILED` | `app/pipeline/orchestrator.py:647-658`, `app/services/flag_service.py:6-80` |
-| 16 | Insights | shipped | Runs the Insight Service ([§3](#3-insight-service-v1insights)) over the aligned segments | Always on | `INSIGHTS_SKIPPED_NO_SPEAKER_SEGMENTS`, `INSIGHTS_FAILED` | `app/pipeline/orchestrator.py:660-715` |
-| 17 | Agent Brain stage | shipped (opt-in) | Turns the pipeline output into action recommendations ([§5.3](#53-pipeline-stage-and-java-callback)) | `VOICEIQ_AGENT_BRAIN_AUTO_RUN` = false | `AGENT_BRAIN_SKIPPED_NO_INSIGHTS`, `AGENT_BRAIN_FAILED` | `app/pipeline/orchestrator.py:717-787` |
-| 18 | PDF report | shipped | fpdf report, returned base64-encoded in `report_pdf_base64` | Always on | `PDF_FAILED` | `app/pipeline/orchestrator.py:852-880`, `app/services/pdf_service.py:119-144` |
+| 0 | Upload gate | shipped | Extension allowlist (`.mp3 .wav .m4a .flac`), magic-byte check on the first chunk, size count while streaming | `VOICEIQ_API_MAX_UPLOAD_MB` = 200 | HTTP 400 / 415 / 413 | `app/utils/upload.py:15-36`, `app/utils/audio_sniff.py:15-34`, `app/routes/process_audio.py:148-232` |
+| 1 | Normalisation | shipped | ffmpeg to mono 16 kHz WAV, with a wall-clock timeout. Audio longer than the limit is rejected, never truncated: ffprobe reads the duration first (if ffprobe is missing or the duration is unknown, decoding goes ahead), ffmpeg stops one second past the limit, and a decoded file longer than the limit is deleted | `VOICEIQ_FFMPEG_TIMEOUT_SEC` = 120 (range 1–600); `VOICEIQ_MAX_AUDIO_SECONDS` = 7200, two hours (≥ 1) | `AUDIO_NORMALIZATION_TIMEOUT` (422), `AUDIO_TOO_LONG` (413), `AUDIO_NORMALIZATION_FAILED` (400) | `app/pipeline/orchestrator.py:253-293`, `app/utils/audio_utils.py:38-60,72-160`; commit `6c17c72`; tests in `test_audio_duration.py` |
+| 2 | Quality gate | shipped | RMS level and an estimated SNR (signal-to-noise ratio) | Silence at RMS ≤ -60 dB, near-silence at ≤ -45 dB, low SNR < 10 dB, very low < 5 dB | `AUDIO_SILENT_OR_NEAR_SILENT` (400), `LOW_SNR_AUDIO`, `HEAVY_NOISE_AUDIO`, `AUDIO_QUALITY_FAILED` | `app/pipeline/orchestrator.py:295-340`, `app/utils/audio_quality.py:38-44,122-126` |
+| 3 | Whisper ASR (speech to text) | shipped | openai-whisper, model `base`, cached per process | Always on | `EMPTY_TRANSCRIPT`, `ASR_FAILED` | `app/pipeline/orchestrator.py:342-384`, `app/services/asr_service.py:28-39` |
+| 4 | Diarization (who spoke when) | partial | pyannote `pyannote/speaker-diarization`. Falls back to a one-speaker mock. | Needs `PYANNOTE_AUTH_TOKEN` or `HUGGINGFACE_TOKEN` (empty by default) | `SINGLE_SPEAKER_MODE`, `MOCK_DIARIZATION_USED`, `DIARIZATION_FAILED_FALLBACK`, `SPEAKER_CAP_APPLIED`, `LOW_SNR_DIARIZATION_UNRELIABLE` | `app/pipeline/orchestrator.py:386-440`, `app/services/diarization_service.py:45-53,90-92,133-147,258-329` |
+| 5 | Alignment | shipped | Matches ASR segments to speaker turns. Gap merge 0.75 s, overlaps marked. | Always on | `ALIGNMENT_SKIPPED_MISSING_INPUT`, `ALIGNMENT_FAILED` | `app/pipeline/orchestrator.py:442-490` |
+| 6 | Stats | shipped | Per-speaker and per-conversation talk statistics | Always on | `STATS_FAILED` | `app/pipeline/orchestrator.py:492-512` |
+| 7 | Sentiment | shipped | Transformers model `cardiffnlp/twitter-roberta-base-sentiment-latest` | Always on | `SENTIMENT_SKIPPED_NO_SPEAKER_SEGMENTS`, `SENTIMENT_FAILED` | `app/pipeline/orchestrator.py:514-529`, `app/services/sentiment_service.py:31,175-197` |
+| 8 | Keywords | shipped | spaCy `en_core_web_sm` phrases ranked with sentence-transformers `all-MiniLM-L6-v2`. Top 5 per segment. | Always on | `KEYWORDS_SKIPPED_NO_SPEAKER_SEGMENTS`, `KEYWORDS_FAILED` | `app/pipeline/orchestrator.py:531-546`, `app/services/keyword_service.py:20,26,106` |
+| 9 | Gender | shipped | Pitch heuristic (librosa pyin) | Skipped on low SNR | `GENDER_SKIPPED_LOW_SNR`, `GENDER_SKIPPED_NO_SPEAKER_SEGMENTS`, `GENDER_FAILED` | `app/pipeline/orchestrator.py:548-566`, `app/services/gender_service.py:36-68` |
+| 10 | Emotion | partial | Text and sentiment rules only. No audio emotion model is wired in. | Skipped on low SNR | `EMOTION_SKIPPED_LOW_SNR`, `EMOTION_SKIPPED_NO_SPEAKER_SEGMENTS`, `EMOTION_FAILED` | `app/pipeline/orchestrator.py:568-588`, `app/services/emotion_service.py:29-79` |
+| 11 | Topic | shipped | Zero-shot `facebook/bart-large-mnli` over 11 fixed labels | Always on | `TOPIC_FAILED` | `app/pipeline/orchestrator.py:590-607`, `app/services/topic_service.py:12-24,56-62` |
+| 12 | Summary | shipped | `sshleifer/distilbart-cnn-12-6`, 60–180 tokens | Always on | `SUMMARY_FAILED` | `app/pipeline/orchestrator.py:609-620`, `app/services/summary_service.py:27-60` |
+| 13 | Intent | shipped | Keyword rules per turn: greeting, question, apology, complaint, storytelling, gratitude, agreement, closing, information_sharing, other. Keywords match whole words only; the greeting rule needs the turn to start with one | Always on | `INTENT_SKIPPED_NO_CONVERSATION`, `INTENT_FAILED` | `app/pipeline/orchestrator.py:622-638`, `app/services/intent_service.py:14-51`, `app/utils/text_match.py` |
+| 14 | Legacy fact candidates | partial | Regex scan for URLs and digit sequences, each marked `TO_VERIFY`. Nothing is verified and no network call is made. | Always on (not behind the fact-check opt-in) | `FACTCHECK_FAILED` | `app/pipeline/orchestrator.py:640-649`, `app/services/factcheck_service.py:7-69` |
+| 15 | Flags | shipped | Heuristic hesitation, aggression and `lie_risk` flags per turn, from keyword lists matched as whole words only | Always on | `FLAGS_LIMITED_SINGLE_SPEAKER`, `FLAGS_FAILED` | `app/pipeline/orchestrator.py:651-662`, `app/services/flag_service.py:7-82`, `app/utils/text_match.py` |
+| 16 | Insights | shipped | Runs the Insight Service ([§3](#3-insight-service-v1insights)) over the aligned segments | Always on | `INSIGHTS_SKIPPED_NO_SPEAKER_SEGMENTS`, `INSIGHTS_FAILED` (also when the Insight Service returns `status: "error"`) | `app/pipeline/orchestrator.py:664-732` |
+| 17 | Agent Brain stage | shipped (opt-in) | Turns the pipeline output into action recommendations ([§5.3](#53-pipeline-stage-and-java-callback)) | `VOICEIQ_AGENT_BRAIN_AUTO_RUN` = false | `AGENT_BRAIN_SKIPPED_NO_INSIGHTS`, `AGENT_BRAIN_FAILED` | `app/pipeline/orchestrator.py:734-804` |
+| 18 | PDF report | shipped | fpdf report, returned base64-encoded in `report_pdf_base64` | Always on | `PDF_FAILED` | `app/pipeline/orchestrator.py:869-897`, `app/services/pdf_service.py:119-144` |
 
 After the stages finish, the route adds fact-check enrichment (`fact_checks_v2`, [§2](#2-fact-check-enrichment-on-process-audio)).
 
 ### 1.2 Known functional limits
 
 - **Speaker count.** If `expected_speakers` is not given, diarization asks for exactly two speakers. It widens to 1–8 only if that call raises an error (`app/services/diarization_service.py:269-286`).
-- **Diarization fallback.** With no token, if pyannote is not installed, or if the model fails to load, the whole file is labelled `SPEAKER_00`. No diarization error warning is raised for this. The signs in the response are the `SINGLE_SPEAKER_MODE` warning and `"source": "mock"` on the entries in `segments` (`app/services/diarization_service.py:86-93,124-128,133-147,263-264`; `app/pipeline/orchestrator.py:438-441,929`).
+- **Diarization fallback.** With no token, if pyannote is not installed, or if the model fails to load or run, the whole file is labelled `SPEAKER_00`. The signs in the response are the `MOCK_DIARIZATION_USED` and `SINGLE_SPEAKER_MODE` warnings and `"source": "mock"` on the entries in `segments`. Only a model that loaded but then failed to run also adds `DIARIZATION_FAILED_FALLBACK`; the other cases raise no diarization error warning. `MOCK_DIARIZATION_USED` is added whenever a segment comes from the fallback (commit `2721a73`; test `test_mock_diarization_is_flagged`). The two-speaker default for calls is unchanged (`app/services/diarization_service.py:86-93,124-128,133-147,263-264,326-329`; `app/pipeline/orchestrator.py:406-409,437-440,946`).
 - **Keyword model must be installed separately.** The keyword stage needs the spaCy `en_core_web_sm` model. No requirements file installs it, so it needs its own install step. The sentiment stage also runs keyword extraction on every segment, so without that model both stages fail (`app/services/sentiment_service.py:184-197`). See [DATA-FLOW.md §3](DATA-FLOW.md#3-model-downloads--full-pipeline-only).
-- **Sentiment score is confidence.** `sentiment_score` is the model's confidence in its label. It is not a positivity value. The Insight Service builds its session sentiment trend from that score (`app/insights/core/signal_aggregation.py:70-97,163-170`), so on this path the trend direction can mislead.
+- **Sentiment score is confidence; the insight engines get positivity.** `sentiment_score` in the response is the model's confidence in its label, not a positivity value. Before the Insight Service reads it, the adapter turns label and confidence into positivity: a positive label with confidence c gives 0.5 + c/2, a negative one 0.5 - c/2, and neutral 0.5. Any other label, or a confidence that is not a number from 0 to 1, gives no score (`VoiceIQInsightAdapter._positivity`, `app/insights/adapters/voiceiq_adapter.py:27-47,96-101`; commit `98730c3`; tests in `test_voiceiq_adapter_sentiment.py`). The session sentiment trend is built from that score (`app/insights/core/signal_aggregation.py:70-97,163-170`). Insight scores and sentiment-shift markers for processed audio changed with this commit; `/v1/insights` callers that send their own scores are unaffected.
+- **A failed topic step returns a fixed message.** The response's `topic` is then `{"topic": "unknown", "confidence": 0.0, "error": "topic classification failed"}`; the exception text goes only to `artifacts/nlp/topic.status.json` in the job folder (`app/pipeline/orchestrator.py:597-606`; commit `dc97a84`; tests in `test_pipeline_error_text.py`).
 - **Topic and summary read only the start of the call.** Topic uses the first 512 characters of the transcript (`app/services/topic_service.py:59`). Summary uses the first 4,000 characters (`app/services/summary_service.py:38-51`).
 - **Emotion and gender are rough.** Emotion always uses the text fallback (`app/services/emotion_service.py:66-79`). Gender is a pitch heuristic: segments under 0.3 s, or with pitch between 145 and 185 Hz, return `unknown` (`app/services/gender_service.py:49-65`).
-- **Flags are hints, not judgements.** The code itself describes `lie_risk` as a weak heuristic and not proof of deception (`app/services/flag_service.py:63-80`).
-- **The insight stage does not check for errors.** If the Insight Service returns `status: "error"`, the stage still records `ok`, and, when enabled, the Agent Brain stage still runs on the empty bundle (`app/pipeline/orchestrator.py:673-689,747`). To catch this, check `insights.status` in the response.
+- **Flags are hints, not judgements.** The code itself describes `lie_risk` as a weak heuristic and not proof of deception (`app/services/flag_service.py:65-82`). Since milestone M7, flag and intent keywords match whole words only, so "er" no longer matches inside "internet" (`app/utils/text_match.py`; commit `dbae452`; tests in `test_whole_word_rules.py`; [DECISIONS.md #32](DECISIONS.md)). The vocabulary did not change.
+- **An insight error fails the insight stage.** If the Insight Service returns `status: "error"`, the stage is marked `failed` in `insight.status.json`, the warning `INSIGHTS_FAILED` is added and the Agent Brain stage, when switched on, is skipped with `AGENT_BRAIN_SKIPPED_NO_INSIGHTS`. The error result is still returned under `insights`, and the run stays `ok` (`app/pipeline/orchestrator.py:677-692,764-766`; commit `c53c71d`; test `test_an_insight_error_result_fails_the_stage_and_skips_the_agent_brain`).
 - **PDF prints Latin-1 only.** The report uses the Helvetica core font, which covers Latin-1 only. Text outside it no longer fails the PDF. Curly quotes, dashes, the ellipsis, the bullet and thin spaces print as their nearest Latin-1 form, and the euro sign prints as "EUR". Any other character, such as Urdu or Arabic script, prints as "?"; zero-width spaces and byte-order marks are dropped. The JSON response keeps the original text (`app/services/pdf_service.py:29-58,71`; commit `dc9caf3`; tests in `app/insights/tests/test_pdf_unicode.py`; [DECISIONS.md #31](DECISIONS.md#31-m6-the-pdf-prints-latin-1-and-substitutes-the-rest)).
 - **PDF contents.** The PDF includes warnings, audio quality, topic, summary, conversation and speaker stats, emotion overview, intents, flags, legacy fact candidates and the transcript, cut to its first 4,000 characters. It does not include the per-segment detail (the `speaker_segments` argument is accepted but not used), insights, `fact_checks_v2` or recommendations (`app/services/pdf_service.py:119-132,151-299`).
 
 ### 1.3 Response keys
 
-Every run returns these top-level keys: `request_id`, `transcript`, `asr_meta`, `segments`, `speaker_segments`, `conversation`, `speaker_stats`, `conversation_stats`, `topic`, `summary`, `report_pdf_base64`, `intents_summary`, `fact_checks` (legacy candidates), `flags`, `insights`, `timeline`, `emotion_overview`, `warnings`, `single_speaker_mode`, `audio_quality` and `pipeline_meta` (`app/pipeline/orchestrator.py:920-962`).
+Every run returns these top-level keys: `request_id`, `transcript`, `asr_meta`, `segments`, `speaker_segments`, `conversation`, `speaker_stats`, `conversation_stats`, `topic`, `summary`, `report_pdf_base64`, `intents_summary`, `fact_checks` (legacy candidates), `flags`, `insights`, `timeline`, `emotion_overview`, `warnings`, `single_speaker_mode`, `audio_quality` and `pipeline_meta` (`app/pipeline/orchestrator.py:937-979`).
 
 Two more keys:
 
-- `recommendations` appears only when the Agent Brain stage produced output. Otherwise it is left out entirely, not set to null (`app/pipeline/orchestrator.py:963-964`).
-- `fact_checks_v2` is added by the route to every successful response (`app/routes/process_audio.py:258-261`).
+- `recommendations` appears only when the Agent Brain stage produced output. Otherwise it is left out entirely, not set to null (`app/pipeline/orchestrator.py:980-981`).
+- `fact_checks_v2` is added by the route to every successful response (`app/routes/process_audio.py:276-279`).
 
 ---
 
@@ -98,15 +99,16 @@ Two more keys:
 | Status | shipped (opt-in) |
 | Reached by | `?fact_check=true` on `/v1/process-audio`, or `VOICEIQ_FACTCHECK_AUTO_ENRICH=true`. The per-request value always wins, including `?fact_check=false`. `app/utils/factcheck_gate.py:24-38` |
 | Default | Off. `fact_checks_v2` is `{"status": "disabled", ...}` and no external call is made. `app/utils/factcheck_gate.py:18-21` |
-| Output | `fact_checks_v2`: a full fact-check v1 response ([§4](#4-fact-check-v1-v1fact-check)), or a `skipped` stub (empty transcript) or a `failed` stub. `app/routes/process_audio.py:82-137` |
+| Output | `fact_checks_v2`: a full fact-check v1 response ([§4](#4-fact-check-v1-v1fact-check)), or a `skipped` stub (empty transcript) or a `failed` stub. `app/routes/process_audio.py:71-126` |
 | Tests | `app/insights/tests/test_factcheck_gate.py`, `app/insights/tests/test_factcheck_source_replies.py`, `app/insights/tests/test_error_text.py` |
 
 Limits:
 
-- The transcript is cut to 10,000 characters before checking (`app/routes/process_audio.py:101-102`).
-- Saving the results is best-effort. A storage failure is logged and does not fail the response (`app/routes/process_audio.py:116-124`).
-- The `failed` stub's reason is always "fact-check enrichment failed". The exception text is not returned; the log names only the exception class, for the enrichment and for a storage failure (`app/routes/process_audio.py:116-137`; commit `0011dd7`; test `test_a_failed_fact_check_enrichment_gives_a_fixed_reason`).
-- Before saving or returning, the payload is checked as strict JSON (no NaN or Infinity). If the check fails, the response gets the `failed` stub and nothing is saved (`app/routes/process_audio.py:111-115`; commit `8e51a94`; tests `test_process_audio_never_500s_on_an_unrenderable_fact_check` and `test_process_audio_never_saves_an_unrenderable_fact_check`).
+- The transcript is cut to 10,000 characters before checking (`app/routes/process_audio.py:90-91`).
+- Saving the results is best-effort. A storage failure is logged and does not fail the response (`app/routes/process_audio.py:105-113`).
+- The `failed` stub's reason is always "fact-check enrichment failed". The exception text is not returned; the log names only the exception class, for the enrichment and for a storage failure (`app/routes/process_audio.py:105-126`; commit `0011dd7`; test `test_a_failed_fact_check_enrichment_gives_a_fixed_reason`).
+- Before saving or returning, the payload is checked as strict JSON (no NaN or Infinity). If the check fails, the response gets the `failed` stub and nothing is saved (`app/routes/process_audio.py:100-104`; commit `8e51a94`; tests `test_process_audio_never_500s_on_an_unrenderable_fact_check` and `test_process_audio_never_saves_an_unrenderable_fact_check`).
+- The run caps of the shared engine apply here too: by default at most 25 claims and 20 seconds per run ([§4](#4-fact-check-v1-v1fact-check)).
 
 ---
 
@@ -116,29 +118,29 @@ Limits:
 |---|---|
 | Status | shipped |
 | Reached by | The routes below, on both entry points |
-| Guards | X-API-Key. POST bodies capped at `VOICEIQ_API_MAX_SESSION_PAYLOAD_KB` = 2048. Both are checked before the body is read. JSON bodies may hold finite numbers only. `app/insights/api/insight_routes.py:26-43` |
-| Storage | SQLite table `insight_records`, at `VOICEIQ_DATABASE_URL` = `sqlite:///./data/insights.db`. Tables are created on startup unless `VOICEIQ_DATABASE_AUTO_CREATE=false`. `app/insights/repository/orm_models.py:33`, `app/main.py:30-38` |
-| Tests | `app/insights/tests/test_insight_api.py`, `app/insights/tests/test_non_finite_inputs.py` and the engine tests in `app/insights/tests/` |
+| Guards | X-API-Key. POST bodies capped at `VOICEIQ_API_MAX_SESSION_PAYLOAD_KB` = 2048. Both are checked before the body is read. JSON bodies may hold finite numbers only. Per-caller rate limits (HTTP 429 with `Retry-After`): the routes that store or delete count as writes, default `60/minute` (`VOICEIQ_RATE_LIMIT_INSIGHT_WRITE`); the `GET` routes, the list included, count as reads, default `120/minute` (`VOICEIQ_RATE_LIMIT_INSIGHT_READ`). `app/insights/api/insight_routes.py:27-49`; commit `e802fcd`; [DECISIONS.md #37](DECISIONS.md) |
+| Storage | SQLite table `insight_records`, at `VOICEIQ_DATABASE_URL` = `sqlite:///./data/insights.db`. Tables are created on startup unless `VOICEIQ_DATABASE_AUTO_CREATE=false`. Records not updated for `VOICEIQ_DB_RETENTION_DAYS` = 30 days are deleted at startup and then hourly (`0` keeps them all). `app/insights/repository/orm_models.py:33`, `lifespan` in `app/main.py`, `app/utils/retention.py`; commit `cbdafb4` |
+| Tests | `app/insights/tests/test_insight_api.py`, `test_non_finite_inputs.py`, `test_insight_limits.py`, `test_insight_keep_good_record.py`, `test_record_retention.py` and the engine tests in `app/insights/tests/` |
 
 | Method | Path | Does | Code |
 |---|---|---|---|
-| POST | `/v1/insights/generate` | Runs the Insight Service over a validated `SessionInput`, stores the result, and returns it | `insight_routes.py:57-74` |
-| POST | `/v1/insights/generate-from-raw` | Takes a loosely typed dict, validates and normalises it, then does the same as `/generate` | `insight_routes.py:77-94` |
-| GET | `/v1/insights/{session_id}` | Full stored bundle | `insight_routes.py:97-112` |
-| GET | `/v1/insights/{session_id}/summary` | Overall summary, notable concerns, key moments | `insight_routes.py:115-137` |
-| GET | `/v1/insights/{session_id}/speakers` | Per-speaker metrics, insights and summaries | `insight_routes.py:140-165` |
-| GET | `/v1/insights/{session_id}/timeline` | Timeline markers | `insight_routes.py:168-188` |
-| GET | `/v1/insights/` | Lists every stored `session_id` | `insight_routes.py:191-199` |
-| DELETE | `/v1/insights/{session_id}` | Deletes a stored record | `insight_routes.py:202-216` |
+| POST | `/v1/insights/generate` | Runs the Insight Service over a validated `SessionInput`, stores the result, and returns it | `insight_routes.py:63-81` |
+| POST | `/v1/insights/generate-from-raw` | Takes a loosely typed dict, validates and normalises it, then does the same as `/generate` | `insight_routes.py:84-102` |
+| GET | `/v1/insights/{session_id}` | Full stored bundle | `insight_routes.py:105-121` |
+| GET | `/v1/insights/{session_id}/summary` | Overall summary, notable concerns, key moments | `insight_routes.py:124-147` |
+| GET | `/v1/insights/{session_id}/speakers` | Per-speaker metrics, insights and summaries | `insight_routes.py:150-176` |
+| GET | `/v1/insights/{session_id}/timeline` | Timeline markers | `insight_routes.py:179-200` |
+| GET | `/v1/insights/` | Lists stored `session_id`s, most recently updated first (ties by `session_id`). Optional `limit` (default 100, 1–500) and `offset` (0–2147483647); a value out of range gets 422, after the API key check | `insight_routes.py:203-214` |
+| DELETE | `/v1/insights/{session_id}` | Deletes a stored record | `insight_routes.py:217-232` |
 
 The engines run in this order: analytics, then rules, then summary (`app/insights/service.py:65-67`). The rule engine itself runs signal aggregation, timeline, escalation, inconsistency and scoring (`app/insights/core/rule_engine.py:32-86`). If an engine fails, the result is a `status: "error"` response, not an HTTP error. Its validation error has code `pipeline_execution_error` and the fixed message "Insight pipeline failed."; the exception text is not returned or stored, and the log names only the exception class (`app/insights/service.py:87-108,313-342`; commit `0011dd7`; test `test_a_failed_insight_run_does_not_return_the_exception_text`).
 
-**Finite numbers only.** A POST body with `NaN`, `Infinity`, `-Infinity` or a number such as `1e999` that overflows to infinity gets HTTP 422 with the standard `json_invalid` error while it is parsed, and nothing is stored. This applies to both POST routes; `/generate-from-raw` refuses such a body rather than correcting it (`app/insights/api/finite_json.py:21-49`, `insight_routes.py:38`; commit `93dda14`; [DECISIONS.md #30](DECISIONS.md#30-insight-routes-accept-only-finite-numbers)). For in-process callers, `SessionInput` and its utterance, sentiment and emotion models refuse non-finite values in their number fields, and the raw-session normaliser treats a non-finite start, end or duration like any invalid value and uses its default (`app/insights/models/input_models.py:12,16,23,36,79`; `app/insights/core/normalizer.py:203-216`).
+**Finite numbers only.** A POST body with `NaN`, `Infinity`, `-Infinity` or a number such as `1e999` that overflows to infinity gets HTTP 422 with the standard `json_invalid` error while it is parsed, and nothing is stored. This applies to both POST routes; `/generate-from-raw` refuses such a body rather than correcting it (`app/insights/api/finite_json.py:21-49`, `insight_routes.py:44`; commit `93dda14`; [DECISIONS.md #30](DECISIONS.md#30-insight-routes-accept-only-finite-numbers)). For in-process callers, `SessionInput` and its utterance, sentiment and emotion models refuse non-finite values in their number fields, and the raw-session normaliser treats a non-finite start, end or duration like any invalid value and uses its default (`app/insights/models/input_models.py:12,16,23,36,79`; `app/insights/core/normalizer.py:203-216`).
 
 Limits:
 
-- **Re-posting overwrites.** Posting a `session_id` that already exists replaces the stored record, even when the new result is an `error` response (`app/insights/repository/insight_repository.py:79-95`).
-- **Two settings do nothing.** `VOICEIQ_THRESHOLD_PROFILE` (default `default`) is validated but never read, so only the built-in thresholds apply. `VOICEIQ_LOG_LEVEL` (default `INFO`) is also validated but never read: the root logger is fixed at INFO (`app/utils/logger.py:12-15`). An invalid value for either still stops startup (`app/insights/config/settings.py:56-59,82-88`; `.env.example:14-16,32-35`).
+- **Re-posting overwrites, except with an error.** Posting a `session_id` that already exists replaces the stored record, but an `error` result never replaces a stored record that is not an error: the stored one is kept, and the caller still gets the error response. An error replaces an error, and a result that is not an error replaces anything (`InsightRepository.save`, `app/insights/repository/insight_repository.py:81-110`; commit `f8bc3ed`; [DECISIONS.md #40](DECISIONS.md)).
+- **Threshold profiles are not implemented.** `VOICEIQ_THRESHOLD_PROFILE` (default `default`) is validated and read only to log a warning, so only the built-in thresholds apply. Each app logs a warning at startup when the variable is set, whatever its value. `VOICEIQ_LOG_LEVEL` (default `INFO`) is applied at startup; the `httpx` and `httpcore` loggers stay at WARNING whatever the level (`configure_logging`, `app/utils/logger.py:31-42`; commit `e25a3b2`; tests in `test_logging_settings.py`). An invalid value for either still stops startup (`app/insights/config/settings.py:56-62,85-92`).
 
 ---
 
@@ -147,36 +149,40 @@ Limits:
 | | |
 |---|---|
 | Status | partial: the engine is shipped, but some claim types never get a verdict (see the table below) |
-| Reached by | `POST /v1/fact-check` with `{conversation_id, speaker_id, transcript_text}`. `transcript_text` can be up to 10,000 characters; longer text gets HTTP 422. `GET /v1/fact-check/{conversation_id}` lists stored results and returns 404 if there are none. `app/insights/api/factcheck_routes.py:79-131`, `app/insights/models/factcheck_models.py:155-163` |
+| Reached by | `POST /v1/fact-check` with `{conversation_id, speaker_id, transcript_text}`. `transcript_text` can be up to 10,000 characters; longer text gets HTTP 422. `GET /v1/fact-check/{conversation_id}` lists stored results and returns 404 if there are none. `app/insights/api/factcheck_routes.py:83-135`, `app/insights/models/factcheck_models.py:155-163` |
 | Guards | X-API-Key, 2048 KB body cap, rate limit on POST (default `60/minute`, `VOICEIQ_RATE_LIMIT_FACTCHECK`) |
-| Storage | SQLite table `fact_check_results`. Saving is best-effort. `app/insights/repository/factcheck_orm_models.py:33`, `factcheck_routes.py:103-112` |
+| Storage | SQLite table `fact_check_results`. Saving is best-effort. Rows created more than `VOICEIQ_DB_RETENTION_DAYS` = 30 days ago are deleted at startup and then hourly (`0` keeps them all). `app/insights/repository/factcheck_orm_models.py:33`, `factcheck_routes.py:107-116`, `app/utils/retention.py`; commit `cbdafb4` |
 | Egress | Claim subjects are sent to external providers. See [DATA-FLOW.md §1](DATA-FLOW.md#1-fact-check--external-providers--opt-in). |
-| Tests | `test_factcheck_api.py`, `test_factcheck_engine.py`, `test_claim_detector.py`, `test_classifier.py`, `test_comparator.py`, `test_scorer.py`, `test_source_clients.py`, `test_factcheck_source_replies.py`, `test_factcheck_reply_limits.py`, `test_factcheck_cache_threads.py`, `test_factcheck_old_rows.py` (all in `app/insights/tests/`) |
+| Tests | `test_factcheck_api.py`, `test_factcheck_engine.py`, `test_claim_detector.py`, `test_classifier.py`, `test_comparator.py`, `test_scorer.py`, `test_source_clients.py`, `test_factcheck_source_replies.py`, `test_factcheck_reply_limits.py`, `test_factcheck_cache_threads.py`, `test_factcheck_old_rows.py`, `test_factcheck_run_limits.py` (all in `app/insights/tests/`) |
 
-How a check runs: a regex detector finds claims, a classifier normalises them, a source client fetches evidence, a comparator decides the verdict, and a scorer sets the confidence (`app/insights/core/factcheck/factcheck_engine.py:167-244`). No LLM (large language model) is used.
+How a check runs: a regex detector finds claims, a classifier normalises them, a source client fetches evidence, a comparator decides the verdict, and a scorer sets the confidence (`app/insights/core/factcheck/factcheck_engine.py:179-268`). No LLM (large language model) is used.
 
-Verdict bands for numbers: a difference of up to 3% is `TRUE`, up to 10% is `PARTIALLY_TRUE`, and anything larger is `FALSE` (`app/insights/core/factcheck/comparator.py:34-35`). If identical claims repeat, the evidence is reused from a cache for 60 seconds, up to 256 entries (`factcheck_engine.py:108,158-161`).
+**Run caps.** A run checks at most `VOICEIQ_FACTCHECK_MAX_CLAIMS` claims (default 25, range 1–1000), in transcript order, and starts no new check once `VOICEIQ_FACTCHECK_RUN_DEADLINE_SEC` has passed (default 20, above 0 and at most 300). A provider call already running finishes within its own timeout. Claims past either limit get no result and count in `stats.skipped`, so `claims_detected` equals `verified` plus `skipped`. The response shape is unchanged (`FactCheckEngine.run`, `factcheck_engine.py:201-211,258-262`; `_build_engine`, `factcheck_routes.py:62-70`; commit `da92ae4`; [DECISIONS.md #38](DECISIONS.md)).
+
+Verdict bands for numbers: a difference of up to 3% is `TRUE`, up to 10% is `PARTIALLY_TRUE`, and anything larger is `FALSE` (`app/insights/core/factcheck/comparator.py:34-35`). If identical claims repeat, the evidence is reused from a cache for 60 seconds, up to 256 entries (`factcheck_engine.py:114,164-170`).
 
 ### 4.1 Claim types and sources
 
 | Claim type | Example the detector matches | Source client | API key | What happens today |
 |---|---|---|---|---|
-| `CURRENCY_RATE` | "USD to PKR is 280", "1 USD = 280 PKR" (11 currency codes) | exchangerate.host | The provider requires one. The service has no setting for it, and none is configured. | `SOURCE_UNAVAILABLE`. The request is still sent; the provider rejects it, and the client reports the reason "provider requires an access key". |
+| `CURRENCY_RATE` | "USD to PKR is 280", "1 USD = 280 PKR" (11 currency codes) | open.er-api.com (ExchangeRate-API open access) | none | Checked against the provider's latest rate. Only the base currency code is sent; after a successful fetch, that base is not fetched again for an hour |
 | `CRYPTO_PRICE` | "Bitcoin is at 95000" (7 assets) | CoinGecko | none | Checked against the USD price |
 | `STOCK_PRICE` | "AAPL is at 175" (14 tickers) | Alpha Vantage | `VOICEIQ_ALPHAVANTAGE_API_KEY`, empty by default | With no key: `SOURCE_UNAVAILABLE`, and no request is made |
 | `WEATHER` | "temperature in Karachi is 32 C" | OpenWeather | `VOICEIQ_OPENWEATHER_API_KEY`, empty by default | With no key: `SOURCE_UNAVAILABLE`, and no request is made |
 | `COMMODITY_PRICE` | "gold price 2400" | none | — | Always `UNSUPPORTED_CLAIM_TYPE` |
 | `STATIC_FACT` | "capital of France is Paris" | Wikipedia REST | none | Checked against the page summary |
 
-Code: detector patterns `app/insights/core/factcheck/claim_detector.py:100-180`, match filter `claim_detector.py:385-467`; routing `factcheck_engine.py:70-85`; forex behaviour `source_clients/forex_client.py:1-9,73-84` (commit `dc03a44`); key checks `source_clients/stock_client.py:36-37` and `source_clients/openweather_client.py:32-34`. The per-call HTTP timeout is `VOICEIQ_FACTCHECK_HTTP_TIMEOUT_SEC` = 5.0 (range 0.5–30). For the forex provider question, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) and the [decision register](FACTCHECK-AGENT-PHASE-0.md#1-decision-register).
+Code: detector patterns `app/insights/core/factcheck/claim_detector.py:100-180`, match filter `claim_detector.py:385-467`; routing `factcheck_engine.py:76-91`; key checks `source_clients/stock_client.py:36-37` and `source_clients/openweather_client.py:32-34`. The per-call HTTP timeout is `VOICEIQ_FACTCHECK_HTTP_TIMEOUT_SEC` = 5.0 (range 0.5–30).
+
+**Currency rates** (`source_clients/forex_client.py`; commit `45a5b22`; [DECISIONS.md #48](DECISIONS.md)). `ForexClient` calls `https://open.er-api.com/v6/latest/{BASE}` with no key; commercial use is allowed. Only the base currency code leaves the host, in the URL path, and the quote rate is picked from the reply. Base and quote must each be three capital letters, or nothing is sent. Each client caches a base's rates for an hour in memory; a failed fetch is not cached. Every evidence record carries the provider's attribution in `raw["attribution"]`, and `Evidence.source` is `open.er-api.com`. A reply with `result: "error"` gives `SOURCE_UNAVAILABLE` with a short reason that names the provider's error type, and the log carries only that type. Currency claims can therefore be verified again; before this commit they always ended as `SOURCE_UNAVAILABLE`.
 
 ### 4.2 Robustness
 
-- **A bad provider reply affects only claims about the same subject in that run.** A transport error, an HTTP error, invalid JSON, a reply that is not an object, a non-finite number, or a client that raises: each gives that claim, and later claims about the same subject in the run, `SOURCE_UNAVAILABLE` with a reason. It never produces a verdict and never causes a 500 (`factcheck_engine.py:203-216,250-269`; `source_clients/base_client.py:130-205`; commit `9aff207`; tests `test_one_bad_reply_affects_only_its_own_claim` and `test_fact_check_api_never_500s_on_a_bad_reply`).
+- **A bad provider reply affects only claims about the same subject in that run.** A transport error, an HTTP error, invalid JSON, a reply that is not an object, a non-finite number, or a client that raises: each gives that claim, and later claims about the same subject in the run, `SOURCE_UNAVAILABLE` with a reason. It never produces a verdict and never causes a 500 (`factcheck_engine.py:227-240,274-293`; `source_clients/base_client.py:130-205`; commit `9aff207`; tests `test_one_bad_reply_affects_only_its_own_claim` and `test_fact_check_api_never_500s_on_a_bad_reply`).
 - **Provider replies are capped at 1 MiB.** Each reply is streamed and read only up to `MAX_REPLY_BYTES` (1 MiB), counted after decompression. A larger reply gives its claim `SOURCE_UNAVAILABLE`, like any other unusable reply (`source_clients/base_client.py:41-57,155-160`; commit `83803b5`; tests `test_an_oversized_reply_is_not_read_to_the_end` and `test_the_limit_counts_decompressed_bytes`).
-- **A failed subject is fetched once per run.** When the fetch for a subject fails, later claims about the same subject in that run reuse the first result and reason. The next run fetches it again (`factcheck_engine.py:183-185,203-209`; commit `83803b5`; tests `test_a_failed_subject_is_fetched_once_per_run` and `test_a_failed_subject_is_fetched_again_in_the_next_run`).
-- **The evidence cache is thread-safe.** The cache is shared by every request in the process. A lock guards its dictionary operations, never a provider call. When it is full, expired entries are dropped before the oldest live one (`factcheck_engine.py:99-135`; commit `1d967c5`; tests in `test_factcheck_cache_threads.py`).
-- **Stored non-finite numbers read back as null.** The repository returns any non-finite number in a stored row, at any depth and in the evidence too, as `null`. Stored data is not changed (`app/insights/repository/factcheck_repository.py:209-241`; commit `a712146`; tests in `test_factcheck_old_rows.py`).
+- **A failed subject is fetched once per run.** When the fetch for a subject fails, later claims about the same subject in that run reuse the first result and reason. The next run fetches it again (`factcheck_engine.py:196-198,227-233`; commit `83803b5`; tests `test_a_failed_subject_is_fetched_once_per_run` and `test_a_failed_subject_is_fetched_again_in_the_next_run`).
+- **The evidence cache is thread-safe.** The cache is shared by every request in the process. A lock guards its dictionary operations, never a provider call. When it is full, expired entries are dropped before the oldest live one (`factcheck_engine.py:105-141`; commit `1d967c5`; tests in `test_factcheck_cache_threads.py`).
+- **Stored non-finite numbers read back as null.** The repository returns any non-finite number in a stored row, at any depth and in the evidence too, as `null`. Stored data is not changed (`app/insights/repository/factcheck_repository.py:223-255`; commit `a712146`; tests in `test_factcheck_old_rows.py`).
 - **Over-long numbers are dropped.** A number with more than 15 digits is not a checkable claim, so the detector drops that claim. Other claims and their ids are kept (`claim_detector.py:193,470-484,512`; commit `8e51a94`; tests `test_detector_drops_a_claim_whose_number_is_too_long` and `test_dropping_an_over_long_claim_keeps_the_others_and_their_ids`).
 - **Names, ages and counts are not prices.** Before overlaps are resolved, each match passes `_keep_match` (`claim_detector.py:352,385-467`; commit `1dbfac7`; tests in `test_claim_detector.py`):
   - A crypto, stock or commodity number followed on the same line by what it counts or measures, or by another currency, is dropped: "Bitcoin is 2 years old", "META is 30 people", "Bitcoin is 5 per cent up", "Gold is 50 a month", "Meta is 30 dollars a day", "BTC is 95000 rupees", "Bitcoin is 90000 in euros", "Gold is 5%", "Bitcoin is at 3:15". For a rising range the word after its end counts ("Bitcoin is 10-20 minutes"). "Gold is 24k" is a purity in karats. The word lists are `_NOT_PRICE_WORDS`, `_NOT_PRICE_PER_UNITS` and `_OTHER_CURRENCY_WORDS` (`claim_detector.py:243-313`). Crypto and stock sources quote USD, which is why other currencies are dropped.
@@ -215,6 +221,8 @@ The Agent Brain turns a processed conversation into ranked action recommendation
 
 The runner calls every agent. If one agent fails, it is logged and skipped, and the others' results still stand. The runner then refines confidence, removes duplicates and ranks the results (`app/agent_brain/core/agent_runner.py:19-75`). Two recommendations of the same action type are duplicates when they share an assignee and deadline, a source segment, or a similar title (similarity 0.82). Fact-Check Review recommendations are told apart by claim instead: reviews of different claims are never duplicates, and reviews without claim ids compare the claim text. So each reviewed claim keeps its own recommendation, and one claim's review does not raise another's confidence (`app/agent_brain/core/deduplication.py:33,73-103`; commit `8103360`; tests in `app/agent_brain/tests/test_dedup_fact_check_claims.py`). Deadline phrases such as "next Monday" are turned into calendar dates (`app/agent_brain/extraction/datetime_resolver.py`; commit `99dfc96`).
 
+The Email Draft agent matches its trigger phrases as whole words, so "send a" no longer matches inside "send all" or "send an engineer". The other agents still match their phrases anywhere in the text (`find_signals(..., whole_words=True)` in `app/agent_brain/extraction/signals.py`, used by `email_draft_agent.py:57`; milestone M7, commit `dbae452`; tests in `app/agent_brain/tests/test_email_signal_whole_words.py`).
+
 ### 5.2 Internal route
 
 | | |
@@ -230,18 +238,18 @@ The runner calls every agent. If one agent fails, it is logged and skipped, and 
 | | |
 |---|---|
 | Status | shipped (opt-in) |
-| Pipeline stage | `VOICEIQ_AGENT_BRAIN_AUTO_RUN` = false. When on, `/v1/process-audio` adds a `recommendations` key (`app/pipeline/orchestrator.py:717-787`; commit `f5e4d84`; tests `TestAgentBrainStage` in `app/insights/tests/test_orchestrator.py:718`). |
-| Java callback | Fires only from the pipeline stage, only when both `VOICEIQ_AGENT_CALLBACK_URL` and `VOICEIQ_AGENT_CALLBACK_SECRET` are set, and only if at least one recommendation passes the confidence filter below. Both settings are empty by default (`app/agent_brain/config/settings.py:14-28`; `app/pipeline/orchestrator.py:811-824`; commit `f619f7d`). The request is HMAC-signed. The contract is in [JAVA-CALLBACK-V2.md](JAVA-CALLBACK-V2.md). |
+| Pipeline stage | `VOICEIQ_AGENT_BRAIN_AUTO_RUN` = false. When on, `/v1/process-audio` adds a `recommendations` key. The stage is skipped with `AGENT_BRAIN_SKIPPED_NO_INSIGHTS` when the insight stage failed or was skipped (`app/pipeline/orchestrator.py:734-804`; commit `f5e4d84`; tests `TestAgentBrainStage` in `app/insights/tests/test_orchestrator.py:788`). |
+| Java callback | Fires only from the pipeline stage, only when both `VOICEIQ_AGENT_CALLBACK_URL` and `VOICEIQ_AGENT_CALLBACK_SECRET` are set, and only if at least one recommendation passes the confidence filter below. Both settings are empty by default (`app/agent_brain/config/settings.py:14-28`; `app/pipeline/orchestrator.py:828-841`; commit `f619f7d`). The request is HMAC-signed. The contract is in [JAVA-CALLBACK-V2.md](JAVA-CALLBACK-V2.md). |
 | Callback timeout | `VOICEIQ_AGENT_CALLBACK_TIMEOUT_SEC` = 5.0 (range 1–60) |
-| Confidence filter | `VOICEIQ_AGENT_MIN_CONFIDENCE` = 0.50. It applies to the callback only: the API response still carries every recommendation (`app/pipeline/orchestrator.py:815-824`). |
+| Confidence filter | `VOICEIQ_AGENT_MIN_CONFIDENCE` = 0.50. It applies to the callback only: the API response still carries every recommendation (`app/pipeline/orchestrator.py:832-841`). |
 | Tests | `app/agent_brain/tests/test_pipeline_callback.py`, `app/agent_brain/tests/test_java_callback.py` |
 
 ### 5.4 Known functional limits
 
-- **Fact-Check Review is dormant in the pipeline.** On the pipeline path the stage passes no fact-check results (`fact_check=None`), so this agent never fires there. The other four agents run (`app/pipeline/orchestrator.py:725-733,763`). For the planned Sprint 7 work that touches this path, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
+- **Fact-Check Review is dormant in the pipeline.** On the pipeline path the stage passes no fact-check results (`fact_check=None`), so this agent never fires there. The other four agents run (`app/pipeline/orchestrator.py:742-750,780`). For the planned Sprint 7 work that touches this path, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
 - **English only.** Only English vocabulary ships. The values `ur`, `ar` and `mixed` are accepted, but they fall back to the English rules (`app/agent_brain/extraction/language.py`; `app/agent_brain/tests/test_language_seam.py`). The plan is in [N4B-MULTILINGUAL-STRATEGY.md](N4B-MULTILINGUAL-STRATEGY.md).
 - **Dates use the processing date.** Relative deadlines resolve against the server's date when the call is processed, not the date of the call (`app/agent_brain/core/base_agent.py:29-38`).
-- **The callback is single-shot and fire-and-forget.** It is one POST on a background daemon thread, with no retry. A send still in flight at shutdown is dropped. Retries and de-duplication belong to the Java side (`app/pipeline/orchestrator.py:789-850`; `app/agent_brain/integrations/java_callback_client.py:65-100`).
+- **The callback is single-shot and fire-and-forget.** It is one POST on a background daemon thread, with no retry. A send still in flight at shutdown is dropped. Retries and de-duplication belong to the Java side (`app/pipeline/orchestrator.py:806-867`; `app/agent_brain/integrations/java_callback_client.py:65-100`).
 
 ---
 
@@ -251,23 +259,27 @@ One line each. The controls, how to report a vulnerability, and known limitation
 
 | Feature | Setting / default | Code or commit |
 |---|---|---|
-| X-API-Key auth on every `/v1` and `/internal` route. A production deployment with no keys configured refuses requests. | `VOICEIQ_API_KEYS` (empty) | `app/security/api_key.py`; `bb6e61b` |
+| X-API-Key auth on every `/v1` and `/internal` route. A `production` or `staging` deployment with no keys configured refuses requests with 503. | `VOICEIQ_API_KEYS` (empty) | `app/security/api_key.py`; `bb6e61b`, `d7f9075` |
 | Body and upload size caps (HTTP 413) | 2048 KB / 200 MB | `app/security/payload_size.py`; `ce3cb82` |
-| API key, then declared size, checked before a POST, PUT or PATCH body is read on the guarded routes, with the same status and detail as the route checks. A refusal closes the connection. A body longer than its declared length gets 413. | — | `app/security/request_guard.py`, installed at `app/main.py:68` and `app/insight_main.py:78`; `ff874de`; [DECISIONS.md #28](DECISIONS.md#28-request-checks-run-before-the-body-is-read) |
+| API key, then declared size, checked before a POST, PUT or PATCH body is read on the guarded routes, with the same status and detail as the route checks. A refusal closes the connection. A body longer than its declared length gets 413. | — | `app/security/request_guard.py`, installed at `app/main.py:72` and `app/insight_main.py:83`; `ff874de`; [DECISIONS.md #28](DECISIONS.md#28-request-checks-run-before-the-body-is-read) |
 | Upload extension allowlist and magic-byte check | — | `app/utils/upload.py`, `app/utils/audio_sniff.py`; `525316d`, `e8a294f` |
 | ffmpeg timeout | 120 s | `app/utils/audio_utils.py`; `80cd4f0` |
-| Per-caller rate limits (HTTP 429 with Retry-After) on `POST /v1/process-audio`, `POST /v1/fact-check` and the internal Agent Brain route. The bucket is the API key only when it is an accepted key, otherwise the client IP. | `VOICEIQ_RATE_LIMIT_ENABLED` = true | `app/security/rate_limit.py:43-52`; `93f73b1`, `702d23d` |
-| Job files deleted after a retention period | `VOICEIQ_JOB_RETENTION_HOURS` = 24 (0 turns it off) | `app/utils/job_io.py:127`; `3c3adb2` |
+| Audio longer than the limit refused with 413 (`AUDIO_TOO_LONG`), never truncated | `VOICEIQ_MAX_AUDIO_SECONDS` = 7200 | `app/utils/audio_utils.py`; `6c17c72` |
+| Bounded wait for a pipeline slot on `/v1/process-audio`; a further upload gets 503 with `Retry-After` | `VOICEIQ_PROCESS_AUDIO_MAX_RUNNING` = 1, `VOICEIQ_PROCESS_AUDIO_MAX_WAITING` = 2, `VOICEIQ_PROCESS_AUDIO_RETRY_AFTER_SEC` = 30 | `app/routes/process_audio.py`; `948c49d` |
+| Per-caller rate limits (HTTP 429 with Retry-After) on `POST /v1/process-audio`, `POST /v1/fact-check`, the internal Agent Brain route, and the insight routes (writes and reads limited separately). Each route group keeps its own counter. The bucket is the API key only when it is an accepted key, otherwise the client IP. | `VOICEIQ_RATE_LIMIT_ENABLED` = true | `app/security/rate_limit.py:45-54,62-101`; `93f73b1`, `702d23d`, `e802fcd` |
+| Fact-check run caps | `VOICEIQ_FACTCHECK_MAX_CLAIMS` = 25, `VOICEIQ_FACTCHECK_RUN_DEADLINE_SEC` = 20 | `app/insights/core/factcheck/factcheck_engine.py`; `da92ae4` |
+| Job files and stored records deleted after a retention period, at startup and then hourly | `VOICEIQ_JOB_RETENTION_HOURS` = 24, `VOICEIQ_DB_RETENTION_DAYS` = 30 (0 turns each off) | `app/utils/retention.py`, `app/utils/job_io.py:127`; `3c3adb2`, `cbdafb4` |
 | Fact-check enrichment is opt-in | `VOICEIQ_FACTCHECK_AUTO_ENRICH` = false | `app/utils/factcheck_gate.py`; `61fbf56` |
-| Upload failures return a generic message | — | `app/routes/process_audio.py:201-206`; `f7ecd55` |
-| A failed insight run and a failed fact-check enrichment return fixed messages, not the exception text; their logs name only the exception class | — | `app/insights/service.py:87-98`, `app/routes/process_audio.py:116-137`; `0011dd7` |
+| Upload failures return a generic message | — | `app/routes/process_audio.py:213-218`; `f7ecd55` |
+| A failed insight run and a failed fact-check enrichment return fixed messages, not the exception text; their logs name only the exception class | — | `app/insights/service.py:87-98`, `app/routes/process_audio.py:105-126`; `0011dd7` |
+| A failed topic step returns a fixed message; the exception text stays in the job folder | — | `app/pipeline/orchestrator.py:597-606`; `dc97a84` |
 | Wikipedia lookups percent-encode the country | — | `source_clients/static_facts_client.py`; `7b0c313` |
 | Callback signatures (v1 and timestamped v2); HTTPS required except to local hosts | — | `java_callback_client.py:45-57,78-95`; `a54944b` |
-| `/docs`, `/redoc` and `/openapi.json` hidden in production | `VOICEIQ_ENVIRONMENT=production` | `app/main.py:43-48`, `app/insight_main.py:53-58`; `c7c34db` |
+| `/docs`, `/redoc` and `/openapi.json` hidden in production | `VOICEIQ_ENVIRONMENT=production` | `app/main.py:47-52`, `app/insight_main.py:58-63`; `c7c34db` |
 | Model loading serialised on first use (diarization, sentiment and summary models) | — | `app/services/diarization_service.py`, `app/services/sentiment_service.py`, `app/services/summary_service.py`; `7c9f4fc` |
-| Outbound request URLs kept out of logs; a failed callback logs only the error class and HTTP status | — | `app/utils/logger.py:4-15`, `app/pipeline/orchestrator.py:836-846`; `c1b35d9`, `cedfe96` |
+| Outbound request URLs kept out of logs; a failed callback logs only the error class and HTTP status | — | `app/utils/logger.py:10-23`, `app/pipeline/orchestrator.py:853-863`; `c1b35d9`, `cedfe96` |
 
-Tests: `test_auth.py`, `test_payload_size.py`, `test_request_guard.py`, `test_upload.py`, `test_audio_sniff.py`, `test_rate_limit.py`, `test_job_retention.py`, `test_factcheck_gate.py`, `test_docs_gating.py`, `test_logging_hygiene.py` and `test_error_text.py` (all in `app/insights/tests/`).
+Tests: `test_auth.py`, `test_deployment_defaults.py`, `test_payload_size.py`, `test_request_guard.py`, `test_upload.py`, `test_audio_sniff.py`, `test_audio_duration.py`, `test_process_audio_concurrency.py`, `test_rate_limit.py`, `test_insight_limits.py`, `test_factcheck_run_limits.py`, `test_job_retention.py`, `test_record_retention.py`, `test_factcheck_gate.py`, `test_docs_gating.py`, `test_logging_hygiene.py`, `test_error_text.py` and `test_pipeline_error_text.py` (all in `app/insights/tests/`).
 
 ---
 
@@ -275,11 +287,12 @@ Tests: `test_auth.py`, `test_payload_size.py`, `test_request_guard.py`, `test_up
 
 | Method | Path | Returns | Auth |
 |---|---|---|---|
-| GET | `/healthz` | `{"status": "ok"}` | none |
+| GET | `/healthz` | `{"status": "ok"}` while the process is up (liveness) | none |
+| GET | `/readyz` | 200 `{"status": "ok", "checks": {...}}` when the database answers `SELECT 1` and, on `app.main` only, `ffmpeg` is on PATH. Otherwise 503 `{"status": "unavailable", "checks": {...}}`, with each failed check marked `failed`. No error text; the cause is logged | none |
 | GET | `/version` | version, service name, environment | none |
 | GET | `/docs`, `/redoc`, `/openapi.json` | Interactive API docs and schema | none. Not served when `VOICEIQ_ENVIRONMENT=production`. |
 
-Both entry points serve these (`app/main.py:43-48,71-82`, `app/insight_main.py:53-58,81-92`). The Docker health check calls `/healthz` (`Dockerfile:85-87`). The Docker image sets `VOICEIQ_ENVIRONMENT=production`, so it does not serve the interactive docs (`Dockerfile:60`).
+Both entry points serve these (`app/main.py:47-52,75-91`, `app/insight_main.py:58-63,86-102`; readiness checks in `app/utils/readiness.py`, commit `660558c`, tests in `test_readiness.py`). The Docker and compose health checks call `/healthz` (`Dockerfile:85-87`); `/readyz` is there for an orchestrator that wants a readiness probe ([DECISIONS.md #46](DECISIONS.md)). The Docker image sets `VOICEIQ_ENVIRONMENT=production`, so it does not serve the interactive docs (`Dockerfile:60`).
 
 ---
 

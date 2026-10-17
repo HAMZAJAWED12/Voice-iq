@@ -15,7 +15,7 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 | | |
 |---|---|
 | Date | 2026-10-17 |
-| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3` |
+| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452` |
 | Current phase | **Phase 0 — Contract and scope lock: partially complete.** Phases 1–7 not started (no Sprint 7 application code exists). |
 | Overall progress | **0.83 %** |
 
@@ -39,7 +39,7 @@ plan deliverables and do not move the percentage.
 
 ## Completed
 
-Verified against the repository on 2026-10-17 (`3bf7506`).
+Verified against the repository on 2026-10-17 (`dbae452`).
 
 - **Phase 0: 3 of 10 register decisions signed** — see
   [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)
@@ -108,8 +108,9 @@ Verified against the repository on 2026-10-17 (`3bf7506`).
     ellipsis, the euro sign as "EUR") and any other character prints as "?",
     so the report is produced and `PDF_FAILED` no longer fires for it; the
     JSON response keeps the original text. 6 new tests, red-checked first
-    (`UnicodeEncodeError`, `PDF_FAILED`). Readable Urdu and Arabic need a
-    Unicode font (Phase 6).
+    (`UnicodeEncodeError`, `PDF_FAILED`). M6 is containment only (owner,
+    2026-10-17): a Unicode-capable PDF font is still required before
+    Phase 6, for readable Urdu and Arabic.
   - `a712146` — **Stored rows with non-finite numbers read back as null**
     (the approved old-rows fix). Re-checking showed the route already
     rendered them as null through its serializer; the repository now returns
@@ -135,6 +136,53 @@ Verified against the repository on 2026-10-17 (`3bf7506`).
       comparison, accurate purge count, CI checks the gitleaks checksum.
 
     Light suite 1579 passed, 1 skipped.
+  - **Owner decisions implemented** (2026-10-17), one small commit each,
+    under the size rule; records in
+    [DECISIONS #33–#49](DECISIONS.md#security-and-reliability-decisions-2026-10-17):
+    - `dc97a84` — a failed topic step returns a fixed message.
+    - `d7f9075` — staging fails closed without keys; compose binds to
+      loopback.
+    - `948c49d` — `/v1/process-audio`: one run and two waiting uploads per
+      worker by default, then 503 with `Retry-After: 30` (completes the
+      process-audio concurrency prerequisite).
+    - `6c17c72` — audio longer than two hours gets 413 `AUDIO_TOO_LONG`,
+      checked with ffprobe before decoding and an ffmpeg hard stop; never
+      truncated.
+    - `e802fcd` — insight writes 60/minute and reads 120/minute per caller;
+      the session list takes `limit` (default 100, at most 500) and
+      `offset`.
+    - `da92ae4` — a fact-check run checks at most 25 claims within 20 s;
+      the rest are counted as skipped.
+    - `cbdafb4` — insight and fact-check records are deleted after 30 days,
+      by the retention sweep, now at startup and hourly.
+    - `f8bc3ed`, `c53c71d`, `0f9c4c1` — an error never overwrites a good
+      stored record; an insight error fails its stage and skips the Agent
+      Brain; a missing stage package fails only that stage.
+    - `98730c3` — pipeline sentiment reaches the insight engines as
+      positivity, so insight scores for processed audio change.
+    - `2721a73`, `e25a3b2`, `660558c`, `fb56d7d` — mock diarization is
+      flagged; the log level is applied and threshold profiles are marked
+      not implemented; `/readyz`; compose CPU and memory limits and TLS at
+      the ingress.
+    - `45a5b22` — currency rates from open.er-api.com (the forex decision,
+      option A), with DATA-FLOW.md and the PHASE-0 §6.4 source policy in
+      the same commit.
+    - Recorded without code: one trust group for API keys, to revisit
+      before any direct customer access (DECISIONS #33); the
+      authentication-before-422 order and the raw insight route's refusal
+      of non-finite numbers were accepted.
+    - The approved dependency scan ran once, read-only; its results are
+      tracked privately and nothing was upgraded.
+  - `dbae452` — **M7: keyword rules match whole words only.** The flag rules
+    (hesitation, aggression, lie risk), the intent rules and the
+    email-draft triggers match a keyword only where it is not part of a
+    longer word, so "um" is no longer found in "number" or "send a" in
+    "send all" (`app/utils/text_match.py`). The other Agent Brain agents
+    keep substring matching; no vocabulary changed. 49 new tests,
+    red-checked against the previous code (all 17 part-of-a-word cases
+    fail there).
+
+    Light suite 1730 passed, 1 skipped; `ruff check .` and mypy clean.
 - **2026-10-11 audit and documentation sync** (this branch): stale
   operational docs corrected, PHASE-0 wording made consistent with its own
   register, this status document created.
@@ -146,9 +194,9 @@ Verified against the repository on 2026-10-17 (`3bf7506`).
   changes (per-phase gate reading, `ClaimSpan` in the v1 freeze list).
 - **Prerequisite fixes** — until Phase 0 lets a phase start, no Sprint 7
   application code is written; only fixes that need no pending decision, one
-  per milestone, smallest first. M1–M6, the old-rows fix and the
-  decision-free hardening items are done. The remaining hardening items
-  each need an owner decision (tracked privately).
+  per milestone, smallest first. M1–M7, the old-rows fix, the decision-free
+  hardening items and the owner-decided items are done. The items the
+  owner parked are tracked privately.
 - **Working rules** (project owner, 2026-10-16): the claim detector gets no
   new heuristics until Phase 3, only crash, security or performance fixes
   ([DECISIONS #26](DECISIONS.md#26-claim-detector-no-new-heuristics-until-phase-3));
@@ -168,10 +216,9 @@ Ordered backlog. Phase numbers are the plan's.
    (before Phase 1 ends, Phase 5 or Phase 6 — see PHASE-0 §8) can follow.
 2. **Prerequisite fixes**, smallest first (earliest phase each one gates
    in brackets):
-   1. `/v1/process-audio` concurrency: the event-loop part is done (`2bb6593`); how many runs a worker allows and what an overloaded worker answers — *waits for an owner decision* [6].
-   2. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test; lands with Phase 6, which adds the re-run [6].
-   3. Claim-detector limits left after M5 — past prices read as current ("I bought ETH at 1200"), capitalised acronyms read as tickers, any number after a coin, ticker or commodity read as a price ("Gold is 29.99 with free shipping"); listed in [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector). *Wait for Phase 3* (DECISIONS #26) [3].
-   4. With the decision-free prerequisites done, a separate tech-debt milestone — *next milestone* (M7): keyword matching in `flag_service`, the intent rules and the email-draft triggers matches inside longer words [none].
+   1. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test; lands with Phase 6, which adds the re-run [6].
+   2. Claim-detector limits left after M5 — past prices read as current ("I bought ETH at 1200"), capitalised acronyms read as tickers, any number after a coin, ticker or commodity read as a price ("Gold is 29.99 with free shipping"); listed in [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector). *Wait for Phase 3* (DECISIONS #26) [3].
+   3. A Unicode-capable PDF font — M6 only contains the failure (DECISIONS #31) [6].
 3. **Phase 1** — gold set, model server, bake-off, pinned model.
 4. **Phase 2** — typed v2 models, OpenAI-compatible client, `VOICEIQ_FACTCHECK_*` settings, stubbed boundary.
 5. **Phase 3** — claim extraction with segment/speaker/timestamp traceability, checkability gate, dedup, claim cap.
@@ -218,48 +265,25 @@ Real blockers only.
     `create_all`) — Phase 6;
   - how the D10 re-run rebuilds its inputs after the response has gone, how
     the regenerated PDF and recommendations are delivered, and how run rows
-    age out (the retention sweep removes only `data/jobs/` directories) —
-    Phase 6.
-- **Open decision: forex provider** (owner: project owner; gates Phase 4,
-  which routes structured claims through these clients). exchangerate.host
-  now needs an access key on every call, so `CURRENCY_RATE` claims cannot be
-  verified today. Options:
-  - **(A)** switch to open.er-api.com — keyless, covers all 11 currencies the
-    detector recognises, daily rates, commercial use allowed, attribution
-    required; fetch at most hourly per base currency;
-  - **(B)** keep exchangerate.host with a paid key — `/live` endpoint,
-    `quotes.USDxxx` reply shape (free plan: 100 requests/month, USD source
-    only, non-commercial);
-  - **(C)** mark `CURRENCY_RATE` unsupported until decided.
-  A or B changes an egress destination or what is sent, so `DATA-FLOW.md`
-  and the PHASE-0 §6 source policy must change in the same milestone.
+    age out (the retention sweep knows only `data/jobs/` directories and the
+    v1 insight and fact-check tables) — Phase 6.
 
 ## Next milestone
 
-**M7 — Keyword rules match whole words only.** A tech-debt milestone after
-the prerequisites (owner decision, 2026-10-16). Status: **planned, awaiting
-approval**.
-
-Several rule-based extractors test keywords with a plain substring check, so
-a keyword inside a longer word matches: "um" and "er" (hesitation markers)
-are found in "number", the greeting rule's "hi" starts "his order", the
-agreement rule's "ok" is found in "okayed by the bookkeeper", and the
-email-draft trigger "send a" in "send all" (`app/services/flag_service.py:36,
-50, 64-65`; `app/services/intent_service.py:17-38`;
-`app/agent_brain/core/email_draft_agent.py:25`). M7 makes these checks
-match whole words and phrases, with no change to the vocabularies.
+**None ready for engineering.** M7 was the last fix that needed no pending
+decision, and the owner-decided items are done. The next step is owner-side:
+the **Phase 1 gate** (*Remaining*, item 1). The prerequisites left wait for
+Phase 3 or Phase 6.
 
 ## Acceptance evidence
 
-M7 is done when all of the following ran in the same session and passed:
+The Phase 1 gate (*Remaining*, item 1) is met when all of the following hold (the first two items are the PHASE-0 §8 checklist):
 
-- Tests: each rule fires on its keyword as a whole word or phrase and does
-  not fire when the keyword is only part of a longer word — red-checked
-  against the current code first.
-- The full light suite —
-  `.venv\Scripts\python.exe -m pytest app/insights/tests/ app/agent_brain/tests/ -q` —
-  passes with the new tests added to the 1579 + 1 skipped baseline.
-- `ruff==0.7.4 check .` and
-  `mypy==1.13.0 --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/`
-  are clean.
-- This document is updated: M7 moved to *Completed*, the next item promoted.
+- every register decision due before Phase 1 is signed, with signer and date
+  in [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register);
+- §2, §3 and §6 are approved;
+- the per-phase gate reading and the `ClaimSpan` freeze-list change are
+  confirmed or withdrawn;
+- the decisions listed under *Blockers* that gate Phase 1 are added to the
+  register;
+- this document records the kick-off date and moves Phase 0 to *Completed*.

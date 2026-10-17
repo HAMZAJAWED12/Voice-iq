@@ -1,4 +1,4 @@
-Last verified: 2026-10-17, 3bf7506
+Last verified: 2026-10-17, dbae452
 # Decisions
 
 This file lists the decisions already taken in this repository. A decision is
@@ -20,7 +20,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 
 | # | Decision | Date | Commit |
 |---|---|---|---|
-| 1 | Fail-soft pipeline with exactly four hard-fail gates | 2026-07-17, 2026-07-20 | `24dc644`, `a1e9ef7` |
+| 1 | Fail-soft pipeline with a fixed set of hard-fail gates (five since #36) | 2026-07-17, 2026-07-20 | `24dc644`, `a1e9ef7` |
 | 2 | Lazy ML imports in the orchestrator | 2026-07-25 | `9e57cb4`, `4df98c6` |
 | 3 | Two fault-isolation models, chosen by topology | 2026-06-18, 2026-06-22 | `3c2b14a`, `0970819`, `ef005dd` |
 | 4 | One shared clamp helper | 2026-06-21 | `e9cbd1f`, `c58dd9a` |
@@ -51,28 +51,49 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 | 29 | One pipeline run at a time per worker, off the event loop | 2026-10-16 | `2bb6593` |
 | 30 | Insight routes accept only finite numbers | 2026-10-16 | `93dda14` |
 | 31 | M6: the PDF prints Latin-1 and substitutes the rest | 2026-10-17 | `dc9caf3` |
+| 32 | M7: keyword rules match whole words only | 2026-10-17 | `dbae452` |
+| 33 | One trust group for API keys | 2026-10-17 | — (owner) |
+| 34 | Staging fails closed; compose binds to loopback | 2026-10-17 | `d7f9075` |
+| 35 | Bounded wait for a pipeline slot; 503 beyond it | 2026-10-17 | `948c49d` |
+| 36 | Audio longer than two hours is rejected, never truncated | 2026-10-17 | `6c17c72` |
+| 37 | Rate limits on the insight routes; the session list is paged | 2026-10-17 | `e802fcd` |
+| 38 | A fact-check run checks at most 25 claims within 20 seconds | 2026-10-17 | `da92ae4` |
+| 39 | Stored records are deleted after 30 days | 2026-10-17 | `cbdafb4` |
+| 40 | An error result never replaces a good stored record | 2026-10-17 | `f8bc3ed` |
+| 41 | An insight error result fails the pipeline stage | 2026-10-17 | `c53c71d` |
+| 42 | A missing stage package fails only that stage | 2026-10-17 | `0f9c4c1` |
+| 43 | Pipeline sentiment reaches the insight engines as positivity | 2026-10-17 | `98730c3` |
+| 44 | A warning whenever mock diarization is used | 2026-10-17 | `2721a73` |
+| 45 | The log level setting is applied; threshold profiles are not implemented | 2026-10-17 | `e25a3b2` |
+| 46 | A readiness probe beside the liveness probe | 2026-10-17 | `660558c` |
+| 47 | Container resource limits; TLS terminates at the ingress | 2026-10-17 | `fb56d7d` |
+| 48 | Currency rates come from open.er-api.com | 2026-10-17 | `45a5b22` |
+| 49 | A failed topic step returns a fixed message | 2026-10-17 | `dc97a84` |
 
 ---
 
 ## Pipeline and code structure
 
-### 1. Fail-soft pipeline with exactly four hard-fail gates
+### 1. Fail-soft pipeline with a fixed set of hard-fail gates
 
 - **Context:** `/v1/process-audio` runs 19 stage methods in sequence
-  (`app/pipeline/orchestrator.py`, `run()`, lines 151–228). If one late stage
+  (`app/pipeline/orchestrator.py`, `run()`, lines 154–231). If one late stage
   such as the PDF failed the whole run, the caller would lose good upstream
   output such as the transcript.
 - **Decision:** Only four gates may fail a run: `MISSING_INPUT_AUDIO`,
   `AUDIO_NORMALIZATION_TIMEOUT`, `AUDIO_NORMALIZATION_FAILED` and
   `AUDIO_SILENT_OR_NEAR_SILENT`. They raise the private `_HardFail`
-  (`orchestrator.py:67-76`), which `run()` catches once and returns with
+  (`orchestrator.py:70-79`), which `run()` catches once and returns with
   `status="failed"`. Every other stage catches its own exception, records a
   `<STAGE>_FAILED` warning (diarization records
   `DIARIZATION_FAILED_FALLBACK`), writes an empty or failed artifact, and the
   run ends with `status="ok"`.
-- **Consequence:** `test_exactly_four_hard_fail_gates` and
+- **Update (2026-10-17):** `AUDIO_TOO_LONG` is a fifth gate (#36); the
+  pin test is now `test_exactly_five_hard_fail_gates`.
+- **Consequence:** `test_exactly_five_hard_fail_gates` (named
+  `test_exactly_four_hard_fail_gates` until #36) and
   `test_late_stage_exception_never_flips_status`
-  (`app/insights/tests/test_orchestrator.py:959-1028`) pin this, and
+  (`app/insights/tests/test_orchestrator.py:1029-1104`) pin this, and
   `test_full_success_stage_order` pins the stage order. A new stage is a
   `_run_<stage>` method plus a `_PipelineState` field, and it must be
   fail-soft.
@@ -85,7 +106,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
   requirements and needed its own 8–12 minute CI job (`9e57cb4`).
 - **Decision:** The eight ML-backed imports (ASR, diarization, sentiment,
   keywords, gender, topic, summary, `analyze_audio_quality`) happen inside the
-  `_run_<stage>` method that uses them (`orchestrator.py:13-23`). Four
+  `_run_<stage>` method that uses them (`orchestrator.py:13-25`). Four
   services that only look heavy stay at module scope on purpose:
   `FactCheckService`, `PDFService`, `normalize_to_wav`, and `EmotionService`,
   which guards its own torch import.
@@ -201,6 +222,8 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
   are configured outside production, requests are allowed with a warning. If
   no keys are configured in production, every request gets 503. Keys are
   compared in constant time. `/healthz` and `/version` stay public.
+- **Update (2026-10-17):** staging now fails closed like production (#34),
+  and all keys form one trust group (#33).
 - **Consequence:** A production deployment without keys fails closed, and
   the failure is obvious. `app/insights/tests/test_auth.py` pins this. The
   overview of controls is in [SECURITY.md](SECURITY.md).
@@ -211,7 +234,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 - **Context:** `/docs`, `/redoc` and `/openapi.json` showed every route's
   schema in every environment.
 - **Decision:** With `VOICEIQ_ENVIRONMENT=production`, both entrypoints turn
-  all three off (`app/main.py:46-48`, `app/insight_main.py:56-58`). Other
+  all three off (`app/main.py:50-52`, `app/insight_main.py:61-63`). Other
   environments are unchanged, and `/healthz` stays public.
 - **Consequence:** `app/insights/tests/test_docs_gating.py` pins this.
 - **Date:** 2026-07-25 · **Commit:** `c7c34db`
@@ -229,7 +252,9 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
   `VOICEIQ_RATE_LIMIT_PROCESS_AUDIO=30/minute`,
   `VOICEIQ_RATE_LIMIT_FACTCHECK=60/minute` and
   `VOICEIQ_RATE_LIMIT_AGENT_BRAIN=60/minute`, with the master switch
-  `VOICEIQ_RATE_LIMIT_ENABLED=true` (`app/insights/config/settings.py:136-162`).
+  `VOICEIQ_RATE_LIMIT_ENABLED=true` (`app/insights/config/settings.py:176-202`).
+- **Update (2026-10-17):** the insight routes have their own read and write
+  limits, and every route group keeps its own counter (#37).
 - **Consequence:** `app/insights/tests/test_rate_limit.py` pins this. The
   Agent Brain limit was added when that router was mounted (`df8eec3`).
 - **Date:** 2026-07-25 · **Commit:** `93f73b1`, `df8eec3`
@@ -279,12 +304,16 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
   directories older than `VOICEIQ_JOB_RETENTION_HOURS` (default 24; `0` turns
   purging off). A directory's age is the modification time of its
   `meta.json`, or of the directory itself when there is none. The sweep runs
-  at startup in both entrypoints (`app/main.py:37`, `app/insight_main.py:47`)
+  at startup in both entrypoints (at `3bf7506`: `app/main.py:37`, `app/insight_main.py:47`)
   and at most once an hour at request time
-  (`app/routes/process_audio.py:33-51`). If one directory fails, the sweep
+  (at `3bf7506`: `app/routes/process_audio.py:33-51`). If one directory fails, the sweep
   skips it and carries on.
+- **Update (2026-10-17):** the sweep moved to `app/utils/retention.py`, runs
+  at startup and then hourly from each app's lifespan instead of inside the
+  upload request, and also deletes stored records after
+  `VOICEIQ_DB_RETENTION_DAYS` (#39).
 - **Consequence:** Job artifacts last only as long as the retention window.
-  The sweep covers `data/jobs/` directories only, not database rows.
+  Until #39 the sweep covered `data/jobs/` directories only, not database rows.
   `app/insights/tests/test_job_retention.py` pins this.
 - **Date:** 2026-07-25 · **Commit:** `3c3adb2`
 
@@ -337,7 +366,7 @@ in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
 
 - **Context:** L5 (entry 19) made the Agent Brain a pipeline stage that runs
   before the response is returned. Under D2 it therefore has no fact-check
-  result (`fact_check=None`, `app/pipeline/orchestrator.py:759-765`), so
+  result (`fact_check=None`, `app/pipeline/orchestrator.py:776-782`), so
   `FactCheckReviewAgent` is dormant on that path.
 - **Decision:** When the fact-check job finishes, it re-runs these consumers
   in order: (1) the Agent Brain, (2) the PDF. A new consumer is added as a new
@@ -401,16 +430,16 @@ in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
   `POST /internal/v1/agent-brain/recommendations/generate`, where the caller
   builds the context itself (`f5e4d84`, `f619f7d`).
 - **Decision:** `_run_agent_brain` runs between the insights and PDF stages
-  (`app/pipeline/orchestrator.py:717-787`). It is off unless
+  (`app/pipeline/orchestrator.py:734-804`). It is off unless
   `VOICEIQ_AGENT_BRAIN_AUTO_RUN=true`. When it is off, the `recommendations`
-  key is left out entirely (`orchestrator.py:963-964`), but the stage is
+  key is left out entirely (`orchestrator.py:980-981`), but the stage is
   still timed. The payload uses the camelCase aliases, the same shape the
   route and the callback use. The callback runs on a daemon thread and the
   pipeline does not wait for it. `min_confidence` filters only the callback,
   not the response. A failure in this stage is soft (`AGENT_BRAIN_FAILED`).
 - **Consequence:** `FactCheckReviewAgent` stays dormant on this path until
   the D10 re-run exists; the other four agents are live. `TestAgentBrainStage`
-  (`app/insights/tests/test_orchestrator.py:718`) and
+  (`app/insights/tests/test_orchestrator.py:788`) and
   `app/agent_brain/tests/test_pipeline_callback.py` cover this, and
   `1d8f2f6` proves `to_context` is reached from production code.
 - **Date:** 2026-09-20 · **Commit:** `f5e4d84`, `f619f7d`
@@ -443,7 +472,7 @@ in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
   `app/agent_brain/tests/test_language_seam.py` covers this.
 - **Date:** 2026-09-20 · **Commit:** `359cd5f`, `404de5b`, `c2fadaa`
 
-## Prerequisite fixes (M1–M6)
+## Prerequisite fixes (M1–M7)
 
 Working rule, recorded in the status doc (`6c8c89b`, 2026-10-11): until Phase
 0 lets a phase start, no Sprint 7 application code is written. The only work
@@ -457,10 +486,10 @@ next milestone is in
   logger runs at INFO. Source-client URLs can carry sensitive values,
   including claim subjects taken from the call. A failed Java callback also
   logged httpx's error text, which contains the callback URL.
-- **Decision:** `setup_logging()` (`app/utils/logger.py:9-15`) keeps the
+- **Decision:** `setup_logging()` (`app/utils/logger.py:10-23`) keeps the
   `httpx` and `httpcore` loggers at WARNING whatever the root level is. A
   failed callback logs only the exception class and HTTP status
-  (`app/pipeline/orchestrator.py:836-846`). The rule: a log line never
+  (`app/pipeline/orchestrator.py:853-863`). The rule: a log line never
   contains an outbound request URL, a payload, or exception text that
   includes a URL.
 - **Consequence:** This covers every current and future httpx client. A
@@ -479,7 +508,7 @@ next milestone is in
   Clients read nested values through the `_as_dict` and `_finite_float`
   helpers (`base_client.py:116-128`), and copy only scalar metadata.
   `FactCheckEngine._fetch_usable`
-  (`app/insights/core/factcheck/factcheck_engine.py:250-269`) isolates each
+  (`app/insights/core/factcheck/factcheck_engine.py:274-293`) isolates each
   claim the way the AgentRunner fan-out isolates agents. If a client fails or
   returns a non-finite value, that claim ends as the existing
   `SOURCE_UNAVAILABLE` with a short reason, and the run continues. Logs carry
@@ -500,10 +529,12 @@ next milestone is in
   provider error. The client logs only the provider's error code and type,
   then raises `SourceUnavailable(reason)`, for example "provider requires an
   access key". A reply with no `rates` is reported the same way
-  (`app/insights/core/factcheck/source_clients/forex_client.py:25-32, 49-59, 73-84`).
+  (`app/insights/core/factcheck/source_clients/forex_client.py:25-32, 49-59, 73-84` at `dc03a44`; the client was replaced in `45a5b22`, #48).
   `SourceUnavailable` is the one exception the client contract allows
   (`base_client.py:71`), and the engine maps it to `SOURCE_UNAVAILABLE` with
   that reason, for that claim only. The provider did not change.
+- **Update (2026-10-17):** the provider was decided (#48), and currency-rate
+  claims can be verified again.
 - **Consequence:** Currency-rate claims still cannot be verified, but the
   result now says why. Which provider to use is open (see
   [Open decisions](#open-decisions)).
@@ -520,7 +551,7 @@ next milestone is in
   claim ids stay sequential. As a second layer, `/v1/process-audio` checks the
   fact-check payload with `json.dumps(payload, allow_nan=False)` before saving
   or returning it, and falls back to the failed stub if the check fails
-  (`app/routes/process_audio.py:111-115`).
+  (`app/routes/process_audio.py:101-104`).
 - **Consequence:** `POST /v1/fact-check` returns 200 with that claim
   dropped. `/v1/process-audio` cannot return 500 because of fact-check, and
   a payload that cannot be rendered is never stored. The v1 models did not
@@ -594,7 +625,8 @@ next milestone is in
   error instead of 422, and a body-method request to an unknown path under a
   guarded prefix gets the authentication or size error instead of 404 or 405.
   Response shapes did not change. `app/insights/tests/test_request_guard.py`
-  pins this.
+  pins this. The project owner accepted the authentication-before-422 order
+  on 2026-10-17.
 - **Date:** 2026-10-16 · **Commit:** `ff874de`
 
 ### 29. One pipeline run at a time per worker, off the event loop
@@ -605,8 +637,8 @@ next milestone is in
 - **Decision:** The pipeline and its fact-check enrichment run in a worker
   thread behind a one-slot limiter per event loop
   (`app/routes/process_audio.py`). A further upload waits for the slot.
-  How many runs a worker allows, and whether an overloaded worker should
-  answer 503, are open owner decisions.
+  How many runs a worker allows, and what an overloaded worker answers, were
+  decided later (#35).
 - **Consequence:** Health checks and other routes are served during a run;
   runs stay one at a time per worker, as before.
   `app/insights/tests/test_process_audio_concurrency.py` pins both.
@@ -626,6 +658,7 @@ next milestone is in
 - **Consequence:** Nothing non-finite is stored from these routes;
   `/v1/insights/generate-from-raw` refuses such tokens rather than
   correcting them. `app/insights/tests/test_non_finite_inputs.py` pins this.
+  The project owner accepted that refusal on 2026-10-17.
 - **Date:** 2026-10-16 · **Commit:** `93dda14`
 
 ### 31. M6: the PDF prints Latin-1 and substitutes the rest
@@ -637,9 +670,231 @@ next milestone is in
   byte-order marks, and turns every other character into "?",
   in `safe_text`, which all report text passes through.
 - **Consequence:** The report is produced for any text; Urdu, Arabic and
-  emoji print as "?" until Phase 6 adds a Unicode font. The JSON response
+  emoji print as "?" until a Unicode font is added (required before Phase 6). The JSON response
   keeps the original text. `app/insights/tests/test_pdf_unicode.py` pins this.
+  The project owner confirmed on 2026-10-17 that M6 is containment only: a
+  Unicode-capable PDF font is still required before Phase 6.
 - **Date:** 2026-10-17 · **Commit:** `dc9caf3`
+
+### 32. M7: keyword rules match whole words only
+
+- **Context:** The pipeline's flag rules (hesitation, aggression, lie risk),
+  its intent rules and the Agent Brain's email-draft triggers used a plain
+  substring check, so a keyword inside a longer word matched: "um" in
+  "number", the greeting "hi" at the start of "his order", "ok" in "book",
+  "send a" in "send all".
+- **Decision:** `app/utils/text_match.py` matches a keyword only where it is
+  not part of a longer word; a punctuation edge ("...", "?") matches
+  anywhere. `FlagService` and `IntentService` use it for every rule.
+  `find_signals(..., whole_words=True)` is used by the email-draft agent
+  only. No vocabulary changed.
+- **Consequence:** Fewer false flags, intents and email drafts. The other
+  Agent Brain agents keep substring matching. Pinned by
+  `app/insights/tests/test_whole_word_rules.py` and
+  `app/agent_brain/tests/test_email_signal_whole_words.py`.
+- **Date:** 2026-10-17 · **Commit:** `dbae452`
+
+## Security and reliability decisions (2026-10-17)
+
+Owner decisions on items from a security and reliability review (its
+detailed list is tracked privately). Each code change is its own small
+commit with its own tests, under the size rule (#27).
+
+### 33. One trust group for API keys
+
+- **Context:** Every valid API key can read, replace or delete any stored
+  record (#8).
+- **Decision:** The service has one trust group. Only the Java backend calls
+  it, and it stays off the public internet. There is no per-session
+  ownership for now.
+- **Consequence:** Anyone who holds a key can act on every record. Revisit
+  before any customer can reach the service directly.
+- **Date:** 2026-10-17 · **Commit:** — (owner decision, no code)
+
+### 34. Staging fails closed; compose binds to loopback
+
+- **Context:** With no API keys configured, only `production` refused
+  requests, and the compose file published the port on every interface.
+- **Decision:** `staging` also answers 503 when no keys are configured
+  (`app/security/api_key.py`); `development` and `test` still allow
+  requests with a warning. `docker-compose.yml` publishes the port on
+  `127.0.0.1` only.
+- **Consequence:** A shared environment without keys fails closed. Serving
+  other hosts needs a TLS-terminating proxy in front (#47).
+  `app/insights/tests/test_deployment_defaults.py` pins this.
+- **Date:** 2026-10-17 · **Commit:** `d7f9075`
+
+### 35. Bounded wait for a pipeline slot; 503 beyond it
+
+- **Context:** #29 made uploads wait for the worker's pipeline slot, with no
+  bound on how many could wait.
+- **Decision:** Per worker, at most `VOICEIQ_PROCESS_AUDIO_MAX_RUNNING`
+  runs (default 1) and `VOICEIQ_PROCESS_AUDIO_MAX_WAITING` waiting uploads
+  (default 2). A further upload gets 503 with `Retry-After:
+  VOICEIQ_PROCESS_AUDIO_RETRY_AFTER_SEC` (default 30), before it is saved
+  (`app/routes/process_audio.py`).
+- **Consequence:** A busy worker answers at once instead of queueing without
+  limit. `app/insights/tests/test_process_audio_concurrency.py` pins this.
+- **Date:** 2026-10-17 · **Commit:** `948c49d`
+
+### 36. Audio longer than two hours is rejected, never truncated
+
+- **Context:** Audio of any length was decoded and processed.
+- **Decision:** Audio longer than `VOICEIQ_MAX_AUDIO_SECONDS` (default 7200)
+  gets 413 with the warning code `AUDIO_TOO_LONG`. ffprobe reads the
+  duration before decoding; ffmpeg also stops one second past the limit,
+  and a decoded file longer than the limit is deleted and rejected
+  (`app/utils/audio_utils.py`). Nothing is truncated.
+- **Consequence:** `AUDIO_TOO_LONG` is a fifth hard-fail gate (#1). Pinned by
+  `app/insights/tests/test_audio_duration.py` and
+  `test_exactly_five_hard_fail_gates`.
+- **Date:** 2026-10-17 · **Commit:** `6c17c72`
+
+### 37. Rate limits on the insight routes; the session list is paged
+
+- **Context:** The `/v1/insights` routes had no rate limit, and the session
+  list returned every id.
+- **Decision:** Routes that store or delete a record count against
+  `VOICEIQ_RATE_LIMIT_INSIGHT_WRITE` (default `60/minute`), routes that read
+  against `VOICEIQ_RATE_LIMIT_INSIGHT_READ` (default `120/minute`), per
+  caller. Every route group keeps its own counter. `GET /v1/insights/` takes
+  optional `limit` (default 100, at most 500) and `offset`.
+- **Consequence:** A caller with more than 100 sessions now pages through
+  them. `app/insights/tests/test_insight_limits.py` pins this.
+- **Date:** 2026-10-17 · **Commit:** `e802fcd`
+
+### 38. A fact-check run checks at most 25 claims within 20 seconds
+
+- **Context:** A run checked every detected claim, one provider call after
+  another, with no overall time limit.
+- **Decision:** `FactCheckEngine` checks at most `VOICEIQ_FACTCHECK_MAX_CLAIMS`
+  claims (default 25) and starts no new check after
+  `VOICEIQ_FACTCHECK_RUN_DEADLINE_SEC` (default 20). The per-call timeout
+  stays 5 seconds. Claims past either limit get no result and are counted
+  in `stats.skipped`.
+- **Consequence:** The response shape is unchanged.
+  `app/insights/tests/test_factcheck_run_limits.py` pins this.
+- **Date:** 2026-10-17 · **Commit:** `da92ae4`
+
+### 39. Stored records are deleted after 30 days
+
+- **Context:** Insight records and fact-check results stayed in the database
+  until deleted by hand (#13).
+- **Decision:** Records older than `VOICEIQ_DB_RETENTION_DAYS` (default 30;
+  `0` keeps everything) are deleted: insight records by last update,
+  fact-check results by creation. The sweep in `app/utils/retention.py`
+  purges them with the job directories, at startup and then hourly from
+  each app's lifespan.
+- **Consequence:** The insight-only Docker image, which never handles
+  uploads, now purges while it stays up.
+  `app/insights/tests/test_record_retention.py` pins this.
+- **Date:** 2026-10-17 · **Commit:** `cbdafb4`
+
+### 40. An error result never replaces a good stored record
+
+- **Context:** Regenerating insights for a session and getting an error
+  overwrote the stored ok or warning record.
+- **Decision:** `InsightRepository.save` keeps a stored record that is not
+  an error when the new one is. The caller still gets the error response.
+- **Consequence:** `app/insights/tests/test_insight_keep_good_record.py` pins
+  this.
+- **Date:** 2026-10-17 · **Commit:** `f8bc3ed`
+
+### 41. An insight error result fails the pipeline stage
+
+- **Context:** `InsightService` turns an engine fault into `status="error"`
+  with an empty bundle (CLAUDE.md, fault isolation). The pipeline recorded
+  the stage as ok and passed the empty bundle to the Agent Brain.
+- **Decision:** An error result marks the stage failed, adds
+  `INSIGHTS_FAILED` and skips the Agent Brain. The run stays fail-soft.
+- **Consequence:** Pinned in `app/insights/tests/test_orchestrator.py`.
+- **Date:** 2026-10-17 · **Commit:** `c53c71d`
+
+### 42. A missing stage package fails only that stage
+
+- **Context:** Eight stages imported their service before their `try`, so a
+  package that could not be imported failed the whole request.
+- **Decision:** The import sits inside each stage's `try` (#2 still holds:
+  the imports stay lazy).
+- **Consequence:** The stage records its `*_FAILED` warning and the run
+  continues. Pinned in `app/insights/tests/test_orchestrator.py`.
+- **Date:** 2026-10-17 · **Commit:** `0f9c4c1`
+
+### 43. Pipeline sentiment reaches the insight engines as positivity
+
+- **Context:** The sentiment service reports a label and its confidence in
+  that label; the insight engines read the score as positivity.
+- **Decision:** The pipeline adapter maps a positive label with confidence c
+  to 0.5 + c/2, a negative one to 0.5 − c/2, and neutral to 0.5.
+- **Consequence:** Insight scores for processed audio change (see
+  [CHANGES.md](CHANGES.md)). `/v1/insights` callers that send their own
+  scores are unaffected. `app/insights/tests/test_voiceiq_adapter_sentiment.py`
+  pins this.
+- **Date:** 2026-10-17 · **Commit:** `98730c3`
+
+### 44. A warning whenever mock diarization is used
+
+- **Context:** Without a working diarization model the service falls back to
+  a mock that puts the whole call under one speaker, and the response did
+  not say so.
+- **Decision:** Such a run carries `MOCK_DIARIZATION_USED`. The two-speaker
+  default for calls is kept.
+- **Consequence:** Pinned in `app/insights/tests/test_orchestrator.py`.
+- **Date:** 2026-10-17 · **Commit:** `2721a73`
+
+### 45. The log level setting is applied; threshold profiles are not implemented
+
+- **Context:** `VOICEIQ_LOG_LEVEL` and `VOICEIQ_THRESHOLD_PROFILE` were
+  validated but never read.
+- **Decision:** Each app applies `VOICEIQ_LOG_LEVEL` at startup; `httpx` and
+  `httpcore` stay at WARNING. Threshold profiles are marked not implemented,
+  and each app logs a warning at startup when the variable is set. No
+  profiles were added.
+- **Consequence:** `app/insights/tests/test_logging_settings.py` pins this.
+- **Date:** 2026-10-17 · **Commit:** `e25a3b2`
+
+### 46. A readiness probe beside the liveness probe
+
+- **Context:** `/healthz` answers whenever the process is up, even if the
+  database or ffmpeg is unavailable.
+- **Decision:** `GET /readyz` returns 200 only when the database answers
+  and, on the full service, ffmpeg is on PATH; otherwise 503 naming the
+  failed check (`app/utils/readiness.py`). `/healthz` stays the liveness
+  probe.
+- **Consequence:** `app/insights/tests/test_readiness.py` pins this.
+- **Date:** 2026-10-17 · **Commit:** `660558c`
+
+### 47. Container resource limits; TLS terminates at the ingress
+
+- **Context:** The compose file set no resource limits, and the TLS set-up
+  was described only as a recommendation.
+- **Decision:** `docker-compose.yml` caps the container at 2 CPUs and 1 GB.
+  TLS terminates at the ingress, a trusted reverse proxy or load balancer
+  ([SECURITY.md](SECURITY.md)).
+- **Consequence:** The compose file was checked as YAML and by test; Docker
+  was not available to run `docker compose config`.
+- **Date:** 2026-10-17 · **Commit:** `fb56d7d`
+
+### 48. Currency rates come from open.er-api.com
+
+- **Context:** exchangerate.host requires an access key on every call, so
+  every currency-rate claim was `SOURCE_UNAVAILABLE` (#23).
+- **Decision:** Option A: ExchangeRate-API's keyless open access endpoint.
+  Only the base currency code is sent; each base is fetched at most hourly;
+  every evidence record carries the attribution the provider requires.
+- **Consequence:** Currency-rate claims can be verified again.
+  [DATA-FLOW.md](DATA-FLOW.md) and
+  [PHASE-0 §6.4](FACTCHECK-AGENT-PHASE-0.md) changed in the same commit.
+- **Date:** 2026-10-17 · **Commit:** `45a5b22`
+
+### 49. A failed topic step returns a fixed message
+
+- **Context:** The topic result is part of the `/v1/process-audio` response,
+  and a failed topic step put the exception text in it.
+- **Decision:** The response carries a fixed message; the exception text is
+  written only to the job's status file on disk.
+- **Consequence:** `app/insights/tests/test_pipeline_error_text.py` pins this.
+- **Date:** 2026-10-17 · **Commit:** `dc97a84`
 
 ---
 
@@ -672,8 +927,6 @@ them is in force.
 
 **Not yet in the register (listed in the status doc)**
 
-- The forex provider for `CURRENCY_RATE` claims. The options are in the
-  status doc.
 - The job runner behind D2.
 - Supported languages for the agent and its report.
 - The local development model server.
@@ -691,7 +944,5 @@ them is in force.
 
 **Other open owner decisions**
 
-- How many `/v1/process-audio` runs a worker allows, and what an
-  overloaded worker answers (see #29).
-- Further security and reliability items from the review, each waiting
-  for an owner or partner-team decision (tracked privately).
+- Items from the security and reliability review that the owner parked,
+  most of them waiting on the partner team (tracked privately).

@@ -118,7 +118,7 @@ fetching.
 |---|---|---|
 | Whisper (`openai-whisper`) | `openaipublic.azureedge.net` | Downloaded once to `~/.cache/whisper`, then verified locally by SHA-256; no network while the cached file is intact. |
 | Sentiment, topic, summary (Transformers), keywords (sentence-transformers) | `huggingface.co` | Weights cached after the first download, but the Hugging Face client still makes a metadata request on each process's first load unless `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1` is set (nothing in this repo sets them). |
-| pyannote diarization | `huggingface.co` | Needs `PYANNOTE_AUTH_TOKEN` (fallback `HUGGINGFACE_TOKEN`). Every cold load calls `huggingface_hub.login()`, a network call that sends the token and writes it to the local Hugging Face cache. If that call fails (offline, or offline mode set) diarization silently falls back to a single-speaker mock. |
+| pyannote diarization | `huggingface.co` | Needs `PYANNOTE_AUTH_TOKEN` (fallback `HUGGINGFACE_TOKEN`). Every cold load calls `huggingface_hub.login()`, a network call that sends the token and writes it to the local Hugging Face cache. If that call fails (offline, or offline mode set) diarization falls back to a single-speaker mock, and the response carries the `MOCK_DIARIZATION_USED` warning. |
 | spaCy `en_core_web_sm` | — | Never fetched at runtime; it must be installed separately (`python -m spacy download en_core_web_sm`). Without it the keyword stage fails (`KEYWORDS_FAILED`), and so does sentiment (`SENTIMENT_FAILED`), because `SentimentService.analyze_speaker_segments` runs keyword extraction on every segment. |
 
 Air-gapped deployments: pre-populating the caches covers Whisper and the
@@ -132,5 +132,6 @@ diarization as written, because of the unconditional `login()` call.
 Per-request artifacts under `data/jobs/<uuid>/` — raw audio, transcript,
 `whisper.json`, PDF, insights — are purged after `job_retention_hours`
 (default **24h**, `0` disables). See the retention note in the hardening
-plan. Fact-check results and insight records persist in SQLite until
-removed by the operator.
+plan. Insight records (by last update) and fact-check results (by creation)
+are deleted from SQLite after `db_retention_days` (default **30**, `0` keeps
+them). Both purges run at startup and then hourly.

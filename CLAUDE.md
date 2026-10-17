@@ -80,7 +80,7 @@ voiceiq-AI/
 | 2 | Intelligence: Escalation Engine + Inconsistency Engine | ✅ Done |
 | 3 | Persistence + ops: SQLite via SQLAlchemy, Dockerfile, OpenAPI polish, integration tests | ✅ Done |
 | 4 | Handoff documentation: DOCS/ markdown set + polished .docx | ✅ Done |
-| 5 | Fact-check engine: claim detector, classifier, comparator, scorer, orchestrator; 5 source clients (exchangerate.host, CoinGecko, OpenWeather, Alpha Vantage, Wikipedia REST); SQLite `fact_check_results` table; `POST /v1/fact-check` + `GET /v1/fact-check/{id}`; auto-enrichment in `/v1/process-audio`; 91 new tests (118 insight tests passing) | ✅ Done |
+| 5 | Fact-check engine: claim detector, classifier, comparator, scorer, orchestrator; 5 source clients (exchangerate.host — replaced by open.er-api.com on 2026-10-17 — CoinGecko, OpenWeather, Alpha Vantage, Wikipedia REST); SQLite `fact_check_results` table; `POST /v1/fact-check` + `GET /v1/fact-check/{id}`; auto-enrichment in `/v1/process-audio`; 91 new tests (118 insight tests passing) | ✅ Done |
 | CI | GitHub Actions: lint (ruff + mypy hard-gate + gitleaks) + tests on Python 3.10/3.11, every push/PR | ✅ Done |
 | Tier 1 | Production-readiness security: X-API-Key auth, payload-size caps, ffmpeg subprocess timeout, model-loader concurrency locks | ✅ Done |
 | Tier 2 | Test-coverage closure: 6 insight-core engines to 100%; CI ruff + gitleaks + mypy + 3.10/3.11 matrix | ✅ Done |
@@ -173,6 +173,9 @@ all done.
 >   twice its planned size, or needs a second rework round after review,
 >   stop and ask the owner before continuing (DECISIONS #27).
 > - The repository URL in this file and `README.md` stays.
+> - **API keys are one trust group** (2026-10-17): only the Java backend
+>   calls the service and it stays off the public internet; no per-session
+>   ownership. Revisit before any direct customer access (DECISIONS #33).
 
 ## Project knowledge set (DOCS/)
 
@@ -265,12 +268,12 @@ CI runs the same command on every push to `main` via `.github/workflows/test.yml
 
 | Where | Command | Count |
 |---|---|---|
-| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **1582** |
-| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **1579 + 1 skip** |
+| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **1733** |
+| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **1730 + 1 skip** |
 
-1579 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip` of torch, transformers, soundfile, huggingface_hub and pyannote.audio, reported as a single skip) = 1582. Nothing is lost in CI.
+1730 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip` of torch, transformers, soundfile, huggingface_hub and pyannote.audio, reported as a single skip) = 1733. Nothing is lost in CI.
 
-The light figure was measured on 2026-10-17 at `3bf7506` (1579 passed, 1 skipped). The heavy figure is derived (1579 + the 3 skipped tests); it was last measured at 795 before the 2026-10-11 logging and fact-check tests, and needs a heavy-stack run to confirm. Reproduce the CI figure locally:
+The light figure was measured on 2026-10-17 at `dbae452` (1730 passed, 1 skipped). The heavy figure is derived (1730 + the 3 skipped tests); it was last measured at 795 before the 2026-10-11 logging and fact-check tests, and needs a heavy-stack run to confirm. Reproduce the CI figure locally:
 
 ```bash
 .venv\Scripts\python.exe -m pytest app/insights/tests/ app/agent_brain/tests/ --ignore=app/insights/tests/test_model_load_concurrency.py -q
@@ -316,7 +319,8 @@ These need attention but are not blocking new work:
 - **Interpreter trap:** a bare `python`/`pytest` on PATH may resolve to a different interpreter (e.g. `D:\Downloads\python`) that is **missing the project deps** (`pydantic_settings`, etc.) — collection then dies with confusing `ModuleNotFoundError`s. Always run via the venv: `.venv\Scripts\python.exe -m pytest ...` / `.venv\Scripts\python.exe -m mypy ...`. `where python` surfaces the trap.
 - **Git editor:** Set to `notepad` to avoid vim swap-file disasters: `git config --global core.editor notepad`.
 - **Never** run `git add .` without checking `git status` first — it has previously staged the entire `.venv` (10,000+ files).
-- **Security config knobs (Tier S).** All `VOICEIQ_`-prefixed env vars: `JOB_RETENTION_HOURS` (default 24, `0` disables the job-artifact purge), `RATE_LIMIT_ENABLED` / `RATE_LIMIT_PROCESS_AUDIO` (`30/minute`) / `RATE_LIMIT_FACTCHECK` (`60/minute`), `FACTCHECK_AUTO_ENRICH` (default **false** — `/v1/process-audio` no longer fact-checks unless asked; pass `?fact_check=true` per request). Setting `ENVIRONMENT=production` additionally hides `/docs`, `/redoc`, `/openapi.json` and makes missing `VOICEIQ_API_KEYS` fail closed with 503.
+- **Security config knobs (Tier S).** All `VOICEIQ_`-prefixed env vars: `JOB_RETENTION_HOURS` (default 24, `0` disables the job-artifact purge), `RATE_LIMIT_ENABLED` / `RATE_LIMIT_PROCESS_AUDIO` (`30/minute`) / `RATE_LIMIT_FACTCHECK` (`60/minute`), `FACTCHECK_AUTO_ENRICH` (default **false** — `/v1/process-audio` no longer fact-checks unless asked; pass `?fact_check=true` per request). Setting `ENVIRONMENT=production` additionally hides `/docs`, `/redoc`, `/openapi.json` and makes missing `VOICEIQ_API_KEYS` fail closed with 503 (`staging` fails closed too).
+- **Owner-decided limits (2026-10-17, DECISIONS #35–#39).** `PROCESS_AUDIO_MAX_RUNNING` 1 / `PROCESS_AUDIO_MAX_WAITING` 2 / `PROCESS_AUDIO_RETRY_AFTER_SEC` 30 (503 beyond), `MAX_AUDIO_SECONDS` 7200 (413 `AUDIO_TOO_LONG`, a fifth hard-fail gate), `RATE_LIMIT_INSIGHT_WRITE` `60/minute` / `RATE_LIMIT_INSIGHT_READ` `120/minute`, `FACTCHECK_MAX_CLAIMS` 25 / `FACTCHECK_RUN_DEADLINE_SEC` 20, `DB_RETENTION_DAYS` 30 (the retention sweep runs from each app's lifespan, at startup and hourly). `/readyz` is the readiness probe; `/healthz` stays liveness.
 
 ## Next-task candidates (pick one when ready)
 
@@ -328,8 +332,8 @@ turned out to be. Wave E was deferred from the original Tier 3 pass.
 - ✅ **Consolidate `_clamp()` (E1 / E1.b).** Done — single `core/_math.py:clamp`; `scoring_engine`, `signal_aggregation`, `inconsistency_engine`, and `factcheck/scorer` all repointed.
 - ✅ **MIME / magic-byte upload check (E4).** Done — `app/utils/audio_sniff.py` rejects non-audio uploads with 415; extension check kept as first gate.
 - ✅ **E2 — orchestrator decomposition COMPLETE (Phase 1 + Phase 2).**
-  - *Phase 1* built the behavioral safety net `app/insights/tests/test_orchestrator.py`: **51 tests, `orchestrator.py` 100% covered**, real `JobIO(base_dir=tmp_path)`, 12 side-effect points mocked `autospec=True` (7 heavy ML services + 2 audio utils + FactCheckService + byte-producing PDFService + KeywordService), 5 cheap services real. Two crown-jewel invariants pin the fault contract: `test_exactly_four_hard_fail_gates` (only `MISSING_INPUT_AUDIO` / `AUDIO_NORMALIZATION_TIMEOUT` / `AUDIO_NORMALIZATION_FAILED` / `AUDIO_SILENT_OR_NEAR_SILENT` hard-fail) and `test_late_stage_exception_never_flips_status` (every other stage is fail-soft). Stage order locked via the insertion-ordered `timings_ms` keys.
-  - *Phase 2* decomposed `run()` (~530 LOC) into a **75-line stage sequence** of `_run_<stage>` methods. Shared state is one mutable `_PipelineState` dataclass (23 fields); the four early-return gates raise a private `_HardFail` that `run()` catches once. The harness ran green 51/51 after every single extraction — refactor changed shape, not behavior. `orchestrator.py` is 100% covered; **the harness is now a regression net for future edits.**
+  - *Phase 1* built the behavioral safety net `app/insights/tests/test_orchestrator.py`: **51 tests, `orchestrator.py` 100% covered**, real `JobIO(base_dir=tmp_path)`, 12 side-effect points mocked `autospec=True` (7 heavy ML services + 2 audio utils + FactCheckService + byte-producing PDFService + KeywordService), 5 cheap services real. Two crown-jewel invariants pin the fault contract: `test_exactly_four_hard_fail_gates` (only `MISSING_INPUT_AUDIO` / `AUDIO_NORMALIZATION_TIMEOUT` / `AUDIO_NORMALIZATION_FAILED` / `AUDIO_SILENT_OR_NEAR_SILENT` hard-fail; since 2026-10-17 also `AUDIO_TOO_LONG`, and the test is `test_exactly_five_hard_fail_gates`) and `test_late_stage_exception_never_flips_status` (every other stage is fail-soft). Stage order locked via the insertion-ordered `timings_ms` keys.
+  - *Phase 2* decomposed `run()` (~530 LOC) into a **75-line stage sequence** of `_run_<stage>` methods. Shared state is one mutable `_PipelineState` dataclass (23 fields); the early-return gates (four then, five now) raise a private `_HardFail` that `run()` catches once. The harness ran green 51/51 after every single extraction — refactor changed shape, not behavior. `orchestrator.py` is 100% covered; **the harness is now a regression net for future edits.**
   - Extending this pattern to new stages: add a `_run_<stage>` method + a `_PipelineState` field, call it from `run()`, and add a stage-class in the harness. Making the top-level ML imports lazy (so the harness rejoins the light CI job) was done in N2 (`9e57cb4`, `4df98c6`).
 
 - ✅ **E3 — O(n²) hot paths in `alignment_service`. DONE**, in two passes.
