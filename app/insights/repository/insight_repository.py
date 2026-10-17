@@ -142,11 +142,20 @@ class InsightRepository:
         finally:
             session.close()
 
-    def list_session_ids(self) -> list[str]:
-        """Return every session_id, ordered by most recent update."""
+    def list_session_ids(self, limit: int | None = None, offset: int = 0) -> list[str]:
+        """Return session_ids, most recently updated first.
+
+        `limit` and `offset` page through them; ties on update time are
+        ordered by session_id, so pages do not overlap.
+        """
         session = self._open()
         try:
-            stmt = select(InsightRecordORM.session_id).order_by(InsightRecordORM.updated_at.desc())
+            stmt = (
+                select(InsightRecordORM.session_id)
+                .order_by(InsightRecordORM.updated_at.desc(), InsightRecordORM.session_id)
+                .offset(offset)
+                .limit(limit)
+            )
             return [row[0] for row in session.execute(stmt).all()]
         finally:
             session.close()

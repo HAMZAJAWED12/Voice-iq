@@ -186,6 +186,20 @@ class InsightSettings(BaseSettings):
             "(runs five agents over a transcript). slowapi format."
         ),
     )
+    rate_limit_insight_write: str = Field(
+        default="60/minute",
+        description=(
+            "Rate limit for the /v1/insights routes that store or delete a "
+            "record (generate, generate-from-raw, delete). slowapi format."
+        ),
+    )
+    rate_limit_insight_read: str = Field(
+        default="120/minute",
+        description=(
+            "Rate limit for the /v1/insights routes that read (a record, its "
+            "summary, speakers or timeline, and the list). slowapi format."
+        ),
+    )
 
     # --- Authentication -------------------------------------------------- #
     # `NoDecode` tells pydantic-settings to skip its default JSON-decode

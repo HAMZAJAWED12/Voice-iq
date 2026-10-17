@@ -9,7 +9,9 @@ never touches the handler's signature, so it is robust and unit-testable.
 
 Buckets are keyed on the presented ``X-API-Key`` (falling back to the client
 IP for dev-mode / unauthenticated probes), so one caller cannot exhaust
-another caller's budget. Limits are read from settings *per request*, so an
+another caller's budget. Each route group also has its own counter: the
+``limits`` library keys a counter on the limit and its identifiers, so two
+groups with the same limit string would otherwise share one. Limits are read from settings *per request*, so an
 env override + ``get_settings.cache_clear()`` takes effect immediately (used
 by the tests).
 
@@ -57,15 +59,15 @@ def reset() -> None:
     _storage.reset()
 
 
-def _enforce(request: Request, limit_str: str) -> None:
+def _enforce(request: Request, scope: str, limit_str: str) -> None:
     settings = get_settings()
     if not settings.rate_limit_enabled:
         return
     item: RateLimitItem = parse(limit_str)
     key = rate_limit_key(request, settings)
-    if not _strategy.hit(item, key):
+    if not _strategy.hit(item, scope, key):
         # Over the limit. Compute Retry-After from the window reset time.
-        reset_at, _remaining = _strategy.get_window_stats(item, key)
+        reset_at, _remaining = _strategy.get_window_stats(item, scope, key)
         retry_after = max(1, math.ceil(reset_at - time.time()))
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -76,14 +78,24 @@ def _enforce(request: Request, limit_str: str) -> None:
 
 def factcheck_rate_limit(request: Request) -> None:
     """Route dependency for POST /v1/fact-check."""
-    _enforce(request, get_settings().rate_limit_factcheck)
+    _enforce(request, "factcheck", get_settings().rate_limit_factcheck)
 
 
 def process_audio_rate_limit(request: Request) -> None:
     """Route dependency for POST /v1/process-audio."""
-    _enforce(request, get_settings().rate_limit_process_audio)
+    _enforce(request, "process-audio", get_settings().rate_limit_process_audio)
 
 
 def agent_brain_rate_limit(request: Request) -> None:
     """Route dependency for the internal Agent Brain generate endpoint."""
-    _enforce(request, get_settings().rate_limit_agent_brain)
+    _enforce(request, "agent-brain", get_settings().rate_limit_agent_brain)
+
+
+def insight_write_rate_limit(request: Request) -> None:
+    """Route dependency for the /v1/insights routes that store or delete."""
+    _enforce(request, "insight-write", get_settings().rate_limit_insight_write)
+
+
+def insight_read_rate_limit(request: Request) -> None:
+    """Route dependency for the /v1/insights routes that read."""
+    _enforce(request, "insight-read", get_settings().rate_limit_insight_read)
