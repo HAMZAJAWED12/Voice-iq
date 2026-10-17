@@ -1,7 +1,8 @@
 # Data Flow — what leaves the trust boundary
 
 Status: current as of wave S-D (S3); model-download, legacy fact-check and
-callback-content facts re-verified against the code 2026-10-11. Companion to
+callback-content facts re-verified against the code 2026-10-11; currency
+provider changed to open.er-api.com 2026-10-17. Companion to
 [SECURITY-HARDENING-PLAN.md](SECURITY-HARDENING-PLAN.md).
 
 This document enumerates every point where VoiceIQ transmits data to a
@@ -33,7 +34,7 @@ never the transcript, never the audio, never speaker identities.
 
 | Client | Host | Transmitted | Needs API key |
 |---|---|---|---|
-| `ForexClient` | `api.exchangerate.host` | currency codes: `base`, `symbols` (e.g. `USD`, `EUR`) | **yes, and none is configured** — see note |
+| `ForexClient` | `open.er-api.com` | the **base** currency code only, in the URL path (e.g. `USD`); the quote currency is picked out of the reply on the host | no — see note |
 | `CoinGeckoClient` | `api.coingecko.com` | a mapped coin id (e.g. `bitcoin`) from `subject.asset` | no |
 | `OpenWeatherClient` | `api.openweathermap.org` | `city` name + units + your `appid` | **yes** — `VOICEIQ_OPENWEATHER_API_KEY` |
 | `StockClient` | `www.alphavantage.co` | ticker `symbol` + your `apikey` | **yes** — `VOICEIQ_ALPHAVANTAGE_API_KEY` |
@@ -42,14 +43,16 @@ never the transcript, never the audio, never speaker identities.
 A client without its required key is skipped (verdict `SOURCE_UNAVAILABLE`) —
 it makes no request at all.
 
-**Exception — `ForexClient`.** exchangerate.host now rejects every call that
-has no access key (`success: false`, error 101 `missing_access_key`;
-verified 2026-10-11), and this service has no key setting for it. The
-client still sends the request, so the currency codes still leave the host,
-but every `CURRENCY_RATE` claim ends as `SOURCE_UNAVAILABLE` with the reason
-"provider requires an access key". Which provider to use is an open decision
-(see [`FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md)); switching
-provider or adding a key changes this table in the same change.
+**`ForexClient` (provider decided 2026-10-17).** ExchangeRate-API's open
+access endpoint needs no key and allows commercial use. One request returns
+the base currency's rate against every other currency, so the quote currency
+never leaves the host. Rates change once a day; the client asks for each base
+currency at most once an hour (an in-process cache), so many claims about one
+currency send one request per hour. The provider's terms require
+attribution: every evidence record from this client carries "Rates By
+Exchange Rate API (https://www.exchangerate-api.com)" in
+`evidence.raw.attribution`. Switching provider or adding a key changes this
+table in the same change.
 
 ### Privacy characteristics
 
@@ -60,8 +63,9 @@ provider or adding a key changes this table in the same change.
   (`VoiceIQ-FactCheck/1.0 (+<repo url>) httpx`), no auth cookies, and no
   session/speaker identifiers.
 - Hosts are fixed constants; query values go through httpx `params=`
-  (auto-encoded) and redirects are disabled, so a transcript cannot redirect
-  a request elsewhere.
+  (auto-encoded), the two path values are percent-encoded (Wikipedia) or
+  must be three capital letters (the forex base currency), and redirects are
+  disabled, so a transcript cannot redirect a request elsewhere.
 - Request URLs — which carry the claim subject and, for OpenWeather and
   Alpha Vantage, your API key — are not written to the logs:
   `app/utils/logger.py` pins the `httpx` and `httpcore` loggers to WARNING.

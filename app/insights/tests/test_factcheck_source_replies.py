@@ -72,7 +72,7 @@ _TRANSCRIPT = (
 
 _WEATHER = "api.openweathermap.org"
 _STOCK = "www.alphavantage.co"
-_FOREX = "api.exchangerate.host"
+_FOREX = "open.er-api.com"
 _CRYPTO = "api.coingecko.com"
 _WIKI = "en.wikipedia.org"
 _NUMERIC_HOSTS = [_WEATHER, _STOCK, _FOREX, _CRYPTO]
@@ -90,7 +90,7 @@ _CLAIM_TYPE_OF_HOST = {
 _GOOD: dict[str, bytes] = {
     _WEATHER: b'{"main": {"temp": 32.0}, "id": 1174872}',
     _STOCK: b'{"Global Quote": {"05. price": "175.00"}}',
-    _FOREX: b'{"success": true, "base": "USD", "rates": {"PKR": 280.0}}',
+    _FOREX: b'{"result": "success", "base_code": "USD", "rates": {"PKR": 280.0}}',
     _CRYPTO: b'{"bitcoin": {"usd": 95000.0}}',
     _WIKI: b'{"title": "France", "extract": "France is a country in Western Europe. Its capital is Paris."}',
 }
@@ -511,79 +511,47 @@ def test_odd_metadata_field_does_not_break_either_endpoint(host, factcheck_app, 
 
 
 # --------------------------------------------------------------------------- #
-# Provider error bodies (exchangerate.host)                                   #
+# Provider error bodies (open.er-api.com)                                     #
 # --------------------------------------------------------------------------- #
 
-# What exchangerate.host returns for a keyless call (owner-verified
-# 2026-10-11): HTTP 200, success false, error code 101 / missing_access_key.
-_INFO_TEXT = "You have not supplied an API Access Key. [Required format: access_key=YOUR_ACCESS_KEY]"
-
-# (id, reply body, reason the result must carry, logged code, logged type)
+# (id, reply body, reason the result must carry, logged type)
 _PROVIDER_ERRORS = [
     (
-        "missing-key",
-        {"success": False, "error": {"code": 101, "type": "missing_access_key", "info": _INFO_TEXT}},
-        "provider requires an access key (missing_access_key)",
-        "101",
-        "missing_access_key",
+        "unsupported-code",
+        {"result": "error", "error-type": "unsupported-code"},
+        "provider does not support this currency (unsupported-code)",
+        "unsupported-code",
     ),
     (
-        "invalid-key",
-        {"success": False, "error": {"code": 101, "type": "invalid_access_key", "info": _INFO_TEXT}},
-        "provider rejected the access key (invalid_access_key)",
-        "101",
-        "invalid_access_key",
+        "malformed-request",
+        {"result": "error", "error-type": "malformed-request"},
+        "provider rejected the request (malformed-request)",
+        "malformed-request",
     ),
     (
-        "usage-limit",
-        {"success": False, "error": {"code": 104, "type": "usage_limit_reached"}},
-        "provider usage limit reached (usage_limit_reached)",
-        "104",
-        "usage_limit_reached",
-    ),
-    (
-        "plan-restricted",
-        {"success": False, "error": {"code": 105, "type": "base_currency_access_restricted"}},
-        "provider plan does not allow this request (base_currency_access_restricted)",
-        "105",
-        "base_currency_access_restricted",
+        "quota-reached",
+        {"result": "error", "error-type": "quota-reached"},
+        "provider usage limit reached (quota-reached)",
+        "quota-reached",
     ),
     (
         "unknown-type",
-        {"success": False, "error": {"code": 999, "type": "something_new"}},
-        "provider returned an error (something_new)",
-        "999",
-        "something_new",
+        {"result": "error", "error-type": "something-new"},
+        "provider returned an error (something-new)",
+        "something-new",
     ),
-    ("success-false-only", {"success": False}, "provider returned an error (unknown)", "None", "unknown"),
-    (
-        "huge-code",
-        {"success": False, "error": {"code": int("9" * 4000), "type": "missing_access_key"}},
-        "provider requires an access key (missing_access_key)",
-        "None",
-        "missing_access_key",
-    ),
-    (
-        "error-object-only",
-        {"error": {"code": 101, "type": "missing_access_key"}},
-        "provider requires an access key (missing_access_key)",
-        "101",
-        "missing_access_key",
-    ),
+    ("result-error-only", {"result": "error"}, "provider returned an error (unknown)", "unknown"),
+    ("non-string-type", {"result": "error", "error-type": ["x"]}, "provider returned an error (unknown)", "unknown"),
     (
         "hostile-type",
-        {
-            "success": False,
-            "error": {"code": "x", "type": "https://evil.example/?access_key=SECRET", "info": _INFO_TEXT},
-        },
+        {"result": "error", "error-type": "https://evil.example/?access_key=SECRET"},
         "provider returned an error (unknown)",
-        "None",
         "unknown",
     ),
 ]
 
 # Nothing from the reply body, the request URL or the claim may reach a log.
-_MUST_NOT_LOG = ("access_key=", "evil.example", "SECRET", _INFO_TEXT, "api.exchangerate.host", "PKR")
+_MUST_NOT_LOG = ("access_key=", "evil.example", "SECRET", "/v6/latest", "PKR")
 
 
 def _assert_logged_safely(records: list[logging.LogRecord]) -> None:
@@ -594,11 +562,11 @@ def _assert_logged_safely(records: list[logging.LogRecord]) -> None:
 
 
 @pytest.mark.parametrize(
-    ("body", "reason", "code", "error_type"),
+    ("body", "reason", "error_type"),
     [case[1:] for case in _PROVIDER_ERRORS],
     ids=[case[0] for case in _PROVIDER_ERRORS],
 )
-def test_forex_provider_error_is_named_and_logged_safely(body, reason, code, error_type, caplog):
+def test_forex_provider_error_is_named_and_logged_safely(body, reason, error_type, caplog):
     caplog.set_level(logging.DEBUG)
 
     response = _engine(_FOREX, _Reply(json.dumps(body).encode())).run(
@@ -608,15 +576,15 @@ def test_forex_provider_error_is_named_and_logged_safely(body, reason, code, err
     (result,) = response.fact_check_results
     assert result.verdict == "SOURCE_UNAVAILABLE"
     assert result.evidence is None
-    assert result.reason == f"exchangerate.host: {reason}."
+    assert result.reason == f"open.er-api.com: {reason}."
     warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
-    assert any(f"code={code}" in m and f"type={error_type}" in m for m in warnings), warnings
+    assert any(f"type={error_type}" in m for m in warnings), warnings
     _assert_logged_safely(caplog.records)
 
 
 def test_forex_reply_without_rates_is_named_and_logged_safely(caplog):
-    # The keyed /live shape (quotes.USDxxx) is not what the client reads.
-    body = {"success": True, "source": "USD", "quotes": {"USDPKR": 280.0}}
+    # The keyed /v6/<key>/latest shape (conversion_rates) is not what the client reads.
+    body = {"result": "success", "base_code": "USD", "conversion_rates": {"PKR": 280.0}}
     caplog.set_level(logging.DEBUG)
 
     response = _engine(_FOREX, _Reply(json.dumps(body).encode())).run(
@@ -625,7 +593,7 @@ def test_forex_reply_without_rates_is_named_and_logged_safely(caplog):
 
     (result,) = response.fact_check_results
     assert result.verdict == "SOURCE_UNAVAILABLE"
-    assert result.reason == "exchangerate.host: provider reply had no rates."
+    assert result.reason == "open.er-api.com: provider reply had no rates."
     assert any("no rates" in r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING)
     _assert_logged_safely(caplog.records)
 
@@ -633,10 +601,10 @@ def test_forex_reply_without_rates_is_named_and_logged_safely(caplog):
 def test_forex_provider_error_reaches_both_endpoints_and_spares_other_claims(
     factcheck_app, process_audio_client, monkeypatch
 ):
-    missing_key = _Reply(json.dumps(_PROVIDER_ERRORS[0][1]).encode())
+    unsupported = _Reply(json.dumps(_PROVIDER_ERRORS[0][1]).encode())
     app, client = factcheck_app
-    app.dependency_overrides[get_factcheck_engine] = lambda: _engine(_FOREX, missing_key)
-    monkeypatch.setattr(process_audio, "get_factcheck_engine", lambda: _engine(_FOREX, missing_key))
+    app.dependency_overrides[get_factcheck_engine] = lambda: _engine(_FOREX, unsupported)
+    monkeypatch.setattr(process_audio, "get_factcheck_engine", lambda: _engine(_FOREX, unsupported))
 
     api = client.post(
         "/v1/fact-check",
@@ -653,7 +621,7 @@ def test_forex_provider_error_reaches_both_endpoints_and_spares_other_claims(
     for body in (_strict_json(api.text), _strict_json(audio.text)["fact_checks_v2"]):
         _assert_isolated(body, _FOREX)
         forex = next(r for r in body["fact_check_results"] if r["claim"]["claim_type"] == "CURRENCY_RATE")
-        assert forex["reason"] == "exchangerate.host: provider requires an access key (missing_access_key)."
+        assert forex["reason"] == "open.er-api.com: provider does not support this currency (unsupported-code)."
 
 
 # --------------------------------------------------------------------------- #

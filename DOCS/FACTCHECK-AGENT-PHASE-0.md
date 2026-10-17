@@ -501,6 +501,20 @@ require evidence newer than their cache TTL (plan §6, Phase 5). Stale
 evidence degrades the verdict to `INSUFFICIENT_EVIDENCE`; it is never used to
 contradict.
 
+### 6.4 Structured-data providers in use
+
+The v1 source clients that Phase 4 routes structured claims through. Each
+row matches [`DATA-FLOW.md`](DATA-FLOW.md) §1; a change to one changes both.
+
+| Claim type | Provider | Sent | Terms that bind us |
+|---|---|---|---|
+| `CURRENCY_RATE` | ExchangeRate-API open access (`open.er-api.com`), decided 2026-10-17 | base currency code only | attribution required ("Rates By Exchange Rate API", linked); fetch each base at most hourly; rates update daily |
+
+Under §6.3 a rate aggregator is not a Tier 1 source; its tier for the agent
+is set with the other sources in Phase 4. Because its rates update once a
+day, the recency rule above must use the provider's update time, not the
+fetch time, once the agent reads it.
+
 ---
 
 ## 7. Configuration policy
