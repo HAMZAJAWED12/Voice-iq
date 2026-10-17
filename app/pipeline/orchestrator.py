@@ -70,8 +70,8 @@ def _safe_ctor_kwargs(cls, kwargs: dict[str, Any]) -> dict[str, Any]:
 class _HardFail(Exception):
     """Raised by a gate stage to abort the pipeline early.
 
-    Only the four hard-fail gates raise it: missing input audio, the two
-    audio-normalization failures, and silent/near-silent audio. The gate
+    Only the five hard-fail gates raise it: missing input audio, the three
+    normalization failures (timeout, too long, other), silent audio. The gate
     is responsible for setting ``status="failed"``, recording its warning,
     and persisting meta.json before raising; ``run`` catches it once and
     returns the (failed) final response. Every later stage is fail-soft
@@ -236,7 +236,7 @@ class VoiceIQOrchestrator:
     # One method per pipeline step, in production order. Each stage reads
     # what it needs from _PipelineState, writes its artifacts to disk, and
     # records its own timing. All are fail-soft (warn + continue) except
-    # the four hard-fail gates, which raise _HardFail.
+    # the five hard-fail gates, which raise _HardFail.
     # ------------------------------------------------------------------
 
     def _run_input_gate(self, st: _PipelineState) -> None:

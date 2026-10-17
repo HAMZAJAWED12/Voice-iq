@@ -14,7 +14,7 @@ Behaviour matrix:
 | empty           | staging,       | fail closed with 503 (loud misconfig)   |
 |                 | production     |                                         |
 
-Health probes (`/healthz`, `/version`) live on the FastAPI app itself
+Health probes (`/healthz`, `/readyz`, `/version`) live on the FastAPI app itself
 and not on the routers protected by this dependency, so they remain
 public and uvicorn / docker healthchecks keep working.
 
