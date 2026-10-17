@@ -1,4 +1,4 @@
-Last verified: 2026-10-17, dbae452
+Last verified: 2026-10-17, 2966527
 # Workflow
 
 How work gets done in this repository: branches, the local Python environment, the checks, the commit rules and the milestone loop. AI assistants read [CLAUDE.md](../CLAUDE.md) first. For where Sprint 7 stands, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For what the project is, see [CONTEXT.md](CONTEXT.md).
@@ -11,7 +11,7 @@ Run these from the repository root. All of them passed at `dbae452` on 2026-10-1
 .venv\Scripts\python.exe -m pytest -v app/insights/tests/ app/agent_brain/tests/
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
-.venv\Scripts\python.exe -m mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/
+.venv\Scripts\python.exe -m mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/ app/utils/ app/security/
 git status --short
 ```
 
@@ -98,7 +98,7 @@ CI job logs cannot be read without repository admin rights. The workflow surface
 |---|---|---|
 | Ruff lint | `.venv\Scripts\python.exe -m ruff check .` | Yes (test.yml, line 32) |
 | Ruff format | `.venv\Scripts\python.exe -m ruff format --check .` | No. The `ruff-format` pre-commit hook enforces it. |
-| Mypy | `.venv\Scripts\python.exe -m mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/` | Yes, as a hard gate (test.yml, line 35; made required in `a094120`) |
+| Mypy | `.venv\Scripts\python.exe -m mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/ app/utils/ app/security/` | Yes, as a hard gate (test.yml, line 35; made required in `a094120`; `app/utils/` and `app/security/` added after `2966527`) |
 | Gitleaks | Runs through the pre-commit hook (see below) | Yes, as `gitleaks dir . --no-banner --redact`, a scan of the working tree (test.yml, line 54). CI installs gitleaks only after checking the archive against the release checksums (lines 37-48; `c661bad`). |
 
 Tool versions are pinned: ruff 0.7.4 and mypy 1.13.0 in CI (test.yml, line 29), and ruff v0.7.4 in the hook config.
@@ -108,7 +108,7 @@ Configuration lives in [pyproject.toml](../pyproject.toml):
 - **Ruff:** line length 120, target `py310`, rule sets E, F, I, B and UP, with `B008` ignored for the FastAPI `Depends` idiom. It excludes `.venv`, `samples`, `DOCS`, `data`, `tmp`, `uploads` and `outputs` (lines 1-9).
 - **Mypy:** pydantic plugin, `ignore_missing_imports`, `check_untyped_defs`. Test directories are excluded (lines 11-18).
 
-At `dbae452`, ruff reported "All checks passed!" with 207 files already formatted, and mypy found no issues in 84 source files.
+At `dbae452`, ruff reported "All checks passed!" with 207 files already formatted, and mypy found no issues in 84 source files; with `app/utils/` and `app/security/` added to the gate, 99 source files.
 
 ## Pre-commit hooks
 

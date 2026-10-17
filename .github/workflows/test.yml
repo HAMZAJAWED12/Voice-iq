@@ -32,7 +32,7 @@ jobs:
         run: ruff check .
 
       - name: Mypy
-        run: mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/
+        run: mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/ app/utils/ app/security/
 
       - name: Install gitleaks
         run: |

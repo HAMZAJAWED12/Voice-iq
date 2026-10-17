@@ -1,4 +1,4 @@
-Last verified: 2026-10-17, dbae452
+Last verified: 2026-10-17, 2966527
 # System: Runtime View
 
 This page covers how VoiceIQ runs: the two entrypoints, the Docker image, configuration, where data is stored, which outside services it calls, logging and CI. It does not cover:
@@ -217,7 +217,7 @@ CI is defined in `.github/workflows/test.yml` and runs on pushes to `main` and o
 
 | Job | Python | What it runs |
 |---|---|---|
-| `lint` ("Lint, types, secrets") | 3.11 | Installs `requirements-insight.txt`, ruff 0.7.4 and mypy 1.13.0. Then runs `ruff check .` and `mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/`. It downloads the gitleaks 8.21.2 archive and the release's checksums file, checks the archive with `sha256sum --check` and installs it only on a match, in a step that runs with `set -euo pipefail` (`:37-48`, `c661bad`). It then runs `gitleaks dir . --no-banner --redact` (`:53-54`). Job: `:10-54` |
+| `lint` ("Lint, types, secrets") | 3.11 | Installs `requirements-insight.txt`, ruff 0.7.4 and mypy 1.13.0. Then runs `ruff check .` and `mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/ app/utils/ app/security/` (`app/utils/` and `app/security/` joined the gate after `2966527`). It downloads the gitleaks 8.21.2 archive and the release's checksums file, checks the archive with `sha256sum --check` and installs it only on a match, in a step that runs with `set -euo pipefail` (`:37-48`, `c661bad`). It then runs `gitleaks dir . --no-banner --redact` (`:53-54`). Job: `:10-54` |
 | `test` ("Run Insight Service unit tests") | 3.10 and 3.11 (matrix) | Installs `requirements-insight.txt` only, then runs `pytest -v app/insights/tests/ app/agent_brain/tests/` with `PYTHONPATH=.`. On failure, the end of the output is posted as an `::error::` annotation (`:56-100`) |
 
 - **Expected test result:** 1730 passed and 1 skipped on the light stack, measured 2026-10-17 at `dbae452`. The skipped item is `app/insights/tests/test_model_load_concurrency.py`, a 3-test module that needs the ML libraries ([CLAUDE.md](../CLAUDE.md), "One test lane").
