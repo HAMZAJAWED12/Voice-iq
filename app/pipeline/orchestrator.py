@@ -670,21 +670,34 @@ class VoiceIQOrchestrator:
 
                 insight_response = InsightService.generate(session_input)
                 st.insight_payload = insight_response.model_dump()
-                # Carried for _run_agent_brain — these objects exist nowhere
-                # else in the pipeline.
-                st.session_input = session_input
-                st.insight_bundle = insight_response.insights
-                st.agent_summary = insight_response.summaries.overall_summary
-
                 self.io.save_json(st.job, "artifacts/insights/insight_result.json", st.insight_payload)
-                self.io.save_json(
-                    st.job,
-                    "artifacts/insights/insight.status.json",
-                    {
-                        "service": "insights",
-                        "status": "ok",
-                    },
-                )
+                if insight_response.status == "error":
+                    # InsightService contained the fault and returned an empty
+                    # bundle; the stage failed, and the Agent Brain is skipped.
+                    st.warn("INSIGHTS_FAILED")
+                    self.io.save_json(
+                        st.job,
+                        "artifacts/insights/insight.status.json",
+                        {
+                            "service": "insights",
+                            "status": "failed",
+                            "error": "insight service returned status=error",
+                        },
+                    )
+                else:
+                    # Carried for _run_agent_brain — these objects exist
+                    # nowhere else in the pipeline.
+                    st.session_input = session_input
+                    st.insight_bundle = insight_response.insights
+                    st.agent_summary = insight_response.summaries.overall_summary
+                    self.io.save_json(
+                        st.job,
+                        "artifacts/insights/insight.status.json",
+                        {
+                            "service": "insights",
+                            "status": "ok",
+                        },
+                    )
             else:
                 st.skip("insights")
                 st.warn("INSIGHTS_SKIPPED_NO_SPEAKER_SEGMENTS")

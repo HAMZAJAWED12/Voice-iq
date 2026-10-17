@@ -726,6 +726,36 @@ class TestInsightsStage:
         assert res["pipeline_meta"]["status"] == "ok"
         assert "INSIGHTS_FAILED" in res["warnings"]
 
+    def test_an_insight_error_result_fails_the_stage_and_skips_the_agent_brain(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """InsightService contains an engine fault as status="error"; the stage must say so."""
+        _seed_input(io)
+        monkeypatch.setenv("VOICEIQ_AGENT_BRAIN_AUTO_RUN", "true")
+        get_settings.cache_clear()
+        try:
+            with patch("app.insights.service.InsightRuleEngine.run", side_effect=RuntimeError("engine died")):
+                res = orch.run(JOB_ID)
+        finally:
+            get_settings.cache_clear()
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert res["insights"]["status"] == "error"
+        assert "INSIGHTS_FAILED" in res["warnings"]
+        status = io.load_json(io.init_job(JOB_ID), "artifacts/insights/insight.status.json")
+        assert status["status"] == "failed"
+        assert "AGENT_BRAIN_SKIPPED_NO_INSIGHTS" in res["warnings"]
+        assert "recommendations" not in res
+
+    def test_an_ok_insight_result_marks_the_stage_ok(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
+    ) -> None:
+        _seed_input(io)
+        res = orch.run(JOB_ID)
+
+        assert "INSIGHTS_FAILED" not in res["warnings"]
+        assert io.load_json(io.init_job(JOB_ID), "artifacts/insights/insight.status.json")["status"] == "ok"
+
 
 # --------------------------------------------------------------------------- #
 # Stage I — agent brain (opt-in, off by default)                               #
