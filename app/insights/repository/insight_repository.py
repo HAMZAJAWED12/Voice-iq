@@ -30,6 +30,7 @@ from app.insights.models.api_models import (
 )
 from app.insights.repository.db import get_session_factory
 from app.insights.repository.orm_models import InsightRecordORM
+from app.utils.logger import logger
 
 SessionFactory = Callable[[], Session]
 
@@ -78,7 +79,11 @@ class InsightRepository:
     # ------------------------------------------------------------------ #
 
     def save(self, record: InsightStoredRecord) -> InsightStoredRecord:
-        """Insert or update a record keyed by session_id."""
+        """Insert or update a record keyed by session_id.
+
+        An error record never replaces a stored record that is not an error;
+        the stored one is kept.
+        """
         payload_json = record.payload.model_dump_json()
         session = self._open()
         try:
@@ -90,6 +95,9 @@ class InsightRepository:
                     payload_json=payload_json,
                 )
                 session.add(row)
+            elif record.status == "error" and existing.status != "error":
+                logger.warning("insight record kept: an error result does not replace a %s record", existing.status)
+                return record
             else:
                 existing.status = record.status
                 existing.payload_json = payload_json
