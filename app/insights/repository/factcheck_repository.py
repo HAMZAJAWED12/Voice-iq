@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import math
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import delete as sa_delete
@@ -187,6 +188,19 @@ class FactCheckRepository:
         try:
             stmt = select(FactCheckResultORM.id)
             return len(session.execute(stmt).all())
+        finally:
+            session.close()
+
+    def purge_older_than(self, cutoff: datetime) -> int:
+        """Delete results created before `cutoff`; returns how many."""
+        session = self._open()
+        try:
+            result = session.execute(sa_delete(FactCheckResultORM).where(FactCheckResultORM.created_at < cutoff))
+            session.commit()
+            return result.rowcount or 0  # type: ignore[attr-defined]
+        except SQLAlchemyError as exc:
+            session.rollback()
+            raise FactCheckRepositoryError("failed to purge expired fact-check results") from exc
         finally:
             session.close()
 

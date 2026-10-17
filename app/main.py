@@ -18,8 +18,8 @@ from app.insights.repository.db import init_db
 from app.routes.process_audio import MAX_UPLOAD_BYTES
 from app.routes.process_audio import router as process_router
 from app.security.request_guard import RequestGuardMiddleware, guarded_limits
-from app.utils.job_io import JobIO
 from app.utils.logger import setup_logging
+from app.utils.retention import run_retention
 
 load_dotenv()
 setup_logging()
@@ -33,9 +33,10 @@ async def lifespan(app: FastAPI):
     # init_db() respects VOICEIQ_DATABASE_AUTO_CREATE=false for environments
     # where migrations are managed externally.
     init_db(settings)
-    # Sweep stale job artifacts left by prior runs (bounds disk + PII TTL).
-    JobIO().purge_expired(settings.job_retention_hours)
-    yield
+    # Sweep expired job artifacts and stored records now and then hourly
+    # (bounds disk + PII TTL).
+    async with run_retention():
+        yield
 
 
 # Interactive docs expose the full request/response schema of every route.

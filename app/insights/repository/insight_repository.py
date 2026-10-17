@@ -17,6 +17,7 @@ Two construction modes are supported:
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
@@ -139,6 +140,19 @@ class InsightRepository:
         except SQLAlchemyError as exc:
             session.rollback()
             raise InsightRepositoryError(f"failed to delete insight record for session_id={session_id!r}") from exc
+        finally:
+            session.close()
+
+    def purge_older_than(self, cutoff: datetime) -> int:
+        """Delete records last updated before `cutoff`; returns how many."""
+        session = self._open()
+        try:
+            result = session.execute(sa_delete(InsightRecordORM).where(InsightRecordORM.updated_at < cutoff))
+            session.commit()
+            return result.rowcount or 0  # type: ignore[attr-defined]
+        except SQLAlchemyError as exc:
+            session.rollback()
+            raise InsightRepositoryError("failed to purge expired insight records") from exc
         finally:
             session.close()
 

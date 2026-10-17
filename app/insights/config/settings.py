@@ -153,8 +153,18 @@ class InsightSettings(BaseSettings):
             "Age (hours) after which per-request job artifact directories "
             "under data/jobs/ (raw audio, transcript, PDF, insights) are "
             "purged. Bounds disk growth and caps how long call PII persists "
-            "on disk. Swept on startup and opportunistically at request time. "
+            "on disk. Swept on startup and then hourly. "
             "Set to 0 to disable purging (retain everything)."
+        ),
+    )
+    db_retention_days: int = Field(
+        default=30,
+        ge=0,
+        description=(
+            "Age (days) after which stored insight records (by last update) "
+            "and fact-check results (by creation) are deleted from the "
+            "database. Swept on startup and then hourly, with the job "
+            "directories. Set to 0 to keep every record."
         ),
     )
 
