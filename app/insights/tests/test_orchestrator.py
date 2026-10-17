@@ -1078,6 +1078,37 @@ class TestOrchestrationE2E:
         # Early return short-circuits the immediately-downstream stage.
         uncalled(mx).assert_not_called()
 
+    @pytest.mark.parametrize(
+        ("module", "code"),
+        [
+            ("app.utils.audio_quality", "AUDIO_QUALITY_FAILED"),
+            ("app.services.asr_service", "ASR_FAILED"),
+            ("app.services.diarization_service", "DIARIZATION_FAILED_FALLBACK"),
+            ("app.services.sentiment_service", "SENTIMENT_FAILED"),
+            ("app.services.keyword_service", "KEYWORDS_FAILED"),
+            ("app.services.gender_service", "GENDER_FAILED"),
+            ("app.services.topic_service", "TOPIC_FAILED"),
+            ("app.services.summary_service", "SUMMARY_FAILED"),
+        ],
+    )
+    def test_a_missing_stage_package_fails_only_that_stage(
+        self,
+        orch: VoiceIQOrchestrator,
+        io: JobIO,
+        mx: SimpleNamespace,
+        monkeypatch: pytest.MonkeyPatch,
+        module: str,
+        code: str,
+    ) -> None:
+        """A stage whose package cannot be imported warns; the request still succeeds."""
+        _seed_input(io)
+        monkeypatch.setitem(sys.modules, module, None)  # the import now raises ImportError
+
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert code in res["warnings"]
+
     def test_graceful_degradation_preserves_upstream(
         self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
     ) -> None:

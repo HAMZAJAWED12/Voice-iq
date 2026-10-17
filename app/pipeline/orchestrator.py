@@ -14,10 +14,12 @@ from uuid import uuid4
 #
 # The eight ML-backed services (ASR, diarization, sentiment, keywords,
 # gender, topic, summary + analyze_audio_quality) are imported INSIDE the
-# `_run_<stage>` method that uses them. Importing them here would pull
-# whisper / torch / transformers / spacy / librosa at module import time,
-# which made `test_orchestrator.py` unrunnable on the lightweight
-# `requirements-insight.txt` stack and forced a separate 8-12 minute CI job.
+# `try` of the `_run_<stage>` method that uses them. Importing them here
+# would pull whisper / torch / transformers / spacy / librosa at module
+# import time, which made `test_orchestrator.py` unrunnable on the
+# lightweight `requirements-insight.txt` stack and forced a separate 8-12
+# minute CI job. Inside the `try`, a missing package fails only that stage,
+# with its *_FAILED warning, instead of the whole request.
 #
 # The services below are safe at module scope: they are pure-python, or
 # (EmotionService) guard their heavy import in a try/except of their own.
@@ -291,10 +293,10 @@ class VoiceIQOrchestrator:
         raise _HardFail from error
 
     def _run_audio_quality(self, st: _PipelineState) -> None:
-        from app.utils.audio_quality import analyze_audio_quality
-
         t0 = _now_ms()
         try:
+            from app.utils.audio_quality import analyze_audio_quality
+
             st.aq = analyze_audio_quality(st.normalized_wav)
             st.audio_quality_payload = st.aq.to_dict()
             self.io.save_json(st.job, "artifacts/audio/audio_quality.json", st.audio_quality_payload)
@@ -338,10 +340,10 @@ class VoiceIQOrchestrator:
         st.low_snr_flag = bool(st.aq and (st.aq.low_snr or st.aq.very_low_snr))
 
     def _run_asr(self, st: _PipelineState) -> None:
-        from app.services.asr_service import ASRService
-
         t0 = _now_ms()
         try:
+            from app.services.asr_service import ASRService
+
             asr = ASRService(model_name=st.whisper_model, language=st.language)
             st.asr_out = asr.transcribe(st.normalized_wav)
 
@@ -382,11 +384,11 @@ class VoiceIQOrchestrator:
         st.transcript_text = self.io.load_text(st.job, "artifacts/asr/transcript.txt", default="") or ""
 
     def _run_diarization(self, st: _PipelineState) -> None:
-        from app.services.diarization_service import DiarizationService
-
         t0 = _now_ms()
         diar_warns: list[str] = []
         try:
+            from app.services.diarization_service import DiarizationService
+
             diar = DiarizationService()
 
             if hasattr(diar, "diarize_with_warnings"):
@@ -506,10 +508,10 @@ class VoiceIQOrchestrator:
         st.timing("stats", t0)
 
     def _run_sentiment(self, st: _PipelineState) -> None:
-        from app.services.sentiment_service import SentimentService
-
         t0 = _now_ms()
         try:
+            from app.services.sentiment_service import SentimentService
+
             if st.speaker_segments:
                 out = SentimentService.analyze_speaker_segments(st.speaker_segments)
                 st.speaker_segments = out
@@ -523,10 +525,10 @@ class VoiceIQOrchestrator:
         st.timing("sentiment", t0)
 
     def _run_keywords(self, st: _PipelineState) -> None:
-        from app.services.keyword_service import KeywordService
-
         t0 = _now_ms()
         try:
+            from app.services.keyword_service import KeywordService
+
             if st.speaker_segments:
                 out = KeywordService.extract_keywords_per_segment(st.speaker_segments)
                 st.speaker_segments = out
@@ -540,10 +542,10 @@ class VoiceIQOrchestrator:
         st.timing("keywords", t0)
 
     def _run_gender(self, st: _PipelineState) -> None:
-        from app.services.gender_service import GenderService
-
         t0 = _now_ms()
         try:
+            from app.services.gender_service import GenderService
+
             if st.low_snr_flag:
                 st.skip("gender")
                 st.warn("GENDER_SKIPPED_LOW_SNR")
@@ -582,10 +584,10 @@ class VoiceIQOrchestrator:
         st.timing("emotion", t0)
 
     def _run_topic(self, st: _PipelineState) -> None:
-        from app.services.topic_service import TopicService
-
         t0 = _now_ms()
         try:
+            from app.services.topic_service import TopicService
+
             st.topic = TopicService.classify(st.transcript_text or "")
             self.io.save_json(st.job, "artifacts/nlp/topic.json", st.topic)
         except Exception as e:
@@ -601,10 +603,10 @@ class VoiceIQOrchestrator:
         st.timing("topic", t0)
 
     def _run_summary(self, st: _PipelineState) -> None:
-        from app.services.summary_service import SummaryService
-
         t0 = _now_ms()
         try:
+            from app.services.summary_service import SummaryService
+
             st.summary_text = SummaryService.generate_summary(st.transcript_text or "")
             self.io.save_text(st.job, "artifacts/nlp/summary.txt", st.summary_text or "")
         except Exception as e:
