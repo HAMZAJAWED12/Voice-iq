@@ -26,12 +26,14 @@ except ImportError:  # pragma: no cover - optional dep
 
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from app.agent_brain.api.agent_routes import router as agent_brain_router
 from app.insights.api import router as insight_router
 from app.insights.config.settings import get_settings
 from app.insights.repository.db import init_db
 from app.security.request_guard import RequestGuardMiddleware, guarded_limits
+from app.utils.readiness import database_ready, readiness
 from app.utils.retention import run_retention
 
 load_dotenv()
@@ -82,6 +84,11 @@ app.add_middleware(RequestGuardMiddleware, limits=guarded_limits(settings))
 @app.get("/healthz", tags=["Ops"], summary="Liveness probe")
 def healthz() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/readyz", tags=["Ops"], summary="Readiness probe: database reachable")
+def readyz() -> JSONResponse:
+    return readiness({"database": database_ready})
 
 
 @app.get("/version", tags=["Ops"], summary="Service version + environment")

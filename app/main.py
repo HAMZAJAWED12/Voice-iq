@@ -1,7 +1,7 @@
 """FastAPI entrypoint for the VoiceIQ service.
 
 Wires the audio-processing routes and the Insight Service routes, plus
-two ops endpoints (`/healthz`, `/version`). Database schema for the
+three ops endpoints (`/healthz`, `/readyz`, `/version`). Database schema for the
 Insight Service is ensured on startup so the first request never has to
 race a `CREATE TABLE`.
 """
@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from app.agent_brain.api.agent_routes import router as agent_brain_router
 from app.insights.api import router as insight_router
@@ -19,6 +20,7 @@ from app.routes.process_audio import MAX_UPLOAD_BYTES
 from app.routes.process_audio import router as process_router
 from app.security.request_guard import RequestGuardMiddleware, guarded_limits
 from app.utils.logger import setup_logging
+from app.utils.readiness import database_ready, ffmpeg_ready, readiness
 from app.utils.retention import run_retention
 
 load_dotenv()
@@ -72,6 +74,11 @@ app.add_middleware(RequestGuardMiddleware, limits=guarded_limits(settings, uploa
 @app.get("/healthz", tags=["Ops"], summary="Liveness probe")
 def healthz():
     return {"status": "ok"}
+
+
+@app.get("/readyz", tags=["Ops"], summary="Readiness probe: database reachable, ffmpeg present")
+def readyz() -> JSONResponse:
+    return readiness({"database": database_ready, "ffmpeg": ffmpeg_ready})
 
 
 @app.get("/version", tags=["Ops"], summary="Service version + environment")
