@@ -14,10 +14,20 @@ import pytest
 from app.utils.audio_utils import AudioNormalizationError, AudioNormalizationTimeout, normalize_to_wav
 
 
+@pytest.fixture(autouse=True)
+def _decoded_length_is_short(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ffmpeg is mocked and writes no real WAV; the decoded-length check is
+    covered by test_audio_duration.py."""
+    monkeypatch.setattr("app.utils.audio_utils._wav_seconds", lambda _path: 1.0)
+
+
 def _partial_output_then(error: Exception):
-    """A subprocess.run stand-in that writes part of the output, then fails."""
+    """A subprocess.run stand-in: ffprobe finds no duration; ffmpeg writes
+    part of the output, then fails."""
 
     def run(cmd, **_kwargs):
+        if cmd[0] == "ffprobe":
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=b"", stderr=b"")
         Path(cmd[-1]).write_bytes(b"RIFF partial")
         raise error
 
@@ -46,7 +56,8 @@ def test_a_successful_run_keeps_its_output(tmp_path):
     out = tmp_path / "normalized.wav"
 
     def run(cmd, **_kwargs):
-        Path(cmd[-1]).write_bytes(b"RIFF whole")
+        if cmd[0] == "ffmpeg":
+            Path(cmd[-1]).write_bytes(b"RIFF whole")
         return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=b"", stderr=b"")
 
     with patch("app.utils.audio_utils.subprocess.run", side_effect=run):

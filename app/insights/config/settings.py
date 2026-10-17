@@ -124,6 +124,14 @@ class InsightSettings(BaseSettings):
         ge=1,
         description="Retry-After (seconds) sent with that 503.",
     )
+    max_audio_seconds: float = Field(
+        default=7200.0,
+        ge=1.0,
+        description=(
+            "Longest audio /v1/process-audio accepts, in seconds (default 2 hours). "
+            "Longer audio is rejected with 413 and AUDIO_TOO_LONG, never truncated."
+        ),
+    )
     ffmpeg_timeout_sec: float = Field(
         default=120.0,
         ge=1.0,

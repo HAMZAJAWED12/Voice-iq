@@ -261,7 +261,7 @@ async def _admitted_request(
 def _run_pipeline(request_id: str, io: JobIO, expected_speakers: int | None, fact_check: bool | None) -> dict:
     """The blocking part of a request: the pipeline, then fact-check enrichment.
 
-    Runs in a worker thread, one at a time per worker (`_pipeline_slot`).
+    Runs in a worker thread, under the worker's admission limiter.
     """
     orch = VoiceIQOrchestrator(job_io=io)
     result = orch.run(
@@ -274,10 +274,16 @@ def _run_pipeline(request_id: str, io: JobIO, expected_speakers: int | None, fac
 
     if result.get("pipeline_meta", {}).get("status") == "failed":
         # ffmpeg timeout is the caller's fault (corrupt / pathological input,
-        # not server malfunction), so surface it as 422. Other failures stay
-        # at 400 — malformed file the user can fix by re-encoding.
+        # not server malfunction), so surface it as 422; audio over the length
+        # limit is 413. Other failures stay at 400 — malformed file the user
+        # can fix by re-encoding.
         warnings = result.get("warnings", [])
-        status_code = 422 if "AUDIO_NORMALIZATION_TIMEOUT" in warnings else 400
+        if "AUDIO_NORMALIZATION_TIMEOUT" in warnings:
+            status_code = 422
+        elif "AUDIO_TOO_LONG" in warnings:
+            status_code = 413
+        else:
+            status_code = 400
         raise HTTPException(
             status_code=status_code,
             detail={

@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 from uuid import uuid4
 
 # Light imports only at module scope.
@@ -32,6 +32,7 @@ from app.services.metadata_service import MetadataExtractor
 from app.services.pdf_service import PDFService
 from app.utils.audio_utils import (
     AudioNormalizationTimeout,
+    AudioTooLong,
     normalize_to_wav,
 )
 from app.utils.job_io import JobIO, JobPaths
@@ -263,39 +264,31 @@ class VoiceIQOrchestrator:
                 },
             )
         except AudioNormalizationTimeout as e:
-            # Distinct warning code so the HTTP layer can map this to 422
-            # (caller's fault, retry not useful) vs. AUDIO_NORMALIZATION_FAILED
-            # which maps to 400 (malformed file).
-            st.meta["status"] = "failed"
-            st.warn("AUDIO_NORMALIZATION_TIMEOUT")
-            self.io.save_json(
-                st.job,
-                "artifacts/audio/normalize.status.json",
-                {
-                    "service": "audio_normalize",
-                    "status": "timeout",
-                    "error": str(e),
-                },
-            )
-            st.timing("audio_normalize", t0)
-            self.io.save_json(st.job, "meta.json", st.meta)
-            raise _HardFail from e
+            # Distinct warning codes so the HTTP layer can map a timeout to 422
+            # (caller's fault, retry not useful), audio over the length limit
+            # to 413, and AUDIO_NORMALIZATION_FAILED to 400 (malformed file).
+            self._normalize_failed(st, t0, "AUDIO_NORMALIZATION_TIMEOUT", "timeout", e)
+        except AudioTooLong as e:
+            self._normalize_failed(st, t0, "AUDIO_TOO_LONG", "too_long", e)
         except Exception as e:
-            st.meta["status"] = "failed"
-            st.warn("AUDIO_NORMALIZATION_FAILED")
-            self.io.save_json(
-                st.job,
-                "artifacts/audio/normalize.status.json",
-                {
-                    "service": "audio_normalize",
-                    "status": "failed",
-                    "error": str(e),
-                },
-            )
-            st.timing("audio_normalize", t0)
-            self.io.save_json(st.job, "meta.json", st.meta)
-            raise _HardFail from e
+            self._normalize_failed(st, t0, "AUDIO_NORMALIZATION_FAILED", "failed", e)
         st.timing("audio_normalize", t0)
+
+    def _normalize_failed(self, st: _PipelineState, t0: int, code: str, status: str, error: Exception) -> NoReturn:
+        st.meta["status"] = "failed"
+        st.warn(code)
+        self.io.save_json(
+            st.job,
+            "artifacts/audio/normalize.status.json",
+            {
+                "service": "audio_normalize",
+                "status": status,
+                "error": str(error),
+            },
+        )
+        st.timing("audio_normalize", t0)
+        self.io.save_json(st.job, "meta.json", st.meta)
+        raise _HardFail from error
 
     def _run_audio_quality(self, st: _PipelineState) -> None:
         from app.utils.audio_quality import analyze_audio_quality

@@ -53,7 +53,7 @@ import pytest
 
 from app.insights.config.settings import get_settings
 from app.pipeline.orchestrator import VoiceIQOrchestrator, _safe_ctor_kwargs
-from app.utils.audio_utils import AudioNormalizationTimeout
+from app.utils.audio_utils import AudioNormalizationTimeout, AudioTooLong
 from app.utils.job_io import JobIO
 
 _ORCH = "app.pipeline.orchestrator"
@@ -307,6 +307,21 @@ class TestNormalizeStage:
         # Downstream stages must not run.
         mx.aq.assert_not_called()
         mx.asr.assert_not_called()
+
+    def test_audio_over_the_length_limit_hard_fails_413_code(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
+    ) -> None:
+        _seed_input(io)
+        mx.normalize.side_effect = AudioTooLong("Audio is longer than 7200 seconds.")
+
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "failed"
+        assert "AUDIO_TOO_LONG" in res["warnings"]
+        assert "AUDIO_NORMALIZATION_FAILED" not in res["warnings"]
+        status = io.load_json(io.init_job(JOB_ID), "artifacts/audio/normalize.status.json")
+        assert status["status"] == "too_long"
+        mx.aq.assert_not_called()
 
     def test_generic_failure_hard_fails_400_code(
         self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
@@ -987,6 +1002,12 @@ class TestOrchestrationE2E:
             ),
             (
                 True,
+                lambda m: setattr(m.normalize, "side_effect", AudioTooLong("long")),
+                "AUDIO_TOO_LONG",
+                lambda m: m.aq,
+            ),
+            (
+                True,
                 lambda m: setattr(m.normalize, "side_effect", RuntimeError("bad file")),
                 "AUDIO_NORMALIZATION_FAILED",
                 lambda m: m.aq,
@@ -998,9 +1019,9 @@ class TestOrchestrationE2E:
                 lambda m: m.asr,
             ),
         ],
-        ids=["missing_input", "normalize_timeout", "normalize_failed", "audio_silent"],
+        ids=["missing_input", "normalize_timeout", "audio_too_long", "normalize_failed", "audio_silent"],
     )
-    def test_exactly_four_hard_fail_gates(
+    def test_exactly_five_hard_fail_gates(
         self,
         orch: VoiceIQOrchestrator,
         io: JobIO,
@@ -1010,7 +1031,7 @@ class TestOrchestrationE2E:
         code: str,
         uncalled: Any,
     ) -> None:
-        """Crown-jewel invariant #2: these 4 — and only these 4 — hard-fail.
+        """Crown-jewel invariant #2: these 5 — and only these 5 — hard-fail.
 
         Each drives status=="failed", records its code, and short-circuits so
         the next stage never runs. Every *other* stage failing is proven soft

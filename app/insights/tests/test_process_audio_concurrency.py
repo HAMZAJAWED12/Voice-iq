@@ -132,7 +132,7 @@ def test_a_second_upload_waits_for_the_first_run(client, gate):
 
 @pytest.mark.parametrize(
     ("warnings", "status"),
-    [(["AUDIO_NORMALIZATION_TIMEOUT"], 422), (["AUDIO_NORMALIZATION_FAILED"], 400)],
+    [(["AUDIO_NORMALIZATION_TIMEOUT"], 422), (["AUDIO_TOO_LONG"], 413), (["AUDIO_NORMALIZATION_FAILED"], 400)],
 )
 def test_a_failed_run_still_maps_to_the_same_error(warnings, status, tmp_path, monkeypatch):
     # The failure is raised inside the worker thread; the response must not change.
