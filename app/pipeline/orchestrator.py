@@ -403,6 +403,10 @@ class VoiceIQOrchestrator:
 
             for w in diar_warns:
                 st.warn(w)
+            if any(d.get("source") == "mock" for d in st.diar_segments):
+                # The fallback puts the whole call under one speaker: speaker
+                # separation did not happen, whatever the reason.
+                st.warn("MOCK_DIARIZATION_USED")
 
             self.io.save_json(st.job, "artifacts/diarization/diarization.json", st.diar_segments)
             self.io.save_json(

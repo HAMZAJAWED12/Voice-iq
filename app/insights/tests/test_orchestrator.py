@@ -466,6 +466,31 @@ class TestDiarizeStage:
         assert "SPEAKER_CAP_APPLIED" in res["warnings"]
         assert "LOW_SNR_DIARIZATION_UNRELIABLE" in res["warnings"]
 
+    @pytest.mark.parametrize(
+        "service_warnings", [[], ["DIARIZATION_FAILED_FALLBACK"]], ids=["no-model", "model-failed"]
+    )
+    def test_mock_diarization_is_flagged(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, service_warnings: list[str]
+    ) -> None:
+        _seed_input(io)
+        mock_segment = {"speaker": "SPEAKER_00", "start": 0.0, "end": 4.0, "source": "mock"}
+        mx.diar.return_value.diarize_with_warnings.return_value = ([mock_segment], list(service_warnings))
+
+        res = orch.run(JOB_ID)
+
+        assert "MOCK_DIARIZATION_USED" in res["warnings"]
+        assert "SINGLE_SPEAKER_MODE" in res["warnings"]
+        assert res["pipeline_meta"]["status"] == "ok"
+
+    def test_real_diarization_is_not_flagged(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        segments = [dict(seg, source="pyannote") for seg in GOLDEN_DIAR]
+        mx.diar.return_value.diarize_with_warnings.return_value = (segments, [])
+
+        res = orch.run(JOB_ID)
+
+        assert "MOCK_DIARIZATION_USED" not in res["warnings"]
+
     def test_single_speaker_mode(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
         _seed_input(io)
         mx.diar.return_value.diarize_with_warnings.return_value = (
