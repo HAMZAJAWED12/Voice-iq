@@ -597,9 +597,14 @@ class VoiceIQOrchestrator:
             self.io.save_json(st.job, "artifacts/nlp/topic.json", st.topic)
         except Exception as e:
             st.warn("TOPIC_FAILED")
+            # topic.json is returned in the response: a fixed message there,
+            # the exception text only in the status file on disk.
             self.io.save_json(
-                st.job, "artifacts/nlp/topic.json", {"topic": "unknown", "confidence": 0.0, "error": str(e)}
+                st.job,
+                "artifacts/nlp/topic.json",
+                {"topic": "unknown", "confidence": 0.0, "error": "topic classification failed"},
             )
+            self.io.save_json(st.job, "artifacts/nlp/topic.status.json", {"status": "failed", "error": str(e)})
         st.timing("topic", t0)
 
     def _run_summary(self, st: _PipelineState) -> None:
