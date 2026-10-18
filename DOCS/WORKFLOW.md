@@ -1,4 +1,4 @@
-Last verified: 2026-10-18, 16654b5
+Last verified: 2026-10-18, 99006c0
 # Workflow
 
 How work gets done in this repository: branches, the local Python environment, the checks, the commit rules and the milestone loop. AI assistants read [CLAUDE.md](../CLAUDE.md) first. For where Sprint 7 stands, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For what the project is, see [CONTEXT.md](CONTEXT.md).
@@ -170,7 +170,7 @@ Each Sprint 7 prerequisite fix is one milestone: the smallest first, and only fi
 | 1. Plan | Set the scope, the files, the tests and the acceptance evidence. Record them under *Next milestone* and *Acceptance evidence* in the status doc. Implementation starts only after the owner approves the plan. | Status doc, *Next milestone* and *Acceptance evidence* |
 | 2. Red-check | Write the new tests first and run them against the current code. They must fail for the stated reason, apart from deliberate controls that pin behaviour that must not change. Record the counts. | `c1b35d9`: 10 of 14 fail. `9aff207`: 212 failed, 11 controls passed. `8e51a94`: 25 failed, 10 at-bound controls passed. `1dbfac7`: 352 of 433 fail against the previous detector. `dc9caf3`: `UnicodeEncodeError` and `PDF_FAILED` before the fix. |
 | 3. Implement | Make the smallest change that turns the tests green. Follow the rules in [CLAUDE.md](../CLAUDE.md): the engineering standards, the Sprint 7 hard constraints (for example, v1 is frozen) and, under *Testing requirements*, no heavy imports at the orchestrator's module scope. | `9aff207`: "no v1 model or literal changes" |
-| 4. Verify | In one session: the full light suite, ruff check, ruff format check and mypy, all as in [Before every commit](#before-every-commit). Record the new test count. | Full-suite counts in each fix commit body |
+| 4. Verify | In one session: the full light suite, ruff check, ruff format check and mypy, all as in [Before every commit](#before-every-commit). Record the new test count. | Full-suite counts in each fix commit body up to M5 (`1dbfac7`); from M6 on, in the docs commit that records each batch (`42382db`, `2966527`) and in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *Completed* |
 | 5. Adversarial review | An independent review pass tries to break the change, looking for secrets or URLs in logs, new 500 paths, missed input shapes and contract drift. Fix every valid finding, with its own red-checked test. Before any push that touches auth, secrets or external calls, run `/security-review` ([CLAUDE.md](../CLAUDE.md), *Style for AI assistants*). | `cedfe96` is a review finding on `c1b35d9` |
 | 6. Checkpoint | Commit the code, then commit the docs (no push). Report the evidence to the owner and stop. The next milestone starts on the owner's approval. | Docs commits "record Mn as done; promote Mn+1" |
 
@@ -180,7 +180,7 @@ Each Sprint 7 prerequisite fix is one milestone: the smallest first, and only fi
 
 The repository is public. Everything committed must be safe to publish:
 
-- Name roles, never people. No author names, usernames, or links that contain a username. (Exception, by owner decision: the repository URL in CLAUDE.md and README.md stays.)
+- Name roles, never people. No author names, usernames, or links that contain a username. (Exception, by owner decision: the repository URL in CLAUDE.md stays.)
 - No quotes from internal messages, chats or voice notes.
 - No internal URLs, hostnames, credentials or secrets of any kind.
 - Describe security limitations in general terms only. The detailed gap list with severities is tracked privately. [SECURITY.md](SECURITY.md) is the public view.

@@ -172,7 +172,7 @@ all done.
 > - **Size rule:** if a milestone or a security fix grows past roughly
 >   twice its planned size, or needs a second rework round after review,
 >   stop and ask the owner before continuing (DECISIONS #27).
-> - The repository URL in this file and `README.md` stays.
+> - The repository URL in this file stays.
 > - **API keys are one trust group** (2026-10-17): only the Java backend
 >   calls the service and it stays off the public internet; no per-session
 >   ownership. Revisit before any direct customer access (DECISIONS #33).
