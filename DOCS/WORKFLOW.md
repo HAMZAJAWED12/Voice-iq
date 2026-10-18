@@ -1,11 +1,11 @@
-Last verified: 2026-10-17, 2966527
+Last verified: 2026-10-18, 6aa8990
 # Workflow
 
 How work gets done in this repository: branches, the local Python environment, the checks, the commit rules and the milestone loop. AI assistants read [CLAUDE.md](../CLAUDE.md) first. For where Sprint 7 stands, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For what the project is, see [CONTEXT.md](CONTEXT.md).
 
 ## Before every commit
 
-Run these from the repository root. All of them passed at `dbae452` on 2026-10-17.
+Run these from the repository root. At `dbae452` (2026-10-17) the tests, both ruff commands and mypy over `app/insights/` and `app/agent_brain/` passed. The mypy command below is the wider gate added in `6aa8990`, so the `dbae452` result does not cover it. *Lint and types* below says where each check ran.
 
 ```powershell
 .venv\Scripts\python.exe -m pytest -v app/insights/tests/ app/agent_brain/tests/
@@ -108,7 +108,7 @@ Configuration lives in [pyproject.toml](../pyproject.toml):
 - **Ruff:** line length 120, target `py310`, rule sets E, F, I, B and UP, with `B008` ignored for the FastAPI `Depends` idiom. It excludes `.venv`, `samples`, `DOCS`, `data`, `tmp`, `uploads` and `outputs` (lines 1-9).
 - **Mypy:** pydantic plugin, `ignore_missing_imports`, `check_untyped_defs`. Test directories are excluded (lines 11-18).
 
-At `dbae452`, ruff reported "All checks passed!" with 207 files already formatted, and mypy found no issues in 84 source files; with `app/utils/` and `app/security/` added to the gate, 99 source files.
+At `dbae452` (2026-10-17): the tests gave 1730 passed and 1 skipped, ruff reported "All checks passed!" with 207 files already formatted, and mypy over `app/insights/` and `app/agent_brain/` found no issues in 84 source files. The wider gate, which adds `app/utils/` and `app/security/` (99 source files), ran clean in the local Python 3.12 venv, last at `2966527` just before the gate was committed, then in CI run 39119444804 at `6aa8990` (lint job: Python 3.11, `requirements-insight.txt`, mypy 1.13.0). Local runs with `--python-version 3.10` and `3.11` plus `--no-site-packages` were also clean, but they skip installed third-party packages, so they are weaker than CI and not equivalent to it.
 
 ## Pre-commit hooks
 
