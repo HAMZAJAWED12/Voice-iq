@@ -1,7 +1,7 @@
-Last verified: 2026-10-17, dbae452
+Last verified: 2026-10-19, ee2e15b
 # Architecture
 
-This document describes the code structure of VoiceIQ at commit `dbae452`
+This document describes the code structure of VoiceIQ at commit `ee2e15b`
 (branch `sprint7/doc-sync`). It shows how the packages fit together, how data
 moves between them, where faults are contained, what is stored, and how to
 extend the system without breaking it.
@@ -115,7 +115,12 @@ request ─► RequestGuardMiddleware ─► routing ─► body parsing ─► 
   Content-Length check, before the body reaches the app. They share
   `api_key_error` and `content_length_error` with the router dependencies
   (`app/security/api_key.py:63-96`, `app/security/payload_size.py:63-95`), so
-  the status and detail are the same. A refusal carries `Connection: close`.
+  the status and detail are the same. A refusal carries `Connection: close`
+  and the body is not read, so a client that is still sending a large body
+  can see a connection reset instead of the status. Callers such as the
+  Java backend should send `Expect: 100-continue` with large uploads (uvicorn
+  then answers before the body is sent), or read the response when a send
+  fails.
 - **Passing requests** (`request_guard.py:83-101`): the body bytes are
   counted, and a body longer than its declared length gets 413.
 - **Effect of running before routing:** an unauthenticated request with an
@@ -167,8 +172,11 @@ dependencies and the rate limit have run (§3). Then `process_audio()` and
    (default 1) and a count of admitted uploads. When that count has reached
    `process_audio_max_running + process_audio_max_waiting` (default 1 + 2),
    the upload gets 503 "Audio processing is at capacity. Retry later." with
-   `Retry-After: process_audio_retry_after_sec` (default 30), before anything
-   is saved (`_admission`, `:34-57`; `:153-165`). The count changes only on
+   `Retry-After: process_audio_retry_after_sec` (default 30), before the job
+   folder is created but after the whole upload has been received, because
+   FastAPI reads the form before the route runs (`_admission`, `:34-57`;
+   `:153-165`). The rate limit's 429 also comes only after the whole upload,
+   before the handler runs (`:129`, `app/security/rate_limit.py:84-86`). The count changes only on
    its own loop, so it needs no lock ([DECISIONS.md #35](DECISIONS.md)).
 4. `_admitted_request` creates the job workspace `data/jobs/<job_id>/`
    (`:177-178`, `app/utils/job_io.py:32-72`), then streams the upload to
@@ -368,14 +376,18 @@ ClaimDetector.detect (regex; _keep_match drops names, counts and non-USD prices 
   → FactCheckResponse + stats
 ```
 
-All five clients fetch through `_get_json`, which streams the reply and reads
-at most `MAX_REPLY_BYTES` (1 MiB, counted after decompression); a longer
-reply gives no evidence, so the claim ends as `SOURCE_UNAVAILABLE`
-(`base_client.py:38-57`, `155-160`).
+All five clients fetch through `_get_json`, which asks for an uncompressed
+reply (`Accept-Encoding: identity`), streams it and reads at most
+`MAX_REPLY_BYTES` (1 MiB, the bytes that arrive). A reply that declares any
+other content encoding is refused before its body is read. A longer or
+encoded reply gives no evidence, so the claim ends as `SOURCE_UNAVAILABLE`
+(`base_client.py:38-79`, `178-189`; `efdd1a9`).
 
 The run caps are `factcheck_max_claims` (default 25) and
-`factcheck_run_deadline_sec` (default 20); a provider call already running
-at the deadline finishes within its own timeout, and `claims_detected`
+`factcheck_run_deadline_sec` (default 20). The deadline is checked between
+claims: a check already running is not cut short and can make up to two attempts,
+each limited by the HTTP timeout per network operation, so a run can end
+past the deadline. `claims_detected`
 equals `verified` plus `skipped` (`factcheck_engine.py:258-262`, `da92ae4`).
 
 Claim types map to clients as follows: `CURRENCY_RATE` to open.er-api.com
@@ -402,9 +414,11 @@ never duplicates; a fact-check recommendation with no claim id is compared
 by its claim text (`deduplication.py:86-91`). A non-finite confidence in the
 context counts as missing (`agent_context.py:23-26`, `44-47`, `65-69`). The
 Email Draft agent matches its trigger phrases as whole words
-(`find_signals(..., whole_words=True)`, `signals.py:33-46`,
-`email_draft_agent.py:57`); the other agents keep substring matching
-(milestone M7, `dbae452`). This route never calls the Java callback; only
+(`find_signals(..., whole_words=True)`, `signals.py:39-52`,
+`email_draft_agent.py:72`); the other agents keep substring matching
+(milestone M7, `dbae452`). Its list spells out the article and pronoun forms
+whole-word matching needs ("send an", "share these", "forward them";
+`email_draft_agent.py:19-44`, `ee2e15b`). This route never calls the Java callback; only
 the pipeline stage does ([DATA-FLOW.md](DATA-FLOW.md)).
 
 ## 6. Fault boundaries
@@ -424,10 +438,10 @@ reasoning; do not harmonise the two.
 | Insight stage on an error result | `orchestrator.py:677-692`, `764-766` | When `InsightService` returns `status="error"`, the stage records `failed` in `insight.status.json` and warns `INSIGHTS_FAILED`, and the Agent Brain stage, when on, is skipped with `AGENT_BRAIN_SKIPPED_NO_INSIGHTS`. The error result is still returned under `insights`, and the run stays `ok` (`c53c71d`). | `test_an_insight_error_result_fails_the_stage_and_skips_the_agent_brain` (`test_orchestrator.py:754`) |
 | `InsightService` | `service.py:64-108` | The single boundary for the insight engines. One `try/except` around analytics → rule → summary turns any engine fault into a `status="error"` response that keeps the validation result. The error carries the fixed message "Insight pipeline failed." (code `pipeline_execution_error`), and the warning log names the exception class only (`service.py:87-99`, `0011dd7`). `InsightRuleEngine.run` deliberately has no `try/except` (`rule_engine.py:23-98`). | `test_a_failed_insight_run_does_not_return_the_exception_text` (`app/insights/tests/test_error_text.py:62`) |
 | `AgentRunner` | `agent_runner.py:52-59` | Per-agent `try/except`: a failing agent is logged and skipped, and the other agents' recommendations are still returned. | `test_per_agent_fault_isolation` (`app/agent_brain/tests/test_agent_runner.py:41`) |
-| Fact-check, per claim | `factcheck_engine.py:274-293`, `227-240` | A client fault, an unusable reply, a reply over 1 MiB or a non-finite value means no evidence. The comparator then returns `SOURCE_UNAVAILABLE` for that claim only, and the run continues. Clients return `None`, or raise only `SourceUnavailable` with a short reason (`base_client.py:71-80`); `_get_json` stops reading a reply past `MAX_REPLY_BYTES` (`base_client.py:38-57`, `155-160`). A subject whose fetch failed is remembered for the rest of that run, so a repeated claim gets the same reason without a second fetch (`factcheck_engine.py:196-198`, `227-233`). Hardened in `9aff207` and `83803b5`. | `test_one_bad_reply_affects_only_its_own_claim`, `test_engine_contains_a_client_that_breaks_its_contract`, `test_fact_check_api_never_500s_on_a_bad_reply` (`test_factcheck_source_replies.py:338`, `365`, `406`); `test_an_oversized_reply_is_not_read_to_the_end`, `test_a_failed_subject_is_fetched_once_per_run` (`app/insights/tests/test_factcheck_reply_limits.py:33`, `72`) |
+| Fact-check, per claim | `factcheck_engine.py:274-293`, `227-240` | A client fault, an unusable reply, a compressed reply, a reply over 1 MiB or a non-finite value means no evidence. The comparator then returns `SOURCE_UNAVAILABLE` for that claim only, and the run continues. Clients return `None`, or raise only `SourceUnavailable` with a short reason (`base_client.py:93-102`); `_get_json` refuses a reply in any content encoding but identity before reading it, and stops reading a reply past `MAX_REPLY_BYTES` (`base_client.py:38-79`, `178-189`). A subject whose fetch failed is remembered for the rest of that run, so a repeated claim gets the same reason without a second fetch (`factcheck_engine.py:196-198`, `227-233`). Hardened in `9aff207`, `83803b5` and `efdd1a9`. | `test_one_bad_reply_affects_only_its_own_claim`, `test_engine_contains_a_client_that_breaks_its_contract`, `test_fact_check_api_never_500s_on_a_bad_reply` (`test_factcheck_source_replies.py:338`, `365`, `406`); `test_an_oversized_reply_is_not_read_to_the_end`, `test_an_encoded_reply_is_refused_before_its_body_is_read`, `test_a_failed_subject_is_fetched_once_per_run` (`app/insights/tests/test_factcheck_reply_limits.py:37`, `94`, `134`) |
 | Fact-check evidence cache | `factcheck_engine.py:105-141` | One cache per engine, shared by every request in the process, and used from worker threads. A lock guards the dictionary operations only and is never held across a provider call. When the cache is full, expired entries are removed before the oldest live one (`1d967c5`). | `test_many_threads_keep_the_cache_consistent_and_bounded`, `test_expired_entries_are_swept_before_the_oldest_live_one_is_evicted` (`app/insights/tests/test_factcheck_cache_threads.py:71`, `99`) |
 | Fact-check persistence on `/v1/fact-check` | `factcheck_routes.py:109-116` | A `FactCheckRepositoryError` is logged; the verdicts are still returned. | — |
-| Pipeline run in process-audio | `process_audio.py:34-57`, `153-165`, `234-281` | The pipeline and the fact-check enrichment run in a worker thread. Per event loop, at most `process_audio_max_running` runs at once (default 1) and `process_audio_max_waiting` admitted uploads wait for a slot (default 2); a further upload gets 503 with `Retry-After`, before it is saved. The loop keeps serving other requests during a run. A failed run maps to 422 (ffmpeg timeout), 413 (audio too long) or 400 (`2bb6593`, `948c49d`, `6c17c72`). | `test_other_requests_are_served_while_the_pipeline_runs`, `test_a_second_upload_waits_for_the_first_run`, `test_a_failed_run_still_maps_to_the_same_error`, `test_beyond_one_running_and_two_waiting_an_upload_gets_503` (`app/insights/tests/test_process_audio_concurrency.py:89`, `112`, `137`, `173`) |
+| Pipeline run in process-audio | `process_audio.py:34-57`, `153-165`, `234-281` | The pipeline and the fact-check enrichment run in a worker thread. Per event loop, at most `process_audio_max_running` runs at once (default 1) and `process_audio_max_waiting` admitted uploads wait for a slot (default 2); a further upload gets 503 with `Retry-After` before a job folder is created, but only after the whole upload has been received (§4.1 step 3). The loop keeps serving other requests during a run. A failed run maps to 422 (ffmpeg timeout), 413 (audio too long) or 400 (`2bb6593`, `948c49d`, `6c17c72`). | `test_other_requests_are_served_while_the_pipeline_runs`, `test_a_second_upload_waits_for_the_first_run`, `test_a_failed_run_still_maps_to_the_same_error`, `test_beyond_one_running_and_two_waiting_an_upload_gets_503` (`app/insights/tests/test_process_audio_concurrency.py:89`, `112`, `137`, `173`) |
 | Fact-check inside process-audio | `process_audio.py:71-126` | Never fails the audio response. An engine error, or a payload that is not strict JSON, gives a `failed` stub in `fact_checks_v2` with the fixed reason `fact-check enrichment failed`, and an unrenderable payload is not saved. A save failure is logged and the payload is still returned. Both warnings name the exception class only (`0011dd7`). The strict-JSON check came in `8e51a94`. | `test_process_audio_degrades_fact_checks_v2_instead_of_failing`, `test_process_audio_never_500s_on_an_unrenderable_fact_check`, `test_process_audio_never_saves_an_unrenderable_fact_check` (`test_factcheck_source_replies.py:458`, `743`, `761`); `test_a_failed_fact_check_enrichment_gives_a_fixed_reason` (`test_error_text.py:78`) |
 | Java callback | `orchestrator.py:806-867` | Fire-and-forget daemon thread. A failure is logged with the error class and HTTP status only, never the URL or the payload (`cedfe96`). | `test_callback_failure_never_propagates` (`app/agent_brain/tests/test_pipeline_callback.py:163`); the Java callback section of `app/insights/tests/test_logging_hygiene.py` |
 | Outbound request logging | `app/utils/logger.py:10-23` | The `httpx` and `httpcore` loggers are pinned to WARNING, whatever `VOICEIQ_LOG_LEVEL` sets the root level to, so request URLs (which can carry keys and claim subjects) stay out of INFO logs (`c1b35d9`, `e25a3b2`). | `test_logging_hygiene.py`, `test_logging_settings.py` |
@@ -523,16 +537,16 @@ silent, and missing tables are created.
 
 ### 8.4 Adding a fact-check source client
 
-1. Subclass `BaseSourceClient` (`base_client.py:83`), set `name`, and
+1. Subclass `BaseSourceClient` (`base_client.py:105`), set `name`, and
    implement `fetch(claim) -> Evidence | None`.
 2. Never raise from `fetch`, except `SourceUnavailable(reason)`. Keep the
    reason short, with no URLs, keys, response bodies or claim text
-   (`base_client.py:71-80`, `103-110`).
-3. Fetch through `self._get_json(...)`, which handles retries and rejects
-   non-finite, non-object, undecodable or over-1-MiB replies
-   (`base_client.py:130-205`). Read values with `_finite_float` and
-   `_as_dict`. Accept an injected `httpx.Client` so tests can mock the
-   transport (`base_client.py:89-97`).
+   (`base_client.py:93-102`, `125-132`).
+3. Fetch through `self._get_json(...)`, which handles retries, asks for
+   uncompressed replies and rejects compressed, non-finite, non-object,
+   undecodable or over-1-MiB replies (`base_client.py:152-234`). Read values
+   with `_finite_float` and `_as_dict`. Accept an injected `httpx.Client` so
+   tests can mock the transport (`base_client.py:111-119`).
 4. Register it in `SourceRouter.from_settings` under an existing `ClaimType`
    (`factcheck_engine.py:75-91`). PHASE-0 §2.1 sets the rules for changing
    `ClaimType` or `Verdict`; read it before adding a member

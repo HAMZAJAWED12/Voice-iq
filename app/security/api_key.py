@@ -111,8 +111,8 @@ def verify_api_key(
         raise error
 
     if not settings.api_keys:
-        # Dev / staging / test: log and allow through so local development
-        # against /docs and TestClient remains friction-free.
+        # Development / test (production and staging failed closed above):
+        # log and allow, so local work against /docs and TestClient is easy.
         logger.warning(
             "API auth disabled: no VOICEIQ_API_KEYS configured (environment=%s).",
             settings.environment,

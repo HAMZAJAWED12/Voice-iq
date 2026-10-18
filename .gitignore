@@ -50,7 +50,7 @@ build/
 dist/
 node_modules/
 
-# Archives — never commit them. Old history contains rotated credentials.
+# Archives — never commit them.
 *.zip
 *.tar
 *.tar.gz

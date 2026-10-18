@@ -1,4 +1,4 @@
-Last verified: 2026-10-17, dbae452
+Last verified: 2026-10-19, ee2e15b
 # Security
 
 This page covers the security controls in the VoiceIQ service at the commit
@@ -49,9 +49,10 @@ pipeline (`app/main.py:64-91`).
 
 The Docker image serves plain HTTP (`Dockerfile:89` starts uvicorn with no
 TLS options), and the repository has no TLS configuration for either entry
-point. TLS terminates at the ingress: a trusted reverse proxy or load
-balancer in front of the service holds the certificate, and only it talks to
-the container, over a private network. `docker-compose.yml` publishes the
+point. A deployment must therefore terminate TLS at the ingress: a trusted
+reverse proxy or load balancer in front of the service holds the
+certificate, and only it talks to the container, over a private network.
+Nothing in the repository enforces this. `docker-compose.yml` publishes the
 port on the loopback interface only and sets CPU and memory limits for the
 container. The limitations below assume this setup.
 
@@ -68,7 +69,7 @@ container. The limitations below assume this setup.
 | 5 | ffmpeg timeout | `app/utils/audio_utils.py` | `test_audio_utils.py`, `test_audio_utils_cleanup.py` | `80cd4f0`, `5696e32` |
 | 6 | Retention of job files and stored records | `app/utils/retention.py`, `app/utils/job_io.py` | `test_job_retention.py`, `test_record_retention.py` | `3c3adb2`, `cbdafb4` |
 | 7 | API docs hidden in production | `app/main.py`, `app/insight_main.py` | `test_docs_gating.py` | `c7c34db` |
-| 8 | Opt-in egress | `app/utils/factcheck_gate.py` | `test_factcheck_gate.py` | `61fbf56` |
+| 8 | Egress controls | `app/utils/factcheck_gate.py` | `test_factcheck_gate.py` | `61fbf56` |
 | 9 | HMAC-signed callback, https only | `app/agent_brain/integrations/java_callback_client.py` | `app/agent_brain/tests/test_java_callback.py`, `app/agent_brain/tests/test_pipeline_callback.py` | `a54944b` |
 | 10 | Secrets kept out of logs | `app/utils/logger.py`, `app/pipeline/orchestrator.py` | `test_logging_hygiene.py`, `test_logging_settings.py` | `c1b35d9`, `cedfe96`, `dc03a44`, `e25a3b2`, `45a5b22` |
 | 11 | Internal detail kept out of responses (where fixed) | several, see below | `test_factcheck_source_replies.py`, `test_error_text.py`, `test_non_finite_inputs.py`, `test_factcheck_reply_limits.py`, `test_pipeline_error_text.py`, `test_readiness.py` | `f7ecd55`, `9aff207`, `8e51a94`, `0011dd7`, `93dda14`, `83803b5`, `dc97a84`, `660558c` |
@@ -213,8 +214,11 @@ When `VOICEIQ_ENVIRONMENT=production`, `/docs`, `/redoc` and `/openapi.json`
 are turned off in both entry points (`app/main.py:45-52`,
 `app/insight_main.py:56-63`).
 
-### 8. Opt-in egress
+### 8. Egress controls
 
+- **`POST /v1/fact-check` has no opt-in.** Every call sends the claim
+  subjects it detects to the providers; no setting turns this off
+  ([DATA-FLOW.md §1](DATA-FLOW.md#1-fact-check--external-providers)).
 - **Fact-check enrichment in `/v1/process-audio`** runs only with
   `?fact_check=true` or `VOICEIQ_FACTCHECK_AUTO_ENRICH=true`.
   `?fact_check=false` always wins. When enrichment is off, no external call is
@@ -229,7 +233,7 @@ are turned off in both entry points (`app/main.py:45-52`,
   `java_callback_client.py:67-69`).
 - **Fact-check source clients** call fixed hosts. Query values are passed
   through httpx `params`, so httpx encodes them
-  (`app/insights/core/factcheck/source_clients/base_client.py:130-155`). The
+  (`app/insights/core/factcheck/source_clients/base_client.py:152-178`). The
   Wikipedia client percent-encodes the transcript-derived country before it
   puts it in the URL path (`source_clients/static_facts_client.py:88-92`,
   `7b0c313`).
@@ -254,8 +258,9 @@ Every callback carries two signatures (`java_callback_client.py:78-95`):
   `app/agent_brain/config/settings.py:19-24`).
 - The send runs on a background thread. A failure is logged with the
   exception class and HTTP status only (`orchestrator.py:848-867`).
-- The receiving service has to verify the v2 signature and enforce a
-  freshness window. The contract is [JAVA-CALLBACK-V2.md](JAVA-CALLBACK-V2.md).
+- The receiving service has to verify the v2 signature, enforce a freshness
+  window and de-duplicate on the verified v2 signature. The
+  contract is [JAVA-CALLBACK-V2.md](JAVA-CALLBACK-V2.md).
 
 ### 10. Secrets kept out of logs (milestone M1)
 
@@ -271,7 +276,7 @@ Every callback carries two signatures (`java_callback_client.py:78-95`):
   (`app/insights/core/factcheck/source_clients/forex_client.py:98-104`,
   `45a5b22`).
 - Source-client warnings carry the client name, attempt number, HTTP status
-  or exception class (`base_client.py:158-200`). The authentication code
+  or exception class (`base_client.py:184-229`). The authentication code
   never logs key values (`api_key.py:63-122`).
 - A failed insight run, and a failed fact-check enrichment or fact-check
   save in `/v1/process-audio`, log the exception class only
@@ -304,13 +309,14 @@ Every callback carries two signatures (`java_callback_client.py:78-95`):
   class. A client that knows why it failed gives its own short reason
   (`app/insights/core/factcheck/factcheck_engine.py:274-293`). The client
   contract says those reasons must never contain URLs, keys, response bodies
-  or claim text (`base_client.py:71-76`).
+  or claim text (`base_client.py:93-98`).
 - Malformed provider replies give `SOURCE_UNAVAILABLE` per claim, never a
   verdict and never a 500. This covers non-finite numbers, JSON that is not
   an object, and bodies that cannot be decoded (`9aff207`, milestone M2).
-  It also covers replies larger than 1 MiB once decompressed: the client
-  stops reading at that point (`base_client.py:38-57`, `:155-160`,
-  `83803b5`).
+  Requests ask for uncompressed replies, and a reply in any other content
+  encoding is refused before its body is read. The client stops reading a
+  reply once more than 1 MiB has arrived, so nothing is decompressed or held
+  past that size (`base_client.py:38-79`, `:178-189`, `83803b5`, `efdd1a9`).
 - The insight routes refuse JSON bodies that hold `NaN`, `Infinity` or a
   number such as `1e999` that overflows to infinity, with the standard 422 `json_invalid` error,
   before anything is stored (`app/insights/api/finite_json.py:21-49`,
@@ -356,9 +362,15 @@ Each worker process runs a limited number of audio jobs at once and lets a
 limited number more wait for a slot: `VOICEIQ_PROCESS_AUDIO_MAX_RUNNING`
 (default 1) and `VOICEIQ_PROCESS_AUDIO_MAX_WAITING` (default 2). Beyond
 that, an upload gets 503 with a `Retry-After` header
-(`VOICEIQ_PROCESS_AUDIO_RETRY_AFTER_SEC`, default 30) before anything is
-saved. The check runs after the API key and filename checks. Other requests
-are still served while a job runs (`app/routes/process_audio.py:34-57`,
+(`VOICEIQ_PROCESS_AUDIO_RETRY_AFTER_SEC`, default 30). The check runs after
+the API key and filename checks and before a job folder is created, but only
+once the whole upload has been received: the framework reads the form before
+the route runs. The per-caller rate limit's 429 (control 2) is also decided
+only after the whole upload has arrived, before the route runs. So these
+controls bound pipeline runs, not upload traffic or temporary disk use; only
+the API key check and the declared-size cap (controls 1 and 3) run before the
+body is read. Other
+requests are still served while a job runs (`app/routes/process_audio.py:34-57`,
 `:153-165`; `settings.py:113-130`; `948c49d`).
 
 ### 15. Audio length limit
@@ -373,9 +385,12 @@ stops shortly past the limit, and a decoded file over the limit is deleted
 ### 16. Fact-check run caps
 
 One fact-check run checks at most `VOICEIQ_FACTCHECK_MAX_CLAIMS` claims
-(default 25) and starts no new provider call after
+(default 25) and starts no new claim check after
 `VOICEIQ_FACTCHECK_RUN_DEADLINE_SEC` (default 20). The rest are counted as
-skipped. This bounds the outbound calls and the time one request can use
+skipped. This bounds the number of outbound calls. It does not strictly bound
+the time: the deadline is checked between claims, and a check already
+running can make up to two attempts, each limited by the HTTP timeout per
+network operation rather than in total
 (`app/insights/core/factcheck/factcheck_engine.py:201-211`,
 `settings.py:288-305`, `da92ae4`).
 
@@ -459,8 +474,9 @@ These are stated in general terms on purpose.
   as well.
 - All API keys have the same access. Any valid key can read, replace or
   delete any stored record. This is a recorded owner decision: callers are
-  one trust group, because only the platform's own backend calls the service
-  and it stays off the public internet. It is to be revisited before any
+  one trust group. It rests on the owner's requirement that only the
+  platform's own backend calls the service and that the service stays off the
+  public internet; a deployment must meet both. It is to be revisited before any
   direct customer access ([DECISIONS.md #33](DECISIONS.md)). Treat everyone
   who holds a key as one trust domain.
 - Authentication and the API docs depend on the environment label. With no
@@ -470,7 +486,8 @@ These are stated in general terms on purpose.
   `VOICEIQ_API_KEYS`. Also check that no env file overrides the environment
   that the image sets.
 - Callback replay protection depends on the receiving service verifying the
-  v2 signature with a freshness window. The legacy v1 signature is still
+  v2 signature with a freshness window and de-duplicating on the verified
+  v2 signature. The legacy v1 signature is still
   sent until that migration is finished
   ([JAVA-CALLBACK-V2.md](JAVA-CALLBACK-V2.md)).
 - Some responses still include internal error text or server-side paths. Do

@@ -225,8 +225,8 @@ class InsightSettings(BaseSettings):
         description=(
             "Accepted values for the X-API-Key request header. Set "
             "VOICEIQ_API_KEYS as a comma-separated string. Empty list "
-            "disables auth in non-production environments; in production "
-            "an empty list causes every request to fail with 503."
+            "disables auth in development and test; in production and "
+            "staging every protected request then fails with 503."
         ),
     )
 
@@ -283,7 +283,7 @@ class InsightSettings(BaseSettings):
         default=5.0,
         ge=0.5,
         le=30.0,
-        description="Per-call HTTP timeout for fact-check source clients.",
+        description="HTTP timeout for each network operation (connect, read, write) of a fact-check source client.",
     )
     factcheck_max_claims: int = Field(
         default=25,
@@ -298,9 +298,9 @@ class InsightSettings(BaseSettings):
         gt=0.0,
         le=300.0,
         description=(
-            "A fact-check run starts no new check after this many seconds; the "
-            "remaining claims are counted as skipped. A call already running "
-            "finishes within factcheck_http_timeout_sec."
+            "A fact-check run starts no new check after this many seconds; the rest "
+            "are counted as skipped. A running check is not cut short and can take two "
+            "attempts, each timed per network operation, so this is not a hard bound."
         ),
     )
 

@@ -33,7 +33,8 @@ tests, 100%) stays green throughout.
 **Open follow-up owned by another team:** the Java Action Layer should switch
 callback validation from `X-VoiceIQ-Signature` (v1, body-only) to
 `X-VoiceIQ-Signature-V2` (timestamp-bound), checking clock skew and
-de-duplicating on the trace id. Both headers ship today; once Java migrates,
+de-duplicating on the verified v2 signature
+([JAVA-CALLBACK-V2.md](JAVA-CALLBACK-V2.md) §4 step 5). Both headers ship today; once Java migrates,
 v1 can be removed from `java_callback_client.py`. Until then v1 remains
 authoritative and **replay protection is not yet effective end-to-end** —
 Python emits the material, Java must enforce it.
@@ -272,4 +273,4 @@ Recorded so the review scope is auditable:
 - Larger ASR/diarization models for accuracy (product decision).
 - Sprint 6 NLP Phase 2 (dateparser, multilingual).
 - E3 alignment `O(n²)` (profiled, below the bar).
-- Rewriting old git history, which contains rotated credentials (Tier 4 candidate).
+- Rewriting old git history (Tier 4 candidate).

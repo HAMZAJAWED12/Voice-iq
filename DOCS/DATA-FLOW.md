@@ -2,7 +2,8 @@
 
 Status: current as of wave S-D (S3); model-download, legacy fact-check and
 callback-content facts re-verified against the code 2026-10-11; currency
-provider changed to open.er-api.com 2026-10-17. Companion to
+provider changed to open.er-api.com 2026-10-17; fact-check default and
+reply encoding made precise 2026-10-19. Companion to
 [SECURITY-HARDENING-PLAN.md](SECURITY-HARDENING-PLAN.md).
 
 This document enumerates every point where VoiceIQ transmits data to a
@@ -16,7 +17,7 @@ the SQLite database are all processed and stored locally.
 
 | Flow | Trigger | Destination | Default |
 |---|---|---|---|
-| Fact-check verification | `/v1/fact-check`, or `/v1/process-audio` **only when enrichment is requested** | 5 public APIs (below) | **opt-in (off)** |
+| Fact-check verification | `/v1/fact-check`, or `/v1/process-audio` **only when enrichment is requested** | 5 public APIs (below) | `/v1/fact-check`: **every call**, on both entry points; no setting turns it off. `/v1/process-audio`: **opt-in (off)** |
 | Java Action Layer callback | only the opt-in `/v1/process-audio` Agent Brain stage (`VOICEIQ_AGENT_BRAIN_AUTO_RUN=true`); the internal Agent Brain route never calls out | your own Java service | off unless auto-run + URL + secret set |
 | Model weights + Hugging Face checks | first load of an ML service in each process (full pipeline only) | openaipublic.azureedge.net (Whisper), huggingface.co (pyannote, Transformers, sentence-transformers) | on (weights cached; see §3) |
 
@@ -24,7 +25,7 @@ Nothing else egresses. No telemetry, no analytics, no error reporting SaaS.
 
 ---
 
-## 1. Fact-check → external providers  (opt-in)
+## 1. Fact-check → external providers
 
 ### What is sent
 
@@ -61,7 +62,9 @@ table in the same change.
   provider can infer what a conversation touched on.
 - Requests carry an identifying User-Agent
   (`VoiceIQ-FactCheck/1.0 (+<repo url>) httpx`), no auth cookies, and no
-  session/speaker identifiers.
+  session/speaker identifiers. They ask for uncompressed replies
+  (`Accept-Encoding: identity`); a reply in any other encoding is refused
+  unread and counts as no evidence.
 - Hosts are fixed constants; query values go through httpx `params=`
   (auto-encoded), the two path values are percent-encoded (Wikipedia) or
   must be three capital letters (the forex base currency), and redirects are

@@ -262,7 +262,7 @@ The ORM model is intentionally trivial — a single table with primary key, stat
 
 ## Logging
 
-The app uses Python's standard `logging` library. `VOICEIQ_LOG_LEVEL` is validated but currently not applied: the root level is fixed at INFO in `app/utils/logger.py`, and the `httpx`/`httpcore` loggers are pinned to WARNING so outbound request URLs (API keys, claim subjects) are not logged. Logs go to stdout/stderr in standard FastAPI/Uvicorn format. No transcript text is logged — the explainability principle requires structured `evidence` on every flag, but raw utterance text never crosses the logging boundary.
+The app uses Python's standard `logging` library. `VOICEIQ_LOG_LEVEL` sets the root level at startup (default INFO; `app/utils/logger.py`), and the `httpx`/`httpcore` loggers stay pinned to WARNING whatever it is set to so outbound request URLs (API keys, claim subjects) are not logged. Logs go to stdout/stderr in standard FastAPI/Uvicorn format. No transcript text is logged — the explainability principle requires structured `evidence` on every flag, but raw utterance text never crosses the logging boundary.
 
 ---
 

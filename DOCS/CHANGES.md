@@ -1,4 +1,4 @@
-Last verified: 2026-10-17, dbae452
+Last verified: 2026-10-19, ee2e15b
 # Changelog
 
 What changed in VoiceIQ, backfilled from git history. Newest first, grouped
@@ -22,21 +22,21 @@ Taken from git at write time.
 
 | Measure | Value | Command |
 |---|---|---|
-| Commits reachable from HEAD (`dbae452`) | 203 | `git rev-list --count HEAD` |
-| Non-merge commits | 202 | `git rev-list --count --no-merges HEAD` |
+| Commits reachable from HEAD (`ee2e15b`) | 212 | `git rev-list --count HEAD` |
+| Non-merge commits | 211 | `git rev-list --count --no-merges HEAD` |
 | Merge commits | 1 (`032d822`) | `git rev-list --count --merges HEAD` |
 | Commits on `main` (`8fd3972`) | 141 | `git rev-list --count main` |
-| Commits on `sprint7/doc-sync` beyond `main` | 62 | `git rev-list --count main..HEAD` |
+| Commits on `sprint7/doc-sync` beyond `main` | 71 | `git rev-list --count main..HEAD` |
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse --format="%h %ad" --date=short` |
 
-Each of the 203 commits is listed in exactly one row below; a few hashes
+Each of the 212 commits is listed in exactly one row below; a few hashes
 also appear elsewhere as cross-references. Small commits of the same kind
 (wave-completion notes, a batch of stage extractions) share a row. Sections
 are ordered by their most recent commit. Dates are author dates.
 
 | Section | Dates | Commits |
 |---|---|---|
-| [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-17 | 62 |
+| [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-19 | 71 |
 | [Sprint 7 Phase 0 and prerequisites](#sprint-7-phase-0-and-prerequisites) | 2026-09-04 to 2026-09-20 | 7 |
 | [N4b multilingual and L5 pipeline wiring](#n4b-multilingual-and-l5-pipeline-wiring) | 2026-09-19 to 2026-09-20 | 10 |
 | [Tier 3 Wave E](#tier-3-wave-e) | 2026-06-21 to 2026-09-19 | 34 |
@@ -52,17 +52,29 @@ are ordered by their most recent commit. Dates are author dates.
 
 ## Sprint 7 on `sprint7/doc-sync`
 
-62 commits, 2026-10-11 to 2026-10-17: a documentation sync, prerequisite
+71 commits, 2026-10-11 to 2026-10-19: a documentation sync, prerequisite
 fixes that need no pending decision (one per milestone), security and
-reliability fixes, and the owner-decided changes that followed them. Why
+reliability fixes, the owner-decided changes that followed them, and the
+fix round after the pull-request review. Why
 the work is shaped this way: "In progress" in the
 [status doc](FACT-CHECK-AGENT-STATUS.md#in-progress).
+
+### Pull-request review fix round
+
+The owner approved these on 2026-10-18 after two independent reviews of the
+pull request. Each code fix is its own commit with its own tests.
+
+| Date | Change | Commit |
+|---|---|---|
+| 2026-10-19 | Whole-word rules list the forms they would otherwise miss: email triggers "send an", "send/share/forward these, those, them"; flags "umm", "uhh", "erm", "ahh", "crappy", "stupidity", "idiots", "hates", "hated"; intents "apologized", "upsetting". The email title drops a leading article only as a whole word. "Send an engineer" is an email suggestion too, accepted by the owner (DECISIONS #32). | `ee2e15b` |
+| 2026-10-19 | Fact-check provider requests ask for uncompressed replies; a reply in any other content encoding is refused before its body is read, so the 1 MiB cap counts the bytes that arrive. | `efdd1a9` |
+| 2026-10-19 | The test suite never reads `.env` and uses a temporary database and job folder (`app/conftest.py`). Test-only. | `8563572` |
 
 ### Milestones M1 to M7
 
 | Milestone | Date | Change | Commit |
 |---|---|---|---|
-| M7 | 2026-10-17 | Keyword rules match whole words only: the flag rules, the intent rules and the email-draft triggers no longer match a keyword inside a longer word ("um" in "number", "send a" in "send all"). New helper `app/utils/text_match.py`; the other Agent Brain agents keep substring matching; no vocabulary changed. 49 new tests. | `dbae452` |
+| M7 | 2026-10-17 | Keyword rules match whole words only: the flag rules, the intent rules and the email-draft triggers no longer match a keyword inside a longer word ("um" in "number", "send a" in "send all"). New helper `app/utils/text_match.py`; the other Agent Brain agents keep substring matching; no vocabulary changed (forms added later in `ee2e15b`). 49 new tests. | `dbae452` |
 | M6 | 2026-10-17 | Text outside Latin-1 no longer fails the PDF: common punctuation maps to Latin-1, anything else prints as "?" (`app/services/pdf_service.py`, `to_latin1`). 6 new tests. Also listed under hardening below. | see below |
 | M5 | 2026-10-16 | The claim detector stops reading names, ages and counts as prices. A crypto, stock or commodity number followed by what it counts or measures, or by another currency, is dropped; a subject that is also a name or an everyday word, or a stock ticker not in capitals, needs price context (`_keep_match`, `app/insights/core/factcheck/claim_detector.py:385-467`). "1 USD = 280 PKR" is read as a rate; "95k", "24 hundred" and "1.2 million" scale the value. Every detector pattern scans in linear time. No v1 model change. 423 new tests. | `1dbfac7` |
 | M4 | 2026-10-16 | Over-long numbers in a transcript no longer cause a 500 on either endpoint. The claim detector drops a claim whose number has more than 15 digits (`MAX_VALUE_DIGITS`, now `app/insights/core/factcheck/claim_detector.py:193`). `/v1/process-audio` checks the fact-check payload as strict JSON before saving or returning it, and falls back to the failed stub (now `app/routes/process_audio.py:101-104`). 35 new tests. | `8e51a94` |
@@ -78,6 +90,10 @@ See [Next milestone](FACT-CHECK-AGENT-STATUS.md#next-milestone).
 
 | Date | Change | Commit |
 |---|---|---|
+| 2026-10-18 | WORKFLOW.md says where test counts are recorded; WORKFLOW.md and CLAUDE.md name only CLAUDE.md as holding the repository URL. | `a2f3105` |
+| 2026-10-18 | WORKFLOW.md branch rows match the pushed branch. | `99006c0` |
+| 2026-10-18 | WORKFLOW.md says where each check ran: local, reduced local and CI. | `16654b5` |
+| 2026-10-17 | M7 and the owner-decided changes recorded; test counts refreshed. | `2966527` |
 | 2026-10-17 | M6 and the security and reliability fixes recorded; M7 promoted; test counts refreshed. | `42382db` |
 | 2026-10-16 | Owner decisions recorded: M5 choices accepted, no new detector heuristics until Phase 3, size rule; M6 and the old-rows fix approved; reporting steps that work either way. | `43a9c1b` |
 | 2026-10-16 | M5 recorded as done; M6 promoted; detector limits documented; test counts refreshed. | `10b0039` |
@@ -146,6 +162,8 @@ its own tests; they are DECISIONS #34 to #49 (#33 was recorded without code).
 
 | Date | Change | Commit |
 |---|---|---|
+| 2026-10-17 | CI's mypy gate also covers `app/utils/` and `app/security/`; WORKFLOW.md and SYSTEM.md say so. | `6aa8990` |
+| 2026-10-17 | Code comments corrected for the fifth hard-fail gate and `/readyz`. No code change. | `5095cde` |
 | 2026-10-17 | A test comment describes the callback trace id accurately. No code change. | `427feed` |
 | 2026-10-16 | Stale code comments corrected (payload cap, callback trace id, rate-limit storage); notes about old git history reworded; `.git-blame-ignore-revs` points at the current hash of the bulk-format commit; DECISIONS entry 17 marked as followed in practice with formal approval pending. No code change. | `8f09739` |
 

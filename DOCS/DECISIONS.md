@@ -1,4 +1,4 @@
-Last verified: 2026-10-17, dbae452
+Last verified: 2026-10-19, ee2e15b
 # Decisions
 
 This file lists the decisions already taken in this repository. A decision is
@@ -51,13 +51,13 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 | 29 | One pipeline run at a time per worker, off the event loop | 2026-10-16 | `2bb6593` |
 | 30 | Insight routes accept only finite numbers | 2026-10-16 | `93dda14` |
 | 31 | M6: the PDF prints Latin-1 and substitutes the rest | 2026-10-17 | `dc9caf3` |
-| 32 | M7: keyword rules match whole words only | 2026-10-17 | `dbae452` |
+| 32 | M7: keyword rules match whole words only | 2026-10-17, 2026-10-19 | `dbae452`, `ee2e15b` |
 | 33 | One trust group for API keys | 2026-10-17 | — (owner) |
 | 34 | Staging fails closed; compose binds to loopback | 2026-10-17 | `d7f9075` |
 | 35 | Bounded wait for a pipeline slot; 503 beyond it | 2026-10-17 | `948c49d` |
 | 36 | Audio longer than two hours is rejected, never truncated | 2026-10-17 | `6c17c72` |
 | 37 | Rate limits on the insight routes; the session list is paged | 2026-10-17 | `e802fcd` |
-| 38 | A fact-check run checks at most 25 claims within 20 seconds | 2026-10-17 | `da92ae4` |
+| 38 | A fact-check run checks at most 25 claims and starts none after 20 seconds | 2026-10-17 | `da92ae4` |
 | 39 | Stored records are deleted after 30 days | 2026-10-17 | `cbdafb4` |
 | 40 | An error result never replaces a good stored record | 2026-10-17 | `f8bc3ed` |
 | 41 | An insight error result fails the pipeline stage | 2026-10-17 | `c53c71d` |
@@ -504,9 +504,9 @@ next milestone is in
   non-finite numbers, JSON that is not an object, wrong nested types, and
   bodies that cannot be decoded or are nested too deeply.
 - **Decision:** `BaseSourceClient._get_json` rejects these replies
-  (`app/insights/core/factcheck/source_clients/base_client.py:130-205`).
+  (`app/insights/core/factcheck/source_clients/base_client.py:152-234`).
   Clients read nested values through the `_as_dict` and `_finite_float`
-  helpers (`base_client.py:116-128`), and copy only scalar metadata.
+  helpers (`base_client.py:138-150`), and copy only scalar metadata.
   `FactCheckEngine._fetch_usable`
   (`app/insights/core/factcheck/factcheck_engine.py:274-293`) isolates each
   claim the way the AgentRunner fan-out isolates agents. If a client fails or
@@ -531,13 +531,13 @@ next milestone is in
   access key". A reply with no `rates` is reported the same way
   (`app/insights/core/factcheck/source_clients/forex_client.py:25-32, 49-59, 73-84` at `dc03a44`; the client was replaced in `45a5b22`, #48).
   `SourceUnavailable` is the one exception the client contract allows
-  (`base_client.py:71`), and the engine maps it to `SOURCE_UNAVAILABLE` with
+  (`base_client.py:93`), and the engine maps it to `SOURCE_UNAVAILABLE` with
   that reason, for that claim only. The provider did not change.
 - **Update (2026-10-17):** the provider was decided (#48), and currency-rate
   claims can be verified again.
-- **Consequence:** Currency-rate claims still cannot be verified, but the
-  result now says why. Which provider to use is open (see
-  [Open decisions](#open-decisions)).
+- **Consequence:** Until #48, currency-rate claims could not be verified, but
+  the result said why. The provider question this left open was settled by
+  #48.
 - **Date:** 2026-10-16 · **Commit:** `dc03a44`
 
 ### 24. M4: claim numbers capped at 15 digits; strict-JSON check before saving
@@ -692,7 +692,17 @@ next milestone is in
   Agent Brain agents keep substring matching. Pinned by
   `app/insights/tests/test_whole_word_rules.py` and
   `app/agent_brain/tests/test_email_signal_whole_words.py`.
-- **Date:** 2026-10-17 · **Commit:** `dbae452`
+- **Update (2026-10-18, owner):** whole-word matching also dropped forms the
+  substring check had caught through a shorter keyword ("send an invoice",
+  "share these slides", "hates", "umm", "apologized"). The owner chose to
+  list those forms now rather than accept the misses. The email triggers
+  gained the article and pronoun forms, and the flag and intent lists the
+  inflected and drawn-out ones; the email title drops a leading article
+  only as a whole word. "Send an engineer" now gives an email suggestion
+  too, an accepted trade-off because every recommendation needs approval
+  (`ee2e15b`).
+- **Date:** 2026-10-17 (whole-word matching), 2026-10-19 (forms listed) ·
+  **Commit:** `dbae452`, `ee2e15b`
 
 ## Security and reliability decisions (2026-10-17)
 
@@ -704,9 +714,9 @@ commit with its own tests, under the size rule (#27).
 
 - **Context:** Every valid API key can read, replace or delete any stored
   record (#8).
-- **Decision:** The service has one trust group. Only the Java backend calls
-  it, and it stays off the public internet. There is no per-session
-  ownership for now.
+- **Decision:** The service has one trust group. Owner policy: only the Java
+  backend calls it, and it stays off the public internet; a deployment must
+  meet both. There is no per-session ownership for now.
 - **Consequence:** Anyone who holds a key can act on every record. Revisit
   before any customer can reach the service directly.
 - **Date:** 2026-10-17 · **Commit:** — (owner decision, no code)
@@ -731,10 +741,13 @@ commit with its own tests, under the size rule (#27).
 - **Decision:** Per worker, at most `VOICEIQ_PROCESS_AUDIO_MAX_RUNNING`
   runs (default 1) and `VOICEIQ_PROCESS_AUDIO_MAX_WAITING` waiting uploads
   (default 2). A further upload gets 503 with `Retry-After:
-  VOICEIQ_PROCESS_AUDIO_RETRY_AFTER_SEC` (default 30), before it is saved
-  (`app/routes/process_audio.py`).
-- **Consequence:** A busy worker answers at once instead of queueing without
-  limit. `app/insights/tests/test_process_audio_concurrency.py` pins this.
+  VOICEIQ_PROCESS_AUDIO_RETRY_AFTER_SEC` (default 30), before a job folder
+  is created (`app/routes/process_audio.py`).
+- **Consequence:** A busy worker refuses instead of queueing without limit.
+  The refusal comes only after the whole upload has been received, because
+  FastAPI reads the form before the route runs, so this bounds pipeline
+  runs, not upload traffic. `app/insights/tests/test_process_audio_concurrency.py`
+  pins this.
 - **Date:** 2026-10-17 · **Commit:** `948c49d`
 
 ### 36. Audio longer than two hours is rejected, never truncated
@@ -763,15 +776,18 @@ commit with its own tests, under the size rule (#27).
   them. `app/insights/tests/test_insight_limits.py` pins this.
 - **Date:** 2026-10-17 · **Commit:** `e802fcd`
 
-### 38. A fact-check run checks at most 25 claims within 20 seconds
+### 38. A fact-check run checks at most 25 claims and starts none after 20 seconds
 
 - **Context:** A run checked every detected claim, one provider call after
   another, with no overall time limit.
 - **Decision:** `FactCheckEngine` checks at most `VOICEIQ_FACTCHECK_MAX_CLAIMS`
   claims (default 25) and starts no new check after
-  `VOICEIQ_FACTCHECK_RUN_DEADLINE_SEC` (default 20). The per-call timeout
-  stays 5 seconds. Claims past either limit get no result and are counted
-  in `stats.skipped`.
+  `VOICEIQ_FACTCHECK_RUN_DEADLINE_SEC` (default 20). The deadline is
+  checked between claims, so a check already running is not cut short: it
+  can make up to two attempts, each limited by
+  `VOICEIQ_FACTCHECK_HTTP_TIMEOUT_SEC` (default 5) per network operation.
+  The 20 seconds is not a hard bound. Claims past either limit get no
+  result and are counted in `stats.skipped`.
 - **Consequence:** The response shape is unchanged.
   `app/insights/tests/test_factcheck_run_limits.py` pins this.
 - **Date:** 2026-10-17 · **Commit:** `da92ae4`

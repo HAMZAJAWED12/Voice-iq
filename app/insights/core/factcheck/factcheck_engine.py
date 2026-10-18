@@ -21,8 +21,8 @@ within a short window — protects scarce free-tier quotas (Alpha Vantage).
 
 A run checks at most `max_claims` claims and starts no new check once
 `deadline_sec` has passed; the claims left over are counted as skipped and
-get no result. A provider call already running at the deadline finishes
-within its own per-call timeout.
+get no result. The deadline is checked between claims, so a running check
+is not cut short (up to two attempts, each timed per network operation).
 """
 
 from __future__ import annotations

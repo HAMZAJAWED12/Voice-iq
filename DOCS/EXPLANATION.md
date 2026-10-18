@@ -1,4 +1,4 @@
-Last verified: 2026-10-17, dbae452
+Last verified: 2026-10-19, ee2e15b
 # VoiceIQ in Plain English
 
 This guide is for readers who do not write code: product owners, managers,
@@ -69,10 +69,11 @@ a customer whose internet has stopped working talks to a support agent.
 
 **How the example results were produced.** The rule-based stages (intents,
 flags, emotions, statistics, insights and action suggestions) were run on
-this script using the service's own code, most recently at `dbae452`. Two inputs were assumed rather
+this script using the service's own code, most recently at `ee2e15b`. Three inputs were assumed rather
 than measured: the sentiment readings (turn by turn: positive, negative,
-neutral, negative, neutral, positive) and the voice labels (customer
-SPEAKER_00, agent SPEAKER_01). The speech-recognition and AI (artificial
+neutral, negative, neutral, positive, each with confidence 0.9), the voice labels (customer
+SPEAKER_00, agent SPEAKER_01) and a speech-recognition confidence of 0.9
+for every turn. The speech-recognition and AI (artificial
 intelligence) model stages were not run for this guide, so the guide
 describes them but shows no output from them. Real figures will differ from
 call to call.
@@ -111,9 +112,9 @@ VoiceIQ checks the request before it analyses anything:
   send only a limited number of uploads per minute (default 30).
 - The server must have room for the recording. By default each running copy
   of the service analyses one recording at a time and lets two more wait
-  their turn. When that queue is full, a further upload is turned away at
-  once with 503 (busy) and a "try again later" hint (by default, after 30
-  seconds).
+  their turn. When that queue is full, a further upload is turned away with
+  503 (busy) and a "try again later" hint (by default, after 30 seconds). The
+  refusal comes only once the upload has arrived.
 - The file must be MP3, WAV, M4A or FLAC, four common audio formats. The
   file name is checked first.
 - The first bytes of the file must look like real audio, so a document or
@@ -260,7 +261,7 @@ separately, so if one fails the others still run.
 `app/services/emotion_service.py:17-80`;
 `app/services/topic_service.py:12-24, 59`;
 `app/services/summary_service.py:38-58`; `app/services/intent_service.py`;
-`app/services/flag_service.py:7-9, 28-81`; `app/utils/text_match.py`;
+`app/services/flag_service.py:7-23, 42-95`; `app/utils/text_match.py`;
 `app/services/factcheck_service.py`;
 `app/pipeline/orchestrator.py:492-662`.
 
@@ -305,7 +306,7 @@ the analysis still comes back.
   There are also call-level flags for the moderate escalation and the low
   inconsistency.
 - **Scores:** dominance 0.60, engagement 0.76, conflict 0.00 (no
-  interruptions or overlaps), cooperation 0.73, emotion volatility 0.55.
+  interruptions or overlaps), cooperation 0.73, emotion volatility 0.56.
 
 *Source:* `app/insights/service.py:59-108`;
 `app/insights/core/rule_engine.py`;
@@ -357,10 +358,11 @@ with a signature the action layer can check to confirm they came from
 VoiceIQ. The response itself
 keeps every suggestion, so a reviewer can still see the low-confidence ones.
 
-**What the example gets** (four suggestions):
+**What the example gets** (five suggestions):
 
 | Suggestion | Triggered by | Priority | Confidence |
 |---|---|---|---|
+| Send an engineer by email (a known mistake, below) | "I will send an engineer on Friday." | HIGH | 0.925 |
 | Send the booking details by email | "Can you email me the booking details?" | HIGH | 0.925 |
 | Escalate a service issue | The customer's first turn ("frustrated", "not working") | HIGH | 0.885 |
 | Task: email today, supervisor to call (deadline "today") | "I will email you today…" | HIGH | 0.725 |
@@ -368,10 +370,12 @@ keeps every suggestion, so a reviewer can still see the low-confidence ones.
 
 The supervisor's promise to "call you tomorrow to follow up" produced a task
 but no follow-up-meeting suggestion, because that wording is not on the
-follow-up agent's phrase list. Before milestone M7, the email rule's phrase
-"send a" also matched inside "send an engineer" and produced a fifth,
-mistaken email suggestion. The email rule now matches whole words only; the
-other agents still match their phrases anywhere in the text.
+follow-up agent's phrase list. The email suggestion "Send engineer" is a
+mistake the owner accepted: the email rule matches whole words only, and its
+phrase "send an" is there so that requests such as "send an invoice" are
+caught, so it also fires on "send an engineer". Every suggestion needs
+approval, so a reviewer drops it. The other agents still match their phrases
+anywhere in the text.
 
 *Source:* `app/pipeline/orchestrator.py:734-867`;
 `app/agent_brain/core/agent_runner.py`;
@@ -551,8 +555,8 @@ conversation or the people in it.
   emotions and inconsistencies come from fixed word lists and thresholds.
   These rules misfire. Milestone M7 made the flag, intent and
   email-suggestion word rules match whole words only, so "er" no longer
-  matches inside "internet" and "send a" no longer matches "send an
-  engineer"; before that, both raised false hits in the example. The rules
+  matches inside "internet". The email rule still reads "send an engineer"
+  in the example as a request to send something. The rules
   still see only words, not meaning, and the other suggestion agents still
   match phrases inside longer words. The lie-risk flag states that it is not
   proof of deception.
@@ -598,7 +602,7 @@ conversation or the people in it.
 - **The caller waits for the whole analysis.** There is no "submit now,
   collect later" mode. By default each running copy of the service analyses
   one recording at a time and lets two more wait their turn; when that
-  queue is full, a further upload is refused at once with 503 and asked to
+  queue is full, a further upload is refused with 503, once it has arrived, and asked to
   try again later. Other requests are still answered meanwhile. Sprint 7's
   plan moves fact-check, not the whole analysis, into a background job
   (Phase 6; see D2 in the glossary). That work is planned, not built.
@@ -612,15 +616,15 @@ A round of security and reliability fixes landed in October 2026.
 [SECURITY.md](SECURITY.md) describes the security controls and, in general
 terms, the known limitations.
 
-*Source:* `app/services/flag_service.py:14-21, 64-81`;
-`app/services/intent_service.py:6-51`; `app/utils/text_match.py`
+*Source:* `app/services/flag_service.py:28-35, 78-95`;
+`app/services/intent_service.py:6-53`; `app/utils/text_match.py`
 (milestone M7, `dbae452`);
 `app/services/emotion_service.py:17-24, 56-66`;
 `app/services/gender_service.py:9-17`;
 `app/services/alignment_service.py:446-455`;
 `app/services/diarization_service.py:49-51, 202, 264`;
 `app/agent_brain/extraction/language.py`;
-`app/agent_brain/core/email_draft_agent.py:19-34, 57`;
+`app/agent_brain/core/email_draft_agent.py:19-44, 72`;
 `app/services/sentiment_service.py:91`;
 `app/services/pdf_service.py:29-71`;
 `app/insights/core/factcheck/factcheck_engine.py:76-89`;

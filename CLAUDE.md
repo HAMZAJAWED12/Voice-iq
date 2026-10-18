@@ -81,7 +81,7 @@ voiceiq-AI/
 | 3 | Persistence + ops: SQLite via SQLAlchemy, Dockerfile, OpenAPI polish, integration tests | ✅ Done |
 | 4 | Handoff documentation: DOCS/ markdown set + polished .docx | ✅ Done |
 | 5 | Fact-check engine: claim detector, classifier, comparator, scorer, orchestrator; 5 source clients (exchangerate.host — replaced by open.er-api.com on 2026-10-17 — CoinGecko, OpenWeather, Alpha Vantage, Wikipedia REST); SQLite `fact_check_results` table; `POST /v1/fact-check` + `GET /v1/fact-check/{id}`; auto-enrichment in `/v1/process-audio`; 91 new tests (118 insight tests passing) | ✅ Done |
-| CI | GitHub Actions: lint (ruff + mypy hard-gate + gitleaks) + tests on Python 3.10/3.11, every push/PR | ✅ Done |
+| CI | GitHub Actions: lint (ruff + mypy hard-gate + gitleaks) + tests on Python 3.10/3.11, on a push or pull request to `main` | ✅ Done |
 | Tier 1 | Production-readiness security: X-API-Key auth, payload-size caps, ffmpeg subprocess timeout, model-loader concurrency locks | ✅ Done |
 | Tier 2 | Test-coverage closure: 6 insight-core engines to 100%; CI ruff + gitleaks + mypy + 3.10/3.11 matrix | ✅ Done |
 | Tier 3 | Waves A/B/D: cleanups, schema fixes, mypy hard-gate | ✅ Done |
@@ -130,7 +130,9 @@ all done.
 > the dormancy is time-bounded: the fact-check job re-runs every downstream
 > consumer. Nothing in today's code changes — D10 is a Phase 6 obligation.
 
-> **Sprint 7 hard constraints** (settled in Phase 0 — do not relitigate):
+> **Sprint 7 hard constraints** (from Phase 0; decision status lives only in
+> the register, [`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1](DOCS/FACTCHECK-AGENT-PHASE-0.md#1-decision-register)
+> — link, never copy. Do not reopen them without the owner):
 >
 > 1. **New tables only** (D1). The repo has no Alembic; `init_db()` is
 >    `create_all()`, which creates missing *tables* and never `ALTER`s one.
@@ -158,8 +160,9 @@ all done.
 >    §D10, not rediscovering the rule.
 >    ⚠️ **Phase 6 trap:** that makes the Agent Brain run **twice** per
 >    session, so the Java callback must fire **exactly once** — only on the
->    final pass. Java's trace-id de-duplication does *not* cover this: the
->    trace id is per-send and the two payloads genuinely differ, so Java
+>    final pass. Java's replay de-duplication (on the v2 signature) does
+>    *not* cover this: each send is signed separately and the two payloads
+>    genuinely differ, so Java
 >    would treat them as two legitimate recommendation sets for one
 >    `sessionId` with no rule for which wins. Test for *exactly* one
 >    dispatch, not "at least one".
@@ -173,9 +176,10 @@ all done.
 >   twice its planned size, or needs a second rework round after review,
 >   stop and ask the owner before continuing (DECISIONS #27).
 > - The repository URL in this file stays.
-> - **API keys are one trust group** (2026-10-17): only the Java backend
->   calls the service and it stays off the public internet; no per-session
->   ownership. Revisit before any direct customer access (DECISIONS #33).
+> - **API keys are one trust group** (2026-10-17): owner policy is that only
+>   the Java backend calls the service and that it stays off the public
+>   internet; a deployment must meet that. No per-session ownership. Revisit
+>   before any direct customer access (DECISIONS #33).
 
 ## Project knowledge set (DOCS/)
 
@@ -268,12 +272,12 @@ CI runs the same command on every push to `main` via `.github/workflows/test.yml
 
 | Where | Command | Count |
 |---|---|---|
-| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **1733** |
-| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **1730 + 1 skip** |
+| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **1784** |
+| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **1781 + 1 skip** |
 
-1730 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip` of torch, transformers, soundfile, huggingface_hub and pyannote.audio, reported as a single skip) = 1733. Nothing is lost in CI.
+1781 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip` of torch, transformers, soundfile, huggingface_hub and pyannote.audio, reported as a single skip) = 1784. Nothing is lost in CI.
 
-The light figure was measured on 2026-10-17 at `dbae452` (1730 passed, 1 skipped). The heavy figure is derived (1730 + the 3 skipped tests); it was last measured at 795 before the 2026-10-11 logging and fact-check tests, and needs a heavy-stack run to confirm. Reproduce the CI figure locally:
+The light figure was measured on 2026-10-19 at `ee2e15b` (1781 passed, 1 skipped). The heavy figure is derived (1781 + the 3 skipped tests); it was last measured at 795 before the 2026-10-11 logging and fact-check tests, and needs a heavy-stack run to confirm. Reproduce the CI figure locally:
 
 ```bash
 .venv\Scripts\python.exe -m pytest app/insights/tests/ app/agent_brain/tests/ --ignore=app/insights/tests/test_model_load_concurrency.py -q

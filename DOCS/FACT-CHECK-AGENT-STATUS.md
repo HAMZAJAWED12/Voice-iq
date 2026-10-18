@@ -1,6 +1,6 @@
 # Fact-Check Agent — Live Status
 
-Owner: engineering · Status: **Phase 0 in sign-off** · Created: 2026-10-11 · Updated: 2026-10-17
+Owner: engineering · Status: **Phase 0 in sign-off** · Created: 2026-10-11 · Updated: 2026-10-19
 
 The one place that says where Sprint 7 stands. Update it with every
 milestone. Decision status is **not** kept here — it lives only in the
@@ -14,8 +14,8 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 
 | | |
 |---|---|
-| Date | 2026-10-17 |
-| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452` |
+| Date | 2026-10-19 |
+| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b` |
 | Current phase | **Phase 0 — Contract and scope lock: partially complete.** Phases 1–7 not started (no Sprint 7 application code exists). |
 | Overall progress | **0.83 %** |
 
@@ -39,7 +39,7 @@ plan deliverables and do not move the percentage.
 
 ## Completed
 
-Verified against the repository on 2026-10-17 (`dbae452`).
+Verified against the repository on 2026-10-19 (`ee2e15b`).
 
 - **Phase 0: 3 of 10 register decisions signed** — see
   [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)
@@ -151,7 +151,7 @@ Verified against the repository on 2026-10-17 (`dbae452`).
     - `e802fcd` — insight writes 60/minute and reads 120/minute per caller;
       the session list takes `limit` (default 100, at most 500) and
       `offset`.
-    - `da92ae4` — a fact-check run checks at most 25 claims within 20 s;
+    - `da92ae4` — a fact-check run checks at most 25 claims and starts no new check after 20 s;
       the rest are counted as skipped.
     - `cbdafb4` — insight and fact-check records are deleted after 30 days,
       by the retention sweep, now at startup and hourly.
@@ -183,6 +183,25 @@ Verified against the repository on 2026-10-17 (`dbae452`).
     fail there).
 
     Light suite 1730 passed, 1 skipped; `ruff check .` and mypy clean.
+  - **Pull-request review fix round** (2026-10-19), approved by the owner
+    after two independent reviews of the pull request; one commit per fix,
+    each red-checked and reviewed:
+    - `ee2e15b` — whole-word rules list the article, pronoun and inflected
+      forms they would otherwise miss (email triggers such as "send an" and
+      "share these"; "umm", "hates", "apologized" and others); the email
+      title drops a leading article only as a whole word
+      ([DECISIONS #32](DECISIONS.md#32-m7-keyword-rules-match-whole-words-only)).
+    - `efdd1a9` — fact-check provider replies are requested uncompressed,
+      and a reply in any other content encoding is refused before its body
+      is read.
+    - `8563572` — the test suite never reads `.env` and uses a temporary
+      database and job folder.
+    - A docs commit corrected claims that went further than the code:
+      fact-check egress, when the process-audio 503 and 429 come, the
+      fact-check deadline, the callback replay check and deployment
+      requirements.
+
+    Light suite 1781 passed, 1 skipped; ruff and mypy clean.
 - **2026-10-11 audit and documentation sync** (this branch): stale
   operational docs corrected, PHASE-0 wording made consistent with its own
   register, this status document created.
@@ -279,8 +298,10 @@ Phase 3 or Phase 6.
 
 The Phase 1 gate (*Remaining*, item 1) is met when all of the following hold (the first two items are the PHASE-0 §8 checklist):
 
-- every register decision due before Phase 1 is signed, with signer and date
-  in [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register);
+- every register decision is signed, with signer and date in
+  [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register) (only those
+  due before Phase 1, if the per-phase gate reading is confirmed; until then
+  every decision counts);
 - §2, §3 and §6 are approved;
 - the per-phase gate reading and the `ClaimSpan` freeze-list change are
   confirmed or withdrawn;

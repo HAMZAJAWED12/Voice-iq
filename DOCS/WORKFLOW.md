@@ -1,4 +1,4 @@
-Last verified: 2026-10-18, 99006c0
+Last verified: 2026-10-19, ee2e15b
 # Workflow
 
 How work gets done in this repository: branches, the local Python environment, the checks, the commit rules and the milestone loop. AI assistants read [CLAUDE.md](../CLAUDE.md) first. For where Sprint 7 stands, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For what the project is, see [CONTEXT.md](CONTEXT.md).
@@ -22,9 +22,9 @@ Then stage files by explicit path and commit. The pre-commit hooks run on their 
 | Rule | Detail |
 |---|---|
 | Base branch | `main`. |
-| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/doc-sync`, cut from `main` at `8fd3972`. It holds the 2026-10-11 documentation sync, milestones M1 to M7, the project knowledge set, a set of security and reliability fixes, the fixes the owner decided on 2026-10-17, and the docs, code-comment and CI type-check updates that followed: 66 commits beyond `main` at `16654b5` (`git rev-list --count main..HEAD`). |
+| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/doc-sync`, cut from `main` at `8fd3972`. It holds the 2026-10-11 documentation sync, milestones M1 to M7, the project knowledge set, a set of security and reliability fixes, the fixes the owner decided on 2026-10-17, the docs, code-comment and CI type-check updates that followed, and the pull-request review fix round: 71 commits beyond `main` at `ee2e15b` (`git rev-list --count main..HEAD`). |
 | `main` | Never commit to `main` directly. |
-| Push | Never push without the owner's go-ahead. `sprint7/doc-sync` tracks `origin/sprint7/doc-sync` (`git rev-parse --abbrev-ref sprint7/doc-sync@{upstream}`); at `16654b5` the local branch and its upstream pointed to the same commit. |
+| Push | Never push without the owner's go-ahead. `sprint7/doc-sync` tracks `origin/sprint7/doc-sync` (`git rev-parse --abbrev-ref sprint7/doc-sync@{upstream}`). |
 | CI trigger | CI runs on a push to `main` and on a pull request into `main`, nothing else ([.github/workflows/test.yml](../.github/workflows/test.yml), lines 3-7). Until a pull request is open, nothing checks a branch except the local checks. |
 
 The repository sits in a synced OneDrive folder, which sometimes causes `index.lock` collisions. If git starts fighting itself, pause the sync ([CLAUDE.md](../CLAUDE.md), *Working with this repo*).
@@ -75,17 +75,27 @@ Run it locally through the venv:
 
 Locally it passes with or without `PYTHONPATH` set.
 
+### Isolation
+
+The suite never reads `.env` and never writes the repository's `data/`.
+[app/conftest.py](../app/conftest.py), which pytest loads before any test
+module, turns `load_dotenv()` into a no-op, stops both settings classes
+reading an env file, and points the database and the default job folder at a
+temporary directory that is removed when the run ends. A test that needs a
+setting sets it with `monkeypatch`. `app/insights/tests/test_suite_isolation.py`
+pins this (`8563572`).
+
 ### Current count
 
-On the light stack, at `dbae452`: **1730 passed, 1 skipped**, measured on 2026-10-17 on `.venv` (CPython 3.12.10). The CI-equivalent run with `--ignore=app/insights/tests/test_model_load_concurrency.py` gives 1730 passed.
+On the light stack, at `ee2e15b`: **1781 passed, 1 skipped**, measured on 2026-10-19 on `.venv` (CPython 3.12.10). The CI-equivalent run with `--ignore=app/insights/tests/test_model_load_concurrency.py` gives 1781 passed.
 
-The skip is `app/insights/tests/test_model_load_concurrency.py`. It holds 3 tests and calls `pytest.importorskip` on torch, transformers, soundfile, huggingface_hub and pyannote.audio at module level (lines 25-29). The full reconciliation (1733 on the heavy stack, derived rather than measured) lives in [CLAUDE.md](../CLAUDE.md), section *One test lane*. Update it there, not here.
+The skip is `app/insights/tests/test_model_load_concurrency.py`. It holds 3 tests and calls `pytest.importorskip` on torch, transformers, soundfile, huggingface_hub and pyannote.audio at module level (lines 25-29). The full reconciliation (1784 on the heavy stack, derived rather than measured) lives in [CLAUDE.md](../CLAUDE.md), section *One test lane*. Update it there, not here.
 
 ### Why a bare `pytest` at the root fails
 
 | Invocation | pytest rootdir and config | Result |
 |---|---|---|
-| `pytest app/insights/tests/ app/agent_brain/tests/` | rootdir `app/`, config `app/pytest.ini` | 1730 passed, 1 skipped |
+| `pytest app/insights/tests/ app/agent_brain/tests/` | rootdir `app/`, config `app/pytest.ini` | 1781 passed, 1 skipped |
 | `pytest` (no paths, from the root) | rootdir is the repository root. The config is `pyproject.toml`, which has no pytest settings, so `app/pytest.ini` (`testpaths = app/insights/tests`) does not apply. | pytest walks the whole tree, collects the legacy `tests/` folder and stops: `Interrupted: 2 errors during collection` |
 
 The two errors come from the legacy folder. `tests/test_diarization.py` imports `app.services.diarization_service`, which needs `soundfile`. `tests/test_diarization_load.py` imports `huggingface_hub`. The light stack includes neither. Always pass the two paths.

@@ -48,8 +48,8 @@ jobs:
           rm -f "$archive" gitleaks_checksums.txt
 
       # gitleaks scans the working tree only (`dir`), not history (`git`).
-      # Old history contains rotated credentials. Pre-commit gates new
-      # commits; CI mirrors that scope.
+      # Pre-commit gates new commits (.pre-commit-config.yaml); CI mirrors
+      # that scope.
       - name: Gitleaks secret scan (working tree)
         run: gitleaks dir . --no-banner --redact
 

@@ -48,10 +48,14 @@ intent:
 Four things fall out of that table.
 
 **1. Substring matching already works in Arabic script.** `signals.py` lowercases
-and does `in` — and `.lower()` is a no-op on Arabic script (verified:
+and, by default, does `in` — and `.lower()` is a no-op on Arabic script (verified:
 `text.lower() == text` for every ur/ar case). Passing a translated signal list
 matched immediately: `['فوری', 'ابھی']`, `['عاجل', 'فورا']`. The signal layer
-needs **translated word lists, not code and not models.**
+needs **translated word lists, not code and not models.** One exception since
+M7: the Email Draft agent matches whole words (`whole_words=True`), and Arabic
+letters count as word characters, so a word with an attached prefix or suffix
+(the article, a one-letter preposition) does not match its bare form. Its ur/ar
+list must spell out the attached forms (L1).
 
 **2. Priority classification is the same story.** `_CRITICAL_TERMS` is an English
 tuple. A translated tuple matches ur and ar correctly with zero new
@@ -291,7 +295,7 @@ recommendation from this path.
 
 > **Carried into Phase 6 with it:** under Option A the Agent Brain runs twice
 > per session, so the Java callback must fire **exactly once** — only on the
-> final pass. Java's trace-id de-duplication does not cover this, because the
+> final pass. Java's replay de-duplication (on the v2 signature) does not cover this, because the
 > two payloads genuinely differ. Full rule in `FACTCHECK-AGENT-PHASE-0.md`
 > §D10.
 
