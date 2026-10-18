@@ -23,10 +23,12 @@ class IntentService:
         if t.endswith("?") or any(contains_phrase(t, w) for w in ["?", "could you", "would you", "can you"]):
             return "question"
 
-        if any(contains_phrase(t, w) for w in ["sorry", "apologize", "my fault"]):
+        if any(contains_phrase(t, w) for w in ["sorry", "apologize", "apologized", "my fault"]):
             return "apology"
 
-        if any(contains_phrase(t, w) for w in ["angry", "mad", "upset", "frustrated", "terrible", "horrible"]):
+        if any(
+            contains_phrase(t, w) for w in ["angry", "mad", "upset", "upsetting", "frustrated", "terrible", "horrible"]
+        ):
             return "complaint"
 
         if any(

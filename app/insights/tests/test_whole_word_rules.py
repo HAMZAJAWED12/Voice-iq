@@ -2,8 +2,9 @@
 
 Covers the pipeline's flag rules (hesitation, aggression, lie risk) and its
 intent rules. Each rule fires on its keyword as a whole word or phrase, and
-does not fire when the keyword is only part of a longer word. The
-vocabularies are unchanged.
+does not fire when the keyword is only part of a longer word. Inflected and
+drawn-out forms that whole-word matching would otherwise miss ("hates",
+"umm", "apologized") are listed as keywords of their own.
 """
 
 from __future__ import annotations
@@ -37,8 +38,27 @@ def test_a_flag_fires_on_its_whole_keyword(text: str, flag: str) -> None:
 @pytest.mark.parametrize(
     ("text", "flag"),
     [
+        ("Umm, let me check.", "hesitation"),
+        ("Uhh, I am not sure.", "hesitation"),
+        ("Erm, maybe later.", "hesitation"),
+        ("Ahh, I see.", "hesitation"),
+        ("You idiots broke it.", "aggression"),
+        ("She hates this product.", "aggression"),
+        ("I hated every minute.", "aggression"),
+        ("That was sheer stupidity.", "aggression"),
+        ("What a crappy service.", "aggression"),
+    ],
+)
+def test_a_flag_fires_on_an_inflected_or_drawn_out_keyword(text: str, flag: str) -> None:
+    assert flag in _flag_types(text)
+
+
+@pytest.mark.parametrize(
+    ("text", "flag"),
+    [
         ("The number on her order is 42.", "hesitation"),  # um, er
-        ("Yeah, the summary is ready.", "hesitation"),  # ah, um
+        ("Yeah, the summary is ready.", "hesitation"),  # ah, um, umm
+        ("Every permit term is listed.", "hesitation"),  # er, erm
         ("Whatever works for the team.", "aggression"),  # hate
         ("The dumbbells arrived in a scrappy box.", "aggression"),  # dumb, crap
         ("Nevertheless, I think it works.", "lie_risk"),  # never
@@ -66,6 +86,14 @@ def test_a_flag_does_not_fire_on_part_of_a_word(text: str, flag: str) -> None:
     ],
 )
 def test_an_intent_rule_fires_on_its_whole_keyword(text: str, intent: str) -> None:
+    assert IntentService.classify_utterance(text) == intent
+
+
+@pytest.mark.parametrize(
+    ("text", "intent"),
+    [("I apologized already", "apology"), ("This is really upsetting", "complaint")],
+)
+def test_an_intent_rule_fires_on_an_inflected_keyword(text: str, intent: str) -> None:
     assert IntentService.classify_utterance(text) == intent
 
 

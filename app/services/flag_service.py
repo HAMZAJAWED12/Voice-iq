@@ -4,8 +4,22 @@
 from app.utils.logger import logger
 from app.utils.text_match import contains_phrase
 
-HESITATION_MARKERS = ["um", "uh", "you know", "er", "ah", "kind of", "sort of", "..."]
-AGGRESSION_WORDS = ["crap", "stupid", "idiot", "hate", "dumb", "aggressive", "angry"]
+# Matching is whole-word, so inflected and drawn-out forms are listed too.
+HESITATION_MARKERS = ["um", "umm", "uh", "uhh", "you know", "er", "erm", "ah", "ahh", "kind of", "sort of", "..."]
+AGGRESSION_WORDS = [
+    "crap",
+    "crappy",
+    "stupid",
+    "stupidity",
+    "idiot",
+    "idiots",
+    "hate",
+    "hates",
+    "hated",
+    "dumb",
+    "aggressive",
+    "angry",
+]
 ABSOLUTE_WORDS = ["always", "never", "impossible", "absolutely", "definitely"]
 
 
