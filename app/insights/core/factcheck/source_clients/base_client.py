@@ -35,18 +35,40 @@ _DEFAULT_UA: str = "VoiceIQ-FactCheck/1.0 " "(+https://github.com/HAMZAJAWED12/V
 # json.loads hooks: a provider reply carrying a non-finite number (the NaN /
 # Infinity tokens Python's json accepts, or a float literal like 1e999 that
 # overflows to inf) is rejected as invalid JSON instead of reaching a verdict.
-#: Most decoded bytes read from one provider reply. Real replies are a few
-#: kilobytes; a reply that grows past this is not read further (counted
-#: after decompression, so a small compressed body cannot expand past it).
+#: Most bytes read from one provider reply. Real replies are a few kilobytes;
+#: a reply that grows past this is not read further. Replies are asked for
+#: uncompressed and one with any other content encoding is refused unread
+#: (`_refuse_encoded`), so these are the bytes that arrive and nothing is
+#: decompressed before they are counted.
 MAX_REPLY_BYTES: int = 1024 * 1024
+
+#: Sent with every provider request, overriding httpx's default of gzip and
+#: deflate (plus br and zstd when those packages are installed).
+_IDENTITY_ONLY: dict[str, str] = {"Accept-Encoding": "identity"}
 
 
 class _ReplyTooLarge(Exception):
     pass
 
 
+class _EncodedReply(Exception):
+    pass
+
+
+def _refuse_encoded(response: httpx.Response) -> None:
+    """`_EncodedReply` if `response` declares a content encoding other than identity.
+
+    httpx decodes gzip, deflate, br and zstd one network chunk at a time with
+    no limit on the output, before `_read_capped` could count it.
+    """
+    for value in response.headers.get_list("content-encoding", split_commas=True):
+        encoding = value.strip().lower()
+        if encoding and encoding != "identity":
+            raise _EncodedReply
+
+
 def _read_capped(response: httpx.Response, limit: int) -> bytes:
-    """The decoded body of a streamed `response`; `_ReplyTooLarge` past `limit` bytes."""
+    """The body of a streamed `response`; `_ReplyTooLarge` past `limit` bytes."""
     chunks: list[bytes] = []
     size = 0
     for chunk in response.iter_bytes():
@@ -139,9 +161,10 @@ class BaseSourceClient(ABC):
         Performs at most ``retries + 1`` attempts. Retries are *only*
         triggered for transient failures (timeout, connection error, 5xx).
         4xx responses are considered terminal and not retried. A reply that
-        cannot be decoded, is larger than `MAX_REPLY_BYTES`, is not valid
-        JSON, contains a non-finite number, or is not a JSON object also
-        yields `None` (no retry).
+        declares a content encoding other than identity, cannot be decoded,
+        is larger than `MAX_REPLY_BYTES`, is not valid JSON, contains a
+        non-finite number, or is not a JSON object also yields `None` (no
+        retry).
         """
         attempts = max(1, retries + 1)
         client_owned_here = self._client is None
@@ -152,9 +175,15 @@ class BaseSourceClient(ABC):
         try:
             for attempt in range(attempts):
                 try:
-                    with client.stream("GET", url, params=params) as response:
+                    with client.stream("GET", url, params=params, headers=_IDENTITY_ONLY) as response:
                         status = response.status_code
-                        body = _read_capped(response, MAX_REPLY_BYTES) if status < 400 else b""
+                        body = b""
+                        if status < 400:
+                            _refuse_encoded(response)
+                            body = _read_capped(response, MAX_REPLY_BYTES)
+                except _EncodedReply:
+                    logger.warning("%s: compressed reply refused", self.name)
+                    return None
                 except _ReplyTooLarge:
                     logger.warning("%s: reply larger than %d bytes", self.name, MAX_REPLY_BYTES)
                     return None
