@@ -1,4 +1,4 @@
-Last verified: 2026-10-18, 6aa8990
+Last verified: 2026-10-18, 16654b5
 # Workflow
 
 How work gets done in this repository: branches, the local Python environment, the checks, the commit rules and the milestone loop. AI assistants read [CLAUDE.md](../CLAUDE.md) first. For where Sprint 7 stands, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For what the project is, see [CONTEXT.md](CONTEXT.md).
@@ -22,9 +22,9 @@ Then stage files by explicit path and commit. The pre-commit hooks run on their 
 | Rule | Detail |
 |---|---|
 | Base branch | `main`. |
-| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/doc-sync`, cut from `main` at `8fd3972`. It holds the 2026-10-11 documentation sync, milestones M1 to M7, the project knowledge set, a set of security and reliability fixes and the fixes the owner decided on 2026-10-17: 62 commits beyond `main` at `dbae452` (`git rev-list --count main..HEAD`). |
+| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/doc-sync`, cut from `main` at `8fd3972`. It holds the 2026-10-11 documentation sync, milestones M1 to M7, the project knowledge set, a set of security and reliability fixes, the fixes the owner decided on 2026-10-17, and the docs, code-comment and CI type-check updates that followed: 66 commits beyond `main` at `16654b5` (`git rev-list --count main..HEAD`). |
 | `main` | Never commit to `main` directly. |
-| Push | Never push without the owner's go-ahead. `sprint7/doc-sync` has no upstream yet: `git rev-parse --abbrev-ref sprint7/doc-sync@{upstream}` fails. |
+| Push | Never push without the owner's go-ahead. `sprint7/doc-sync` tracks `origin/sprint7/doc-sync` (`git rev-parse --abbrev-ref sprint7/doc-sync@{upstream}`); at `16654b5` the local branch and its upstream pointed to the same commit. |
 | CI trigger | CI runs on a push to `main` and on a pull request into `main`, nothing else ([.github/workflows/test.yml](../.github/workflows/test.yml), lines 3-7). Until a pull request is open, nothing checks a branch except the local checks. |
 
 The repository sits in a synced OneDrive folder, which sometimes causes `index.lock` collisions. If git starts fighting itself, pause the sync ([CLAUDE.md](../CLAUDE.md), *Working with this repo*).
