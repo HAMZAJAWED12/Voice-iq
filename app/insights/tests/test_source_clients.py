@@ -55,23 +55,84 @@ def _claim(
 # --------------------------------------------------------------------------- #
 
 
-def test_forex_returns_evidence_on_success():
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.params["base"] == "USD"
-        assert request.url.params["symbols"] == "PKR"
-        return httpx.Response(200, json={"base": "USD", "rates": {"PKR": 280.5}})
-
-    client = ForexClient(client=_mock_client(handler))
-    claim = _claim(
+def _forex_claim(base: str = "USD", quote: str = "PKR") -> DetectedClaim:
+    return _claim(
         claim_type="CURRENCY_RATE",
         raw_value=280.0,
-        subject={"base": "USD", "quote": "PKR", "pair": "USD/PKR"},
+        subject={"base": base, "quote": quote, "pair": f"{base}/{quote}"},
     )
-    evidence = client.fetch(claim)
+
+
+def test_forex_returns_evidence_on_success():
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"result": "success", "base_code": "USD", "rates": {"PKR": 280.5}})
+
+    evidence = ForexClient(client=_mock_client(handler)).fetch(_forex_claim())
+
     assert evidence is not None
     assert evidence.value == 280.5
     assert evidence.unit == "PKR"
-    assert evidence.source == "exchangerate.host"
+    assert evidence.source == "open.er-api.com"
+    assert evidence.raw["attribution"] == "Rates By Exchange Rate API (https://www.exchangerate-api.com)"
+    (request,) = requests
+    # Only the base currency leaves the host; the quote is picked out locally.
+    assert str(request.url) == "https://open.er-api.com/v6/latest/USD"
+
+
+def test_forex_fetches_each_base_at_most_hourly(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr("app.insights.core.factcheck.source_clients.forex_client.time.monotonic", lambda: clock[0])
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"result": "success", "rates": {"PKR": 280.0, "EUR": 0.9, "USD": 1.0}})
+
+    client = ForexClient(client=_mock_client(handler))
+    pkr = client.fetch(_forex_claim("USD", "PKR"))
+    eur = client.fetch(_forex_claim("USD", "EUR"))
+    clock[0] += 3599.0
+    client.fetch(_forex_claim("USD", "PKR"))
+    assert len(requests) == 1
+
+    clock[0] += 2.0
+    client.fetch(_forex_claim("USD", "PKR"))
+    client.fetch(_forex_claim("EUR", "USD"))
+
+    assert (pkr.value, eur.value) == (280.0, 0.9)
+    assert [r.url.path for r in requests] == ["/v6/latest/USD", "/v6/latest/USD", "/v6/latest/EUR"]
+
+
+def test_forex_does_not_cache_a_failed_fetch():
+    replies = [httpx.Response(404, json={}), httpx.Response(200, json={"result": "success", "rates": {"PKR": 280.0}})]
+    client = ForexClient(client=_mock_client(lambda _request: replies.pop(0)))
+
+    first = client.fetch(_forex_claim())
+    second = client.fetch(_forex_claim())
+
+    assert first is None
+    assert second is not None and second.value == 280.0
+
+
+@pytest.mark.parametrize(
+    "subject",
+    [
+        {"base": "usd", "quote": "PKR"},
+        {"base": "US/D", "quote": "PKR"},
+        {"base": "USD", "quote": "PK"},
+        {"base": "USD"},
+    ],
+)
+def test_forex_sends_nothing_for_a_malformed_currency_code(subject):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError(f"unexpected request {request.url}")
+
+    claim = _claim(claim_type="CURRENCY_RATE", raw_value=1.0, subject=subject)
+
+    assert ForexClient(client=_mock_client(handler)).fetch(claim) is None
 
 
 def test_forex_returns_none_on_http_error():
@@ -79,12 +140,7 @@ def test_forex_returns_none_on_http_error():
         return httpx.Response(500, json={})
 
     client = ForexClient(client=_mock_client(handler))
-    claim = _claim(
-        claim_type="CURRENCY_RATE",
-        raw_value=280.0,
-        subject={"base": "USD", "quote": "PKR"},
-    )
-    assert client.fetch(claim) is None
+    assert client.fetch(_forex_claim()) is None
 
 
 def test_forex_skips_non_currency_claims():

@@ -7,17 +7,19 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 from uuid import uuid4
 
 # Light imports only at module scope.
 #
 # The eight ML-backed services (ASR, diarization, sentiment, keywords,
 # gender, topic, summary + analyze_audio_quality) are imported INSIDE the
-# `_run_<stage>` method that uses them. Importing them here would pull
-# whisper / torch / transformers / spacy / librosa at module import time,
-# which made `test_orchestrator.py` unrunnable on the lightweight
-# `requirements-insight.txt` stack and forced a separate 8-12 minute CI job.
+# `try` of the `_run_<stage>` method that uses them. Importing them here
+# would pull whisper / torch / transformers / spacy / librosa at module
+# import time, which made `test_orchestrator.py` unrunnable on the
+# lightweight `requirements-insight.txt` stack and forced a separate 8-12
+# minute CI job. Inside the `try`, a missing package fails only that stage,
+# with its *_FAILED warning, instead of the whole request.
 #
 # The services below are safe at module scope: they are pure-python, or
 # (EmotionService) guard their heavy import in a try/except of their own.
@@ -32,6 +34,7 @@ from app.services.metadata_service import MetadataExtractor
 from app.services.pdf_service import PDFService
 from app.utils.audio_utils import (
     AudioNormalizationTimeout,
+    AudioTooLong,
     normalize_to_wav,
 )
 from app.utils.job_io import JobIO, JobPaths
@@ -67,8 +70,8 @@ def _safe_ctor_kwargs(cls, kwargs: dict[str, Any]) -> dict[str, Any]:
 class _HardFail(Exception):
     """Raised by a gate stage to abort the pipeline early.
 
-    Only the four hard-fail gates raise it: missing input audio, the two
-    audio-normalization failures, and silent/near-silent audio. The gate
+    Only the five hard-fail gates raise it: missing input audio, the three
+    normalization failures (timeout, too long, other), silent audio. The gate
     is responsible for setting ``status="failed"``, recording its warning,
     and persisting meta.json before raising; ``run`` catches it once and
     returns the (failed) final response. Every later stage is fail-soft
@@ -233,7 +236,7 @@ class VoiceIQOrchestrator:
     # One method per pipeline step, in production order. Each stage reads
     # what it needs from _PipelineState, writes its artifacts to disk, and
     # records its own timing. All are fail-soft (warn + continue) except
-    # the four hard-fail gates, which raise _HardFail.
+    # the five hard-fail gates, which raise _HardFail.
     # ------------------------------------------------------------------
 
     def _run_input_gate(self, st: _PipelineState) -> None:
@@ -263,45 +266,37 @@ class VoiceIQOrchestrator:
                 },
             )
         except AudioNormalizationTimeout as e:
-            # Distinct warning code so the HTTP layer can map this to 422
-            # (caller's fault, retry not useful) vs. AUDIO_NORMALIZATION_FAILED
-            # which maps to 400 (malformed file).
-            st.meta["status"] = "failed"
-            st.warn("AUDIO_NORMALIZATION_TIMEOUT")
-            self.io.save_json(
-                st.job,
-                "artifacts/audio/normalize.status.json",
-                {
-                    "service": "audio_normalize",
-                    "status": "timeout",
-                    "error": str(e),
-                },
-            )
-            st.timing("audio_normalize", t0)
-            self.io.save_json(st.job, "meta.json", st.meta)
-            raise _HardFail from e
+            # Distinct warning codes so the HTTP layer can map a timeout to 422
+            # (caller's fault, retry not useful), audio over the length limit
+            # to 413, and AUDIO_NORMALIZATION_FAILED to 400 (malformed file).
+            self._normalize_failed(st, t0, "AUDIO_NORMALIZATION_TIMEOUT", "timeout", e)
+        except AudioTooLong as e:
+            self._normalize_failed(st, t0, "AUDIO_TOO_LONG", "too_long", e)
         except Exception as e:
-            st.meta["status"] = "failed"
-            st.warn("AUDIO_NORMALIZATION_FAILED")
-            self.io.save_json(
-                st.job,
-                "artifacts/audio/normalize.status.json",
-                {
-                    "service": "audio_normalize",
-                    "status": "failed",
-                    "error": str(e),
-                },
-            )
-            st.timing("audio_normalize", t0)
-            self.io.save_json(st.job, "meta.json", st.meta)
-            raise _HardFail from e
+            self._normalize_failed(st, t0, "AUDIO_NORMALIZATION_FAILED", "failed", e)
         st.timing("audio_normalize", t0)
 
-    def _run_audio_quality(self, st: _PipelineState) -> None:
-        from app.utils.audio_quality import analyze_audio_quality
+    def _normalize_failed(self, st: _PipelineState, t0: int, code: str, status: str, error: Exception) -> NoReturn:
+        st.meta["status"] = "failed"
+        st.warn(code)
+        self.io.save_json(
+            st.job,
+            "artifacts/audio/normalize.status.json",
+            {
+                "service": "audio_normalize",
+                "status": status,
+                "error": str(error),
+            },
+        )
+        st.timing("audio_normalize", t0)
+        self.io.save_json(st.job, "meta.json", st.meta)
+        raise _HardFail from error
 
+    def _run_audio_quality(self, st: _PipelineState) -> None:
         t0 = _now_ms()
         try:
+            from app.utils.audio_quality import analyze_audio_quality
+
             st.aq = analyze_audio_quality(st.normalized_wav)
             st.audio_quality_payload = st.aq.to_dict()
             self.io.save_json(st.job, "artifacts/audio/audio_quality.json", st.audio_quality_payload)
@@ -345,10 +340,10 @@ class VoiceIQOrchestrator:
         st.low_snr_flag = bool(st.aq and (st.aq.low_snr or st.aq.very_low_snr))
 
     def _run_asr(self, st: _PipelineState) -> None:
-        from app.services.asr_service import ASRService
-
         t0 = _now_ms()
         try:
+            from app.services.asr_service import ASRService
+
             asr = ASRService(model_name=st.whisper_model, language=st.language)
             st.asr_out = asr.transcribe(st.normalized_wav)
 
@@ -389,11 +384,11 @@ class VoiceIQOrchestrator:
         st.transcript_text = self.io.load_text(st.job, "artifacts/asr/transcript.txt", default="") or ""
 
     def _run_diarization(self, st: _PipelineState) -> None:
-        from app.services.diarization_service import DiarizationService
-
         t0 = _now_ms()
         diar_warns: list[str] = []
         try:
+            from app.services.diarization_service import DiarizationService
+
             diar = DiarizationService()
 
             if hasattr(diar, "diarize_with_warnings"):
@@ -408,6 +403,10 @@ class VoiceIQOrchestrator:
 
             for w in diar_warns:
                 st.warn(w)
+            if any(d.get("source") == "mock" for d in st.diar_segments):
+                # The fallback puts the whole call under one speaker: speaker
+                # separation did not happen, whatever the reason.
+                st.warn("MOCK_DIARIZATION_USED")
 
             self.io.save_json(st.job, "artifacts/diarization/diarization.json", st.diar_segments)
             self.io.save_json(
@@ -513,10 +512,10 @@ class VoiceIQOrchestrator:
         st.timing("stats", t0)
 
     def _run_sentiment(self, st: _PipelineState) -> None:
-        from app.services.sentiment_service import SentimentService
-
         t0 = _now_ms()
         try:
+            from app.services.sentiment_service import SentimentService
+
             if st.speaker_segments:
                 out = SentimentService.analyze_speaker_segments(st.speaker_segments)
                 st.speaker_segments = out
@@ -530,10 +529,10 @@ class VoiceIQOrchestrator:
         st.timing("sentiment", t0)
 
     def _run_keywords(self, st: _PipelineState) -> None:
-        from app.services.keyword_service import KeywordService
-
         t0 = _now_ms()
         try:
+            from app.services.keyword_service import KeywordService
+
             if st.speaker_segments:
                 out = KeywordService.extract_keywords_per_segment(st.speaker_segments)
                 st.speaker_segments = out
@@ -547,10 +546,10 @@ class VoiceIQOrchestrator:
         st.timing("keywords", t0)
 
     def _run_gender(self, st: _PipelineState) -> None:
-        from app.services.gender_service import GenderService
-
         t0 = _now_ms()
         try:
+            from app.services.gender_service import GenderService
+
             if st.low_snr_flag:
                 st.skip("gender")
                 st.warn("GENDER_SKIPPED_LOW_SNR")
@@ -589,24 +588,29 @@ class VoiceIQOrchestrator:
         st.timing("emotion", t0)
 
     def _run_topic(self, st: _PipelineState) -> None:
-        from app.services.topic_service import TopicService
-
         t0 = _now_ms()
         try:
+            from app.services.topic_service import TopicService
+
             st.topic = TopicService.classify(st.transcript_text or "")
             self.io.save_json(st.job, "artifacts/nlp/topic.json", st.topic)
         except Exception as e:
             st.warn("TOPIC_FAILED")
+            # topic.json is returned in the response: a fixed message there,
+            # the exception text only in the status file on disk.
             self.io.save_json(
-                st.job, "artifacts/nlp/topic.json", {"topic": "unknown", "confidence": 0.0, "error": str(e)}
+                st.job,
+                "artifacts/nlp/topic.json",
+                {"topic": "unknown", "confidence": 0.0, "error": "topic classification failed"},
             )
+            self.io.save_json(st.job, "artifacts/nlp/topic.status.json", {"status": "failed", "error": str(e)})
         st.timing("topic", t0)
 
     def _run_summary(self, st: _PipelineState) -> None:
-        from app.services.summary_service import SummaryService
-
         t0 = _now_ms()
         try:
+            from app.services.summary_service import SummaryService
+
             st.summary_text = SummaryService.generate_summary(st.transcript_text or "")
             self.io.save_text(st.job, "artifacts/nlp/summary.txt", st.summary_text or "")
         except Exception as e:
@@ -672,21 +676,34 @@ class VoiceIQOrchestrator:
 
                 insight_response = InsightService.generate(session_input)
                 st.insight_payload = insight_response.model_dump()
-                # Carried for _run_agent_brain — these objects exist nowhere
-                # else in the pipeline.
-                st.session_input = session_input
-                st.insight_bundle = insight_response.insights
-                st.agent_summary = insight_response.summaries.overall_summary
-
                 self.io.save_json(st.job, "artifacts/insights/insight_result.json", st.insight_payload)
-                self.io.save_json(
-                    st.job,
-                    "artifacts/insights/insight.status.json",
-                    {
-                        "service": "insights",
-                        "status": "ok",
-                    },
-                )
+                if insight_response.status == "error":
+                    # InsightService contained the fault and returned an empty
+                    # bundle; the stage failed, and the Agent Brain is skipped.
+                    st.warn("INSIGHTS_FAILED")
+                    self.io.save_json(
+                        st.job,
+                        "artifacts/insights/insight.status.json",
+                        {
+                            "service": "insights",
+                            "status": "failed",
+                            "error": "insight service returned status=error",
+                        },
+                    )
+                else:
+                    # Carried for _run_agent_brain — these objects exist
+                    # nowhere else in the pipeline.
+                    st.session_input = session_input
+                    st.insight_bundle = insight_response.insights
+                    st.agent_summary = insight_response.summaries.overall_summary
+                    self.io.save_json(
+                        st.job,
+                        "artifacts/insights/insight.status.json",
+                        {
+                            "service": "insights",
+                            "status": "ok",
+                        },
+                    )
             else:
                 st.skip("insights")
                 st.warn("INSIGHTS_SKIPPED_NO_SPEAKER_SEGMENTS")
@@ -727,8 +744,10 @@ class VoiceIQOrchestrator:
         makes it a job that finishes after the audio response, so a
         `FactCheckResponse` is not available at this point in the pipeline
         and will not be. `FactCheckReviewAgent` therefore stays dormant on
-        this path until decision **D10** settles whether the fact-check job
-        re-runs downstream consumers. The other four agents are unaffected.
+        this path until Phase 6 implements the D10 re-run (the fact-check job
+        re-runs the Agent Brain, then the PDF; see
+        DOCS/FACTCHECK-AGENT-PHASE-0.md §D10). The other four agents are
+        unaffected.
         """
         t0 = _now_ms()
         # Imported here, not at module scope: keeps the orchestrator's import
@@ -796,8 +815,9 @@ class VoiceIQOrchestrator:
         a third-party service that may be slow or down would make the
         pipeline's availability depend on Java's. The thread is a daemon:
         a callback in flight at shutdown is dropped, which is the correct
-        trade for a best-effort notification. Java de-duplicates on the
-        trace id, so a retry story belongs on their side.
+        trade for a best-effort notification. Retries and de-duplication
+        belong on the Java side (DOCS/JAVA-CALLBACK-V2.md); the trace id is
+        not signed, so it is not a replay guard on its own.
 
         Returns the thread so tests can join it; production ignores it.
         """
@@ -832,8 +852,15 @@ class VoiceIQOrchestrator:
                 JavaCallbackClient(settings).send(payload, trace_id=trace_id)
             except Exception as exc:  # noqa: BLE001 - best effort, never propagates
                 # No payload content in the log: it carries conversation-derived
-                # recommendations.
-                logger.warning("agent_brain: Java callback failed (trace_id=%s): %s", trace_id, exc)
+                # recommendations. No exception text either: httpx error text
+                # embeds the callback URL. Class name + HTTP status only.
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                logger.warning(
+                    "agent_brain: Java callback failed (trace_id=%s): %s%s",
+                    trace_id,
+                    type(exc).__name__,
+                    f" (HTTP {status})" if status is not None else "",
+                )
 
         thread = threading.Thread(target=_send, name=f"agent-callback-{trace_id[:8]}", daemon=True)
         thread.start()

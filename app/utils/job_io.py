@@ -140,7 +140,8 @@ class JobIO:
             max_age_hours: age threshold in hours; ``<= 0`` disables (no-op).
 
         Returns:
-            The number of directories removed.
+            The number of directories actually removed; one that is still
+            there after the removal attempt is logged and not counted.
         """
         if max_age_hours <= 0 or not self.base_dir.exists():
             return 0
@@ -155,7 +156,11 @@ class JobIO:
                 mtime = meta.stat().st_mtime if meta.exists() else job_dir.stat().st_mtime
                 if mtime < cutoff:
                     shutil.rmtree(job_dir, ignore_errors=True)
-                    removed += 1
+                    # ignore_errors hides failures: count only what is gone.
+                    if job_dir.exists():
+                        logger.warning("purge_expired: could not remove %s", job_dir.name)
+                    else:
+                        removed += 1
             except OSError as e:
                 logger.warning("purge_expired: skipped %s (%s)", job_dir, e)
         if removed:

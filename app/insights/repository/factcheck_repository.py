@@ -14,7 +14,9 @@ Public surface:
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import delete as sa_delete
@@ -189,6 +191,19 @@ class FactCheckRepository:
         finally:
             session.close()
 
+    def purge_older_than(self, cutoff: datetime) -> int:
+        """Delete results created before `cutoff`; returns how many."""
+        session = self._open()
+        try:
+            result = session.execute(sa_delete(FactCheckResultORM).where(FactCheckResultORM.created_at < cutoff))
+            session.commit()
+            return result.rowcount or 0  # type: ignore[attr-defined]
+        except SQLAlchemyError as exc:
+            session.rollback()
+            raise FactCheckRepositoryError("failed to purge expired fact-check results") from exc
+        finally:
+            session.close()
+
     def clear(self) -> None:
         """Remove every row. Intended for tests / dev resets."""
         session = self._open()
@@ -207,7 +222,11 @@ class FactCheckRepository:
 
     @staticmethod
     def _row_to_dict(row: FactCheckResultORM) -> dict[str, Any]:
-        """Expand `to_dict` with parsed evidence + reason for full readers."""
+        """Expand `to_dict` with parsed evidence + reason for full readers.
+
+        Non-finite numbers become None (see `_finite_only`): rows saved before
+        claimed values were capped may hold infinity.
+        """
         out = row.to_dict()
         out["claimed_value"] = row.claimed_value
         out["claimed_text"] = row.claimed_text
@@ -222,7 +241,18 @@ class FactCheckRepository:
                 out["evidence"] = None
         else:
             out["evidence"] = None
-        return out
+        return _finite_only(out)
+
+
+def _finite_only(value: Any) -> Any:
+    """`value` with every non-finite float, at any depth, replaced by None."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {key: _finite_only(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_finite_only(item) for item in value]
+    return value
 
 
 def build_factcheck_repository_from_factory(

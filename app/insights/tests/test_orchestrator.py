@@ -53,7 +53,7 @@ import pytest
 
 from app.insights.config.settings import get_settings
 from app.pipeline.orchestrator import VoiceIQOrchestrator, _safe_ctor_kwargs
-from app.utils.audio_utils import AudioNormalizationTimeout
+from app.utils.audio_utils import AudioNormalizationTimeout, AudioTooLong
 from app.utils.job_io import JobIO
 
 _ORCH = "app.pipeline.orchestrator"
@@ -308,6 +308,21 @@ class TestNormalizeStage:
         mx.aq.assert_not_called()
         mx.asr.assert_not_called()
 
+    def test_audio_over_the_length_limit_hard_fails_413_code(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
+    ) -> None:
+        _seed_input(io)
+        mx.normalize.side_effect = AudioTooLong("Audio is longer than 7200 seconds.")
+
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "failed"
+        assert "AUDIO_TOO_LONG" in res["warnings"]
+        assert "AUDIO_NORMALIZATION_FAILED" not in res["warnings"]
+        status = io.load_json(io.init_job(JOB_ID), "artifacts/audio/normalize.status.json")
+        assert status["status"] == "too_long"
+        mx.aq.assert_not_called()
+
     def test_generic_failure_hard_fails_400_code(
         self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
     ) -> None:
@@ -450,6 +465,31 @@ class TestDiarizeStage:
 
         assert "SPEAKER_CAP_APPLIED" in res["warnings"]
         assert "LOW_SNR_DIARIZATION_UNRELIABLE" in res["warnings"]
+
+    @pytest.mark.parametrize(
+        "service_warnings", [[], ["DIARIZATION_FAILED_FALLBACK"]], ids=["no-model", "model-failed"]
+    )
+    def test_mock_diarization_is_flagged(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, service_warnings: list[str]
+    ) -> None:
+        _seed_input(io)
+        mock_segment = {"speaker": "SPEAKER_00", "start": 0.0, "end": 4.0, "source": "mock"}
+        mx.diar.return_value.diarize_with_warnings.return_value = ([mock_segment], list(service_warnings))
+
+        res = orch.run(JOB_ID)
+
+        assert "MOCK_DIARIZATION_USED" in res["warnings"]
+        assert "SINGLE_SPEAKER_MODE" in res["warnings"]
+        assert res["pipeline_meta"]["status"] == "ok"
+
+    def test_real_diarization_is_not_flagged(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
+        _seed_input(io)
+        segments = [dict(seg, source="pyannote") for seg in GOLDEN_DIAR]
+        mx.diar.return_value.diarize_with_warnings.return_value = (segments, [])
+
+        res = orch.run(JOB_ID)
+
+        assert "MOCK_DIARIZATION_USED" not in res["warnings"]
 
     def test_single_speaker_mode(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
         _seed_input(io)
@@ -710,6 +750,36 @@ class TestInsightsStage:
             res = orch.run(JOB_ID)
         assert res["pipeline_meta"]["status"] == "ok"
         assert "INSIGHTS_FAILED" in res["warnings"]
+
+    def test_an_insight_error_result_fails_the_stage_and_skips_the_agent_brain(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """InsightService contains an engine fault as status="error"; the stage must say so."""
+        _seed_input(io)
+        monkeypatch.setenv("VOICEIQ_AGENT_BRAIN_AUTO_RUN", "true")
+        get_settings.cache_clear()
+        try:
+            with patch("app.insights.service.InsightRuleEngine.run", side_effect=RuntimeError("engine died")):
+                res = orch.run(JOB_ID)
+        finally:
+            get_settings.cache_clear()
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert res["insights"]["status"] == "error"
+        assert "INSIGHTS_FAILED" in res["warnings"]
+        status = io.load_json(io.init_job(JOB_ID), "artifacts/insights/insight.status.json")
+        assert status["status"] == "failed"
+        assert "AGENT_BRAIN_SKIPPED_NO_INSIGHTS" in res["warnings"]
+        assert "recommendations" not in res
+
+    def test_an_ok_insight_result_marks_the_stage_ok(
+        self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace
+    ) -> None:
+        _seed_input(io)
+        res = orch.run(JOB_ID)
+
+        assert "INSIGHTS_FAILED" not in res["warnings"]
+        assert io.load_json(io.init_job(JOB_ID), "artifacts/insights/insight.status.json")["status"] == "ok"
 
 
 # --------------------------------------------------------------------------- #
@@ -987,6 +1057,12 @@ class TestOrchestrationE2E:
             ),
             (
                 True,
+                lambda m: setattr(m.normalize, "side_effect", AudioTooLong("long")),
+                "AUDIO_TOO_LONG",
+                lambda m: m.aq,
+            ),
+            (
+                True,
                 lambda m: setattr(m.normalize, "side_effect", RuntimeError("bad file")),
                 "AUDIO_NORMALIZATION_FAILED",
                 lambda m: m.aq,
@@ -998,9 +1074,9 @@ class TestOrchestrationE2E:
                 lambda m: m.asr,
             ),
         ],
-        ids=["missing_input", "normalize_timeout", "normalize_failed", "audio_silent"],
+        ids=["missing_input", "normalize_timeout", "audio_too_long", "normalize_failed", "audio_silent"],
     )
-    def test_exactly_four_hard_fail_gates(
+    def test_exactly_five_hard_fail_gates(
         self,
         orch: VoiceIQOrchestrator,
         io: JobIO,
@@ -1010,7 +1086,7 @@ class TestOrchestrationE2E:
         code: str,
         uncalled: Any,
     ) -> None:
-        """Crown-jewel invariant #2: these 4 — and only these 4 — hard-fail.
+        """Crown-jewel invariant #2: these 5 — and only these 5 — hard-fail.
 
         Each drives status=="failed", records its code, and short-circuits so
         the next stage never runs. Every *other* stage failing is proven soft
@@ -1026,6 +1102,37 @@ class TestOrchestrationE2E:
         assert code in res["warnings"]
         # Early return short-circuits the immediately-downstream stage.
         uncalled(mx).assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("module", "code"),
+        [
+            ("app.utils.audio_quality", "AUDIO_QUALITY_FAILED"),
+            ("app.services.asr_service", "ASR_FAILED"),
+            ("app.services.diarization_service", "DIARIZATION_FAILED_FALLBACK"),
+            ("app.services.sentiment_service", "SENTIMENT_FAILED"),
+            ("app.services.keyword_service", "KEYWORDS_FAILED"),
+            ("app.services.gender_service", "GENDER_FAILED"),
+            ("app.services.topic_service", "TOPIC_FAILED"),
+            ("app.services.summary_service", "SUMMARY_FAILED"),
+        ],
+    )
+    def test_a_missing_stage_package_fails_only_that_stage(
+        self,
+        orch: VoiceIQOrchestrator,
+        io: JobIO,
+        mx: SimpleNamespace,
+        monkeypatch: pytest.MonkeyPatch,
+        module: str,
+        code: str,
+    ) -> None:
+        """A stage whose package cannot be imported warns; the request still succeeds."""
+        _seed_input(io)
+        monkeypatch.setitem(sys.modules, module, None)  # the import now raises ImportError
+
+        res = orch.run(JOB_ID)
+
+        assert res["pipeline_meta"]["status"] == "ok"
+        assert code in res["warnings"]
 
     def test_graceful_degradation_preserves_upstream(
         self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace

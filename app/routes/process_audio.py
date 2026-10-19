@@ -1,7 +1,11 @@
 # app/routes/process_audio.py
-import time
+import asyncio
+import json
 import uuid
+import weakref
+from dataclasses import dataclass
 
+import anyio
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 # Sprint-5 fact-check engine. Imported here so the audio pipeline can
@@ -26,25 +30,31 @@ from app.utils.upload import resolve_audio_ext
 MAX_UPLOAD_BYTES = get_settings().api_max_upload_mb * 1024 * 1024
 _enforce_upload_size = enforce_content_length(MAX_UPLOAD_BYTES)
 
-# Opportunistic retention sweep. The lifespan hook sweeps on startup; this
-# throttled call also sweeps on a long-running server that rarely restarts,
-# at most once per interval so it never adds latency to the hot path.
-_JOB_RETENTION_HOURS = get_settings().job_retention_hours
-_PURGE_INTERVAL_SEC = 3600.0
-_next_purge_at = 0.0
+
+@dataclass
+class _Admission:
+    """Pipeline slots and admitted uploads for one event loop (one worker)."""
+
+    slots: anyio.CapacityLimiter
+    inflight: int = 0  # admitted uploads: running or waiting for a slot
 
 
-def _maybe_purge(io: JobIO) -> None:
-    """Sweep expired job dirs at most once per _PURGE_INTERVAL_SEC. Fail-soft."""
-    global _next_purge_at
-    now = time.monotonic()
-    if now < _next_purge_at:
-        return
-    _next_purge_at = now + _PURGE_INTERVAL_SEC
-    try:
-        io.purge_expired(_JOB_RETENTION_HOURS)
-    except Exception:  # pragma: no cover - retention must never break a request
-        logger.exception("opportunistic job purge failed")
+# Pipeline runs execute in a worker thread so the event loop keeps serving
+# other requests. At most `process_audio_max_running` run at once per event
+# loop (one loop per worker process) and `process_audio_max_waiting` more
+# wait; a further upload gets 503 with Retry-After. Keyed by loop because a
+# limiter belongs to the loop it was created on; the counter changes only on
+# that loop, so it needs no lock.
+_ADMISSIONS: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, _Admission]" = weakref.WeakKeyDictionary()
+
+
+def _admission() -> _Admission:
+    loop = asyncio.get_running_loop()
+    admission = _ADMISSIONS.get(loop)
+    if admission is None:
+        slots = anyio.CapacityLimiter(get_settings().process_audio_max_running)
+        admission = _ADMISSIONS[loop] = _Admission(slots=slots)
+    return admission
 
 
 # Every route on this router requires a valid X-API-Key header (see
@@ -87,6 +97,11 @@ def _auto_run_factcheck(request_id: str, result: dict) -> None:
             speaker_id="pipeline",
             transcript_text=transcript,
         )
+        payload = response.model_dump(mode="json")
+        # The audio response is rendered as strict JSON (no NaN/Infinity): check
+        # the fact-check part first, so it degrades to the failed stub below
+        # instead of failing the whole response — and is never persisted.
+        json.dumps(payload, allow_nan=False)
         # Persistence is best-effort - log and continue on failure.
         try:
             factcheck_repository.save_response(response)
@@ -94,18 +109,20 @@ def _auto_run_factcheck(request_id: str, result: dict) -> None:
             logger.warning(
                 "fact-check persistence failed for request_id=%s (%s)",
                 request_id,
-                persist_exc,
+                type(persist_exc).__name__,
             )
-        result["fact_checks_v2"] = response.model_dump(mode="json")
+        result["fact_checks_v2"] = payload
     except Exception as exc:
+        # The exception text can carry provider or input details: log the
+        # class only and give the caller a fixed reason.
         logger.warning(
             "fact-check auto-run failed for request_id=%s (%s)",
             request_id,
-            exc,
+            type(exc).__name__,
         )
         result["fact_checks_v2"] = {
             "status": "failed",
-            "reason": str(exc),
+            "reason": "fact-check enrichment failed",
         }
 
 
@@ -133,8 +150,31 @@ async def process_audio(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+    settings = get_settings()
+    admission = _admission()
+    if admission.inflight >= settings.process_audio_max_running + settings.process_audio_max_waiting:
+        raise HTTPException(
+            status_code=503,
+            detail="Audio processing is at capacity. Retry later.",
+            headers={"Retry-After": str(settings.process_audio_retry_after_sec)},
+        )
+    admission.inflight += 1
+    try:
+        return await _admitted_request(request_id, file, ext, expected_speakers, fact_check, admission)
+    finally:
+        admission.inflight -= 1
+
+
+async def _admitted_request(
+    request_id: str,
+    file: UploadFile,
+    ext: str,
+    expected_speakers: int | None,
+    fact_check: bool | None,
+    admission: _Admission,
+) -> dict:
+    """Save the upload, then run the pipeline in a slot."""
     io = JobIO()
-    _maybe_purge(io)
     job = io.init_job(request_id)
 
     input_path = io.p(job, f"input/original{ext}")
@@ -191,6 +231,16 @@ async def process_audio(
             detail=(f"Upload exceeded the limit of {MAX_UPLOAD_BYTES} bytes " "mid-stream."),
         )
 
+    return await anyio.to_thread.run_sync(
+        _run_pipeline, request_id, io, expected_speakers, fact_check, limiter=admission.slots
+    )
+
+
+def _run_pipeline(request_id: str, io: JobIO, expected_speakers: int | None, fact_check: bool | None) -> dict:
+    """The blocking part of a request: the pipeline, then fact-check enrichment.
+
+    Runs in a worker thread, under the worker's admission limiter.
+    """
     orch = VoiceIQOrchestrator(job_io=io)
     result = orch.run(
         job_id=request_id,
@@ -202,10 +252,16 @@ async def process_audio(
 
     if result.get("pipeline_meta", {}).get("status") == "failed":
         # ffmpeg timeout is the caller's fault (corrupt / pathological input,
-        # not server malfunction), so surface it as 422. Other failures stay
-        # at 400 — malformed file the user can fix by re-encoding.
+        # not server malfunction), so surface it as 422; audio over the length
+        # limit is 413. Other failures stay at 400 — malformed file the user
+        # can fix by re-encoding.
         warnings = result.get("warnings", [])
-        status_code = 422 if "AUDIO_NORMALIZATION_TIMEOUT" in warnings else 400
+        if "AUDIO_NORMALIZATION_TIMEOUT" in warnings:
+            status_code = 422
+        elif "AUDIO_TOO_LONG" in warnings:
+            status_code = 413
+        else:
+            status_code = 400
         raise HTTPException(
             status_code=status_code,
             detail={

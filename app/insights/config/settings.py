@@ -55,7 +55,10 @@ class InsightSettings(BaseSettings):
     )
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         default="INFO",
-        description="Root log level applied at startup.",
+        description=(
+            "Root log level applied at startup. The httpx and httpcore loggers "
+            "stay at WARNING whatever this is set to."
+        ),
     )
 
     # --- Persistence ------------------------------------------------------ #
@@ -82,8 +85,9 @@ class InsightSettings(BaseSettings):
     threshold_profile: Literal["default", "strict", "lenient"] = Field(
         default="default",
         description=(
-            "Named threshold profile applied to the rule engines. "
-            "Engines fall back to DEFAULT_THRESHOLDS if no override is wired."
+            "Not implemented: the rule engines always use their default "
+            "thresholds, and responses report the profile as 'default'. "
+            "Setting this logs a warning at startup."
         ),
     )
 
@@ -93,8 +97,8 @@ class InsightSettings(BaseSettings):
         ge=1,
         description=(
             "Hard cap on incoming JSON payload size (KB) for /v1/insights/* "
-            "and /v1/fact-check. Enforced via Content-Length; requests "
-            "above this are rejected with 413 before any body is read."
+            "and /v1/fact-check. Checked against the declared Content-Length; "
+            "requests above it are rejected with 413."
         ),
     )
     api_max_upload_mb: int = Field(
@@ -104,6 +108,32 @@ class InsightSettings(BaseSettings):
             "Hard cap on multipart upload size (MB) for /v1/process-audio. "
             "Enforced both via Content-Length and during streaming write so "
             "a lying Content-Length header cannot bypass it."
+        ),
+    )
+    process_audio_max_running: int = Field(
+        default=1,
+        ge=1,
+        description="Pipeline runs a worker process executes at once on /v1/process-audio.",
+    )
+    process_audio_max_waiting: int = Field(
+        default=2,
+        ge=0,
+        description=(
+            "Uploads that may wait for a pipeline slot per worker process. "
+            "Beyond running + waiting, /v1/process-audio answers 503."
+        ),
+    )
+    process_audio_retry_after_sec: int = Field(
+        default=30,
+        ge=1,
+        description="Retry-After (seconds) sent with that 503.",
+    )
+    max_audio_seconds: float = Field(
+        default=7200.0,
+        ge=1.0,
+        description=(
+            "Longest audio /v1/process-audio accepts, in seconds (default 2 hours). "
+            "Longer audio is rejected with 413 and AUDIO_TOO_LONG, never truncated."
         ),
     )
     ffmpeg_timeout_sec: float = Field(
@@ -127,8 +157,18 @@ class InsightSettings(BaseSettings):
             "Age (hours) after which per-request job artifact directories "
             "under data/jobs/ (raw audio, transcript, PDF, insights) are "
             "purged. Bounds disk growth and caps how long call PII persists "
-            "on disk. Swept on startup and opportunistically at request time. "
+            "on disk. Swept on startup and then hourly. "
             "Set to 0 to disable purging (retain everything)."
+        ),
+    )
+    db_retention_days: int = Field(
+        default=30,
+        ge=0,
+        description=(
+            "Age (days) after which stored insight records (by last update) "
+            "and fact-check results (by creation) are deleted from the "
+            "database. Swept on startup and then hourly, with the job "
+            "directories. Set to 0 to keep every record."
         ),
     )
 
@@ -160,6 +200,20 @@ class InsightSettings(BaseSettings):
             "(runs five agents over a transcript). slowapi format."
         ),
     )
+    rate_limit_insight_write: str = Field(
+        default="60/minute",
+        description=(
+            "Rate limit for the /v1/insights routes that store or delete a "
+            "record (generate, generate-from-raw, delete). slowapi format."
+        ),
+    )
+    rate_limit_insight_read: str = Field(
+        default="120/minute",
+        description=(
+            "Rate limit for the /v1/insights routes that read (a record, its "
+            "summary, speakers or timeline, and the list). slowapi format."
+        ),
+    )
 
     # --- Authentication -------------------------------------------------- #
     # `NoDecode` tells pydantic-settings to skip its default JSON-decode
@@ -171,8 +225,8 @@ class InsightSettings(BaseSettings):
         description=(
             "Accepted values for the X-API-Key request header. Set "
             "VOICEIQ_API_KEYS as a comma-separated string. Empty list "
-            "disables auth in non-production environments; in production "
-            "an empty list causes every request to fail with 503."
+            "disables auth in development and test; in production and "
+            "staging every protected request then fails with 503."
         ),
     )
 
@@ -229,7 +283,25 @@ class InsightSettings(BaseSettings):
         default=5.0,
         ge=0.5,
         le=30.0,
-        description="Per-call HTTP timeout for fact-check source clients.",
+        description="HTTP timeout for each network operation (connect, read, write) of a fact-check source client.",
+    )
+    factcheck_max_claims: int = Field(
+        default=25,
+        ge=1,
+        le=1000,
+        description=(
+            "Most claims one fact-check run checks. Claims past the limit are " "counted as skipped and get no result."
+        ),
+    )
+    factcheck_run_deadline_sec: float = Field(
+        default=20.0,
+        gt=0.0,
+        le=300.0,
+        description=(
+            "A fact-check run starts no new check after this many seconds; the rest "
+            "are counted as skipped. A running check is not cut short and can take two "
+            "attempts, each timed per network operation, so this is not a hard bound."
+        ),
     )
 
     @property

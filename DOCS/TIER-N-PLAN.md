@@ -227,7 +227,8 @@ overwhelmingly a **vocabulary** gap, not a model gap:
 
 Two structural findings: `AgentContext.language` is **write-only** (nothing
 in `core/`, `service.py` or `extraction/` reads it), and Whisper's detected
-language is already captured at `orchestrator.py:764` and then discarded — so
+language is already captured by `ASRService` (`asr_meta.language`) and then
+discarded — so
 **no language-detection dependency is needed either**.
 
 Decisions: N4b-2 reuses the Sprint 7 out-of-process model server rather than

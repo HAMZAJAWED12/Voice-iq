@@ -1,5 +1,7 @@
 # 04 — Engines
 
+> Historical snapshot — Sprint 1–4 handoff. Current state: [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md), [`DOCS/FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
+
 This is the per-engine reference. Each section documents one file under `app/insights/core/`, in the order the rule engine invokes it. Every detector, every threshold, every score component is reproduced from the source as it currently exists.
 
 ---

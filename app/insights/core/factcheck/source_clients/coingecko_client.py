@@ -42,13 +42,9 @@ class CoinGeckoClient(BaseSourceClient):
         if not payload:
             return None
 
-        asset_block = payload.get(gecko_id) or {}
-        price = asset_block.get("usd")
-        if price is None:
-            return None
-        try:
-            value = float(price)
-        except (TypeError, ValueError):
+        asset_block = self._as_dict(payload.get(gecko_id))
+        value = self._finite_float(asset_block.get("usd"))
+        if value is None:
             return None
 
         return Evidence(

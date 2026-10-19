@@ -1,5 +1,7 @@
 # 02 — Architecture
 
+> Historical snapshot — Sprint 1–4 handoff. Current state: [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md), [`DOCS/FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
+
 ## Module topology
 
 ```

@@ -1,5 +1,7 @@
 # 09 — Testing
 
+> Historical snapshot — Sprint 1–4 handoff. Current state: [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md), [`DOCS/FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
+
 The test suite is in `app/insights/tests/`. There are 28 tests across four files, all passing as of the current branch. This document describes what is covered, how to run it, and the patterns the suite follows.
 
 ---
@@ -21,8 +23,10 @@ The integration file exercises the full HTTP surface. The other three are focuse
 ## Running the suite
 
 ```bash
-pytest -v
+pytest -v app/insights/tests/ app/agent_brain/tests/
 ```
+
+Pass the paths explicitly: a bare `pytest` at the repository root also collects the legacy `tests/` folder, which aborts during collection.
 
 Or filter by file:
 

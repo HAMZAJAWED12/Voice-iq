@@ -33,7 +33,7 @@ timestamp you can range-check.
 | `X-VoiceIQ-Signature` | `9f86d0…` | **v1, legacy** — body only |
 | `X-VoiceIQ-Signature-V2` | `4c8a2b…` | **v2** — timestamp-bound |
 | `X-VoiceIQ-Timestamp` | `1769342461` | **Unix seconds**, decimal string, UTC |
-| `X-VoiceIQ-Trace-Id` | `9b1f…` | per-send id, use for de-duplication |
+| `X-VoiceIQ-Trace-Id` | `9b1f…` | per-send id for correlation; not covered by either signature (de-duplication: §4 step 5) |
 
 Both signatures are lowercase hex SHA-256 (64 chars).
 
@@ -75,9 +75,13 @@ signature_v2 = hmac.new(secret.encode("utf-8"), signed_v2, hashlib.sha256).hexdi
    tolerates modest clock skew; tighten once clocks are known-good).
 4. Recompute v2 and compare with `X-VoiceIQ-Signature-V2` using a
    **constant-time** comparison (`MessageDigest.isEqual`). Never `String.equals`.
-5. **Replay:** reject if `X-VoiceIQ-Trace-Id` was already processed. Cache
-   seen ids for at least the freshness window (Redis/Caffeine with a 10-min
-   TTL is sufficient).
+5. **Replay:** once step 4 succeeds, reject the request if its v2
+   signature was already processed. Key the cache on one canonical form of
+   the verified signature, for example the HMAC computed in step 4 as
+   lowercase hex, never on the header text as received. Cache seen values for at least the freshness window (Redis/Caffeine
+   with a 10-min TTL is sufficient). The signature is unique per send,
+   because the body carries a fresh `generatedAt` and fresh recommendation
+   ids.
 6. Only then bind the JSON and act.
 
 ### Reference implementation
@@ -127,9 +131,9 @@ independently revertible.
 
 | Step | Owner | Action | Rollback |
 |---|---|---|---|
-| 1 | Java | Verify **v2**; on mismatch fall back to v1 and **log a warning**. Freshness + trace-id checks active. | drop to v1-only |
+| 1 | Java | Verify **v2**; on mismatch fall back to v1 and **log a warning**. Freshness check and signature de-duplication (§4 step 5) active. | drop to v1-only |
 | 2 | Java | Watch the warning count. Zero over a full traffic cycle ⇒ v2 verifies universally. | — |
-| 3 | Java | Remove the v1 fallback. **Replay protection is now live.** | re-enable fallback |
+| 3 | Java | Remove the v1 fallback. Freshness, v2 verification and signature de-duplication are now enforced. | re-enable fallback |
 | 4 | Python | Delete `X-VoiceIQ-Signature` from `java_callback_client.py` + its test. | revert commit |
 
 Do not start step 4 before Java confirms step 3 in production.
@@ -177,7 +181,7 @@ recommendations and is authenticated by a shared secret.
 
 - [ ] v2 verified with constant-time comparison
 - [ ] Freshness window enforced (±5 min)
-- [ ] Trace-id replay cache active
+- [ ] Replay cache keyed on the computed v2 signature active
 - [ ] Raw-body capture confirmed (not re-serialised JSON)
 - [ ] Cross-language test vector passes
 - [ ] v1 fallback removed after a clean traffic cycle

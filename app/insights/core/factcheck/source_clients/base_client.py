@@ -6,15 +6,20 @@ Design contract:
   * Any failure mode (timeout, HTTP non-2xx, missing field, missing key,
     parse error) MUST be caught locally and converted to `None`.
   * No exceptions propagate out of a client - the engine treats `None` as
-    `SOURCE_UNAVAILABLE` and never crashes the request.
+    `SOURCE_UNAVAILABLE` and never crashes the request. The one allowed
+    exception is `SourceUnavailable`, raised to say *why* there is no
+    evidence (e.g. the provider demands an access key); the engine maps it
+    to `SOURCE_UNAVAILABLE` with that reason.
   * Each client owns a short, single-attempt retry policy. Persistent
     failures degrade gracefully.
 """
 
 from __future__ import annotations
 
+import json
+import math
 from abc import ABC, abstractmethod
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import httpx
 
@@ -25,6 +30,76 @@ from app.utils.logger import logger
 # and a courtesy for every other source. Includes a contact URL per
 # Wikipedia's API etiquette guidelines.
 _DEFAULT_UA: str = "VoiceIQ-FactCheck/1.0 " "(+https://github.com/HAMZAJAWED12/Voice-iq) " "httpx"
+
+
+# json.loads hooks: a provider reply carrying a non-finite number (the NaN /
+# Infinity tokens Python's json accepts, or a float literal like 1e999 that
+# overflows to inf) is rejected as invalid JSON instead of reaching a verdict.
+#: Most bytes read from one provider reply. Real replies are a few kilobytes;
+#: a reply that grows past this is not read further. Replies are asked for
+#: uncompressed and one with any other content encoding is refused unread
+#: (`_refuse_encoded`), so these are the bytes that arrive and nothing is
+#: decompressed before they are counted.
+MAX_REPLY_BYTES: int = 1024 * 1024
+
+#: Sent with every provider request, overriding httpx's default of gzip and
+#: deflate (plus br and zstd when those packages are installed).
+_IDENTITY_ONLY: dict[str, str] = {"Accept-Encoding": "identity"}
+
+
+class _ReplyTooLarge(Exception):
+    pass
+
+
+class _EncodedReply(Exception):
+    pass
+
+
+def _refuse_encoded(response: httpx.Response) -> None:
+    """`_EncodedReply` if `response` declares a content encoding other than identity.
+
+    httpx decodes gzip, deflate, br and zstd one network chunk at a time with
+    no limit on the output, before `_read_capped` could count it.
+    """
+    for value in response.headers.get_list("content-encoding", split_commas=True):
+        encoding = value.strip().lower()
+        if encoding and encoding != "identity":
+            raise _EncodedReply
+
+
+def _read_capped(response: httpx.Response, limit: int) -> bytes:
+    """The body of a streamed `response`; `_ReplyTooLarge` past `limit` bytes."""
+    chunks: list[bytes] = []
+    size = 0
+    for chunk in response.iter_bytes():
+        size += len(chunk)
+        if size > limit:
+            raise _ReplyTooLarge
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _reject_non_finite_constant(token: str) -> float:
+    raise ValueError(f"non-finite JSON constant: {token}")
+
+
+def _finite_json_float(token: str) -> float:
+    value = float(token)
+    if not math.isfinite(value):
+        raise ValueError("non-finite JSON number")
+    return value
+
+
+class SourceUnavailable(Exception):
+    """A source could not answer, for a reason worth showing the caller.
+
+    ``reason`` becomes the fact-check result's reason. Keep it short, and
+    never put URLs, keys, response bodies or claim text in it.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 class BaseSourceClient(ABC):
@@ -51,13 +126,28 @@ class BaseSourceClient(ABC):
     def fetch(self, claim: DetectedClaim) -> Evidence | None:
         """Resolve `claim` against the upstream source.
 
-        Concrete implementations MUST NOT raise. Returning ``None``
-        signals SOURCE_UNAVAILABLE to the engine.
+        Concrete implementations MUST NOT raise, except
+        ``SourceUnavailable`` to give the reason. Returning ``None`` signals
+        SOURCE_UNAVAILABLE to the engine.
         """
 
     # ------------------------------------------------------------------ #
     # Helpers for subclasses                                             #
     # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _as_dict(value: Any) -> dict:
+        """`value` if it is a JSON object, else an empty dict (for nested lookups)."""
+        return value if isinstance(value, dict) else {}
+
+    @staticmethod
+    def _finite_float(value: Any) -> float | None:
+        """`float(value)` if that is a finite number, else None."""
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        return number if math.isfinite(number) else None
 
     def _get_json(
         self,
@@ -70,7 +160,11 @@ class BaseSourceClient(ABC):
 
         Performs at most ``retries + 1`` attempts. Retries are *only*
         triggered for transient failures (timeout, connection error, 5xx).
-        4xx responses are considered terminal and not retried.
+        4xx responses are considered terminal and not retried. A reply that
+        declares a content encoding other than identity, cannot be decoded,
+        is larger than `MAX_REPLY_BYTES`, is not valid JSON, contains a
+        non-finite number, or is not a JSON object also yields `None` (no
+        retry).
         """
         attempts = max(1, retries + 1)
         client_owned_here = self._client is None
@@ -81,7 +175,18 @@ class BaseSourceClient(ABC):
         try:
             for attempt in range(attempts):
                 try:
-                    response = client.get(url, params=params)
+                    with client.stream("GET", url, params=params, headers=_IDENTITY_ONLY) as response:
+                        status = response.status_code
+                        body = b""
+                        if status < 400:
+                            _refuse_encoded(response)
+                            body = _read_capped(response, MAX_REPLY_BYTES)
+                except _EncodedReply:
+                    logger.warning("%s: compressed reply refused", self.name)
+                    return None
+                except _ReplyTooLarge:
+                    logger.warning("%s: reply larger than %d bytes", self.name, MAX_REPLY_BYTES)
+                    return None
                 except (httpx.TimeoutException, httpx.TransportError) as exc:
                     logger.warning(
                         "%s: transport error on attempt %d/%d (%s)",
@@ -93,8 +198,11 @@ class BaseSourceClient(ABC):
                     if attempt == attempts - 1:
                         return None
                     continue
+                except httpx.HTTPError as exc:
+                    # Not transient (e.g. a body that fails to decode): no retry.
+                    logger.warning("%s: unusable response (%s)", self.name, type(exc).__name__)
+                    return None
 
-                status = response.status_code
                 if 500 <= status < 600 and attempt < attempts - 1:
                     logger.warning(
                         "%s: server error %d on attempt %d/%d, retrying",
@@ -108,10 +216,18 @@ class BaseSourceClient(ABC):
                     logger.warning("%s: HTTP %d (terminal)", self.name, status)
                     return None
                 try:
-                    return response.json()
-                except ValueError:
+                    payload = json.loads(
+                        body,
+                        parse_constant=_reject_non_finite_constant,
+                        parse_float=_finite_json_float,
+                    )
+                except (ValueError, RecursionError):
                     logger.warning("%s: invalid JSON in response", self.name)
                     return None
+                if not isinstance(payload, dict):
+                    logger.warning("%s: JSON reply is not an object (%s)", self.name, type(payload).__name__)
+                    return None
+                return payload
             return None
         finally:
             if client_owned_here:

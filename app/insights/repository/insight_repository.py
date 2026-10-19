@@ -17,6 +17,7 @@ Two construction modes are supported:
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
@@ -29,6 +30,7 @@ from app.insights.models.api_models import (
 )
 from app.insights.repository.db import get_session_factory
 from app.insights.repository.orm_models import InsightRecordORM
+from app.utils.logger import logger
 
 SessionFactory = Callable[[], Session]
 
@@ -77,7 +79,11 @@ class InsightRepository:
     # ------------------------------------------------------------------ #
 
     def save(self, record: InsightStoredRecord) -> InsightStoredRecord:
-        """Insert or update a record keyed by session_id."""
+        """Insert or update a record keyed by session_id.
+
+        An error record never replaces a stored record that is not an error;
+        the stored one is kept.
+        """
         payload_json = record.payload.model_dump_json()
         session = self._open()
         try:
@@ -89,6 +95,9 @@ class InsightRepository:
                     payload_json=payload_json,
                 )
                 session.add(row)
+            elif record.status == "error" and existing.status != "error":
+                logger.warning("insight record kept: an error result does not replace a %s record", existing.status)
+                return record
             else:
                 existing.status = record.status
                 existing.payload_json = payload_json
@@ -142,11 +151,33 @@ class InsightRepository:
         finally:
             session.close()
 
-    def list_session_ids(self) -> list[str]:
-        """Return every session_id, ordered by most recent update."""
+    def purge_older_than(self, cutoff: datetime) -> int:
+        """Delete records last updated before `cutoff`; returns how many."""
         session = self._open()
         try:
-            stmt = select(InsightRecordORM.session_id).order_by(InsightRecordORM.updated_at.desc())
+            result = session.execute(sa_delete(InsightRecordORM).where(InsightRecordORM.updated_at < cutoff))
+            session.commit()
+            return result.rowcount or 0  # type: ignore[attr-defined]
+        except SQLAlchemyError as exc:
+            session.rollback()
+            raise InsightRepositoryError("failed to purge expired insight records") from exc
+        finally:
+            session.close()
+
+    def list_session_ids(self, limit: int | None = None, offset: int = 0) -> list[str]:
+        """Return session_ids, most recently updated first.
+
+        `limit` and `offset` page through them; ties on update time are
+        ordered by session_id, so pages do not overlap.
+        """
+        session = self._open()
+        try:
+            stmt = (
+                select(InsightRecordORM.session_id)
+                .order_by(InsightRecordORM.updated_at.desc(), InsightRecordORM.session_id)
+                .offset(offset)
+                .limit(limit)
+            )
             return [row[0] for row in session.execute(stmt).all()]
         finally:
             session.close()

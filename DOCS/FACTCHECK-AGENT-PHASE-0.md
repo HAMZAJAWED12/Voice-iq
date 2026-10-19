@@ -1,12 +1,15 @@
 # Fact-Check Agent — Phase 0: Contract and Scope Lock
 
-Owner: engineering · Status: **awaiting sign-off** · Created: 2026-09-04
+Owner: engineering · Status: **in sign-off — partly signed, see §1 and §8** · Created: 2026-09-04
 Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` **v1.1**
 
 Phase 0 ships **no application code**. Its deliverables are the four policies
-below plus a signed decision register. Phases 1–7 do not start until §1 is
-signed — that is the whole point of the phase: freeze the contract so later
-phases cannot churn it.
+below plus a signed decision register. No phase of 1–7 starts until the §1
+decisions that gate it (listed in §1 and §8) are signed and §2, §3 and §6 are
+approved — that is the whole point of the phase: freeze the contract so later
+phases cannot churn it. *(This per-phase reading is pending owner
+confirmation and not yet in force — see §1. Until it is confirmed, every §1
+decision blocks Phase 1.)*
 
 Everything here is **normative**. Where a rule says *must*, a later phase that
 breaks it is a defect, not a judgement call.
@@ -21,8 +24,19 @@ breaks it is a defect, not a judgement call.
 
 ## 1. Decision register
 
-Nine decisions. Every one blocks Phase 1. v1.0 of the plan listed the
-questions but assigned neither owner nor date, so none could be chased.
+Ten decisions (D10 was added on 2026-09-20, raised by N4b L5). Each gates a
+phase, following its *Needed by* column: D1–D5 and D7 (*+N days* from
+kick-off) block Phase 1; D6 must be signed before Phase 1 ends; D9 blocks
+Phase 5; D8 and D10 block Phase 6. v1.0 of the plan listed the questions but
+assigned neither owner nor date, so none could be chased.
+
+*Pending owner confirmation — not in force.* The per-phase reading above was
+written on 2026-10-11 to follow the register's own *Needed by* dates; plan
+v1.1 §11 and the first draft of this section said every decision blocks
+Phase 1, which contradicts those dates. It takes effect only when the tech
+lead and the engineering manager confirm it. Until then the original reading
+applies: **every §1 decision blocks Phase 1.** See
+[`FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
 
 `Needed by` is relative to the Phase 0 kick-off date.
 
@@ -133,7 +147,7 @@ Consequence today: the Agent Brain's stage passes `fact_check=None`, so
 **`FactCheckReviewAgent` is dormant on the pipeline path**. The other four
 agents are unaffected. That is recorded behaviour, not a defect — but it
 means a `CONTRADICTED` verdict produces no manual-review recommendation from
-this path until D10 is answered.
+this path until Phase 6 ships the D10 re-run.
 
 | Option | Consequence |
 |---|---|
@@ -225,8 +239,11 @@ MAX_TRANSCRIPT_CHARS = 10_000
 ```
 
 **Rule.** No field of `FactCheckRequest`, `FactCheckResponse`,
-`FactCheckResult`, `DetectedClaim`, `Evidence`, `Confidence` or
-`FactCheckStats` may be added, removed, renamed or retyped by this project.
+`FactCheckResult`, `DetectedClaim`, `ClaimSpan` (the type of
+`DetectedClaim.span`), `Evidence`, `Confidence` or `FactCheckStats` may be
+added, removed, renamed or retyped by this project. *(`ClaimSpan` was added
+to this list on 2026-10-11; that addition is pending owner confirmation and
+not in force until the tech lead and the engineering manager confirm it.)*
 No member may be added to or removed from `ClaimType` or `Verdict`.
 `GET /v1/fact-check/{id}` is frozen on the same terms.
 
@@ -362,7 +379,7 @@ Normative restatement of plan §8. Three rules, then the matrix.
 **Allowed.** Creating new tables. `create_all()` picks them up on next start.
 
 **Forbidden.** Adding, removing, renaming or retyping any column on
-`fact_check_results`, `insights`, or any other existing table. Forbidden
+`fact_check_results`, `insight_records`, or any other existing table. Forbidden
 because the mechanism to do it does not exist and its absence fails silently.
 
 **Shape.** Four new tables, one-to-many downward:
@@ -392,15 +409,18 @@ have caught the Option-B assumption in plan v1.0.
 ## 5. Verdict mapping policy
 
 The v2 verdicts must reach the existing `FactCheckReviewAgent` without
-inventing new Agent Brain statuses (R1). Today the adapter maps with a
-default:
+inventing new Agent Brain statuses (R1). Until commit `1cd5350`
+(2026-09-19) the v1 adapter mapped with a default:
 
 ```python
 status=_VERDICT_TO_STATUS.get(result.verdict, "UNVERIFIED")
 ```
 
-That default is currently dead — the existing map covers all six v1 verdicts.
-It becomes live the moment v2 verdicts arrive, and it fails in two directions:
+That default is gone: the v1 map is now typed `dict[Verdict, FactCheckStatus]`,
+indexed directly, and pinned by `test_verdict_map_is_total`, so an unmapped
+verdict raises instead of degrading. The two failures below are what a
+default does the moment v2 verdicts arrive — the v2 map must keep the
+no-default property:
 
 **Failure 1 — silent downgrade.** `CONTRADICTED` is not a key, so it falls
 through to `UNVERIFIED`. The review agent then produces a `HIGH` priority
@@ -481,6 +501,20 @@ require evidence newer than their cache TTL (plan §6, Phase 5). Stale
 evidence degrades the verdict to `INSUFFICIENT_EVIDENCE`; it is never used to
 contradict.
 
+### 6.4 Structured-data providers in use
+
+The v1 source clients that Phase 4 routes structured claims through. Each
+row matches [`DATA-FLOW.md`](DATA-FLOW.md) §1; a change to one changes both.
+
+| Claim type | Provider | Sent | Terms that bind us |
+|---|---|---|---|
+| `CURRENCY_RATE` | ExchangeRate-API open access (`open.er-api.com`), decided 2026-10-17 | base currency code only | attribution required ("Rates By Exchange Rate API", linked); fetch each base at most hourly; rates update daily |
+
+Under §6.3 a rate aggregator is not a Tier 1 source; its tier for the agent
+is set with the other sources in Phase 4. Because its rates update once a
+day, the recency rule above must use the provider's update time, not the
+fetch time, once the agent reads it.
+
 ---
 
 ## 7. Configuration policy
@@ -513,7 +547,13 @@ skipped, it does not guess.
 
 ## 8. Exit checklist
 
-Phase 1 may start when all nine boxes are ticked.
+*Pending owner confirmation — not in force (see §1). Until it is confirmed,
+Phase 1 needs every box in this checklist ticked.*
+
+Phase 1 may start when D1–D5, D7 and the §2, §3 and §6 approvals are ticked.
+D6 gates the end of Phase 1; D9 gates the start of Phase 5; D8 and D10 gate
+the start of Phase 6. The §6 approval needed for Phase 1 covers §6 except the
+§6.3 high-stakes rule, which stays pending D9 and is settled before Phase 5.
 
 - [x] **D1 signed** — Option A, new tables only *(2026-09-04)*
 - [x] **D2 signed** — job-based execution *(2026-09-04)*

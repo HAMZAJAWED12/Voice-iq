@@ -1,4 +1,7 @@
-"""Detection-signal matching (Phase 1: case-insensitive substring).
+"""Detection-signal matching: case-insensitive, substring by default.
+
+With `whole_words=True` (the Email Draft agent, since M7) a phrase counts
+only as whole words. The other agents still use substring matching.
 
 N4b-1 Phase 1: `signals` may now be either a plain sequence (as before) or
 a language-keyed table, in which case `language` selects the entry.
@@ -8,7 +11,10 @@ Arabic script**. `.lower()` is a no-op there — verified `text.lower() ==
 text` for every Urdu and Arabic probe case — and substring matching hits
 normally. Urdu/Arabic signal detection therefore needs translated word
 lists and nothing else: no code change here, no model, no dependency. That
-content is decision **L1**.
+content is decision **L1**. One caveat for L1: whole-word matching treats
+Arabic letters as word characters, so a word written with an attached
+prefix or suffix (the article, a one-letter preposition) does not match its
+bare form. A whole-word list must spell out those attached forms.
 """
 
 from __future__ import annotations
@@ -16,6 +22,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from app.agent_brain.extraction.language import vocabulary_for
+from app.utils.text_match import contains_phrase
 
 # Either the legacy flat list, or a table keyed by language code.
 SignalSource = Mapping[str, Sequence[str]] | Sequence[str]
@@ -29,11 +36,19 @@ def _resolve(signals: SignalSource, language: str | None) -> Sequence[str]:
     return signals
 
 
-def find_signals(text: str, signals: SignalSource, *, language: str | None = None) -> list[str]:
-    """Return the signal phrases present in `text` (case-insensitive)."""
+def find_signals(
+    text: str, signals: SignalSource, *, language: str | None = None, whole_words: bool = False
+) -> list[str]:
+    """Return the signal phrases present in `text` (case-insensitive).
+
+    With `whole_words`, a phrase counts only where it is not part of a longer
+    word ("send a" is not found in "send all").
+    """
     if not text:
         return []
     lowered = text.lower()
+    if whole_words:
+        return [s for s in _resolve(signals, language) if contains_phrase(lowered, s.lower())]
     return [s for s in _resolve(signals, language) if s.lower() in lowered]
 
 

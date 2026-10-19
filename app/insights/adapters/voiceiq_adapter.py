@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
+from app.insights.core._math import clamp
 from app.insights.models.input_models import SessionInput
 
 
@@ -21,6 +23,28 @@ class VoiceIQInsightAdapter:
             "value": value,
             "unit": unit,
         }
+
+    @staticmethod
+    def _positivity(label: Any, confidence: Any) -> float | None:
+        """The pipeline's sentiment as a positivity score in [0, 1].
+
+        SentimentService gives a label and the model's confidence in that
+        label; the Insight Service reads `score` as positivity, low meaning
+        negative. A positive label with confidence c maps to 0.5 + c/2, a
+        negative one to 0.5 - c/2, and neutral to 0.5. Any other label, or a
+        confidence that is not a number in [0, 1], gives no score.
+        """
+        label = str(label).lower().strip() if label is not None else None
+        if label == "neutral":
+            return 0.5
+        if label not in {"positive", "negative"}:
+            return None
+        if isinstance(confidence, bool) or not isinstance(confidence, int | float):
+            return None
+        if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+            return None
+        half = confidence / 2.0
+        return clamp(0.5 + half if label == "positive" else 0.5 - half)
 
     @classmethod
     def _normalize_conversation_stats(cls, conversation_stats: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -73,7 +97,7 @@ class VoiceIQInsightAdapter:
             if seg.get("sentiment") is not None or seg.get("sentiment_score") is not None:
                 sentiment_payload = {
                     "label": seg.get("sentiment"),
-                    "score": seg.get("sentiment_score"),
+                    "score": VoiceIQInsightAdapter._positivity(seg.get("sentiment"), seg.get("sentiment_score")),
                 }
 
             emotion_payload = None

@@ -1,5 +1,7 @@
 # 10 — Current Status
 
+> Historical snapshot — Sprint 1–4 handoff. Current state: [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md), [`DOCS/FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
+
 A snapshot of what is currently shipped on this branch. Everything below is on disk and verified by the test suite. This file is intentionally backward-looking; forward-looking roadmap decisions are left to the receiving developer.
 
 ---

@@ -23,8 +23,18 @@ _EMAIL_SIGNALS_EN = [
     "send across",
     "send the",
     "send a",
+    "send an",
+    "send these",
+    "send those",
+    "send them",
     "share the",
+    "share these",
+    "share those",
+    "share them",
     "forward the",
+    "forward these",
+    "forward those",
+    "forward them",
     "forward details",
     "send assessment",
     "send quotation",
@@ -37,9 +47,14 @@ _EMAIL_SIGNALS_EN = [
 # entries fall back to English, so behaviour is unchanged until one lands.
 _EMAIL_SIGNALS: dict[str, list[str]] = {"en": _EMAIL_SIGNALS_EN}
 
-# Capture the object of the send/share request ("the pricing proposal").
+# Capture the object of the send/share request ("the pricing proposal"). A
+# leading article is dropped only as a whole word, so "an invoice" gives
+# "invoice", not "n invoice". Without an article, the object never starts
+# with a word that ends it, so "share them with finance" captures "them" (a
+# stop object), not "with finance"; after one, it may ("the before photos").
 _OBJECT = re.compile(
-    r"\b(?:send|share|forward|email)(?:\s+(?:me|us|over|across))?\s+(?:the|a|an|my|your)?\s*"
+    r"\b(?:send|share|forward|email)(?:\s+(?:me|us|them|over|across))?\s+"
+    r"(?:(?:the|an|a|my|your)\s+|(?!(?:by|before|to|with|on|via)\b))"
     r"([A-Za-z][A-Za-z ]*?)(?:\s+(?:by|before|to|with|on|via)\b|[.?!,]|$)",
     re.IGNORECASE,
 )
@@ -54,7 +69,7 @@ class EmailDraftAgent(BaseAgent):
 
         for segment in context.transcript:
             text = (segment.text or "").strip()
-            if not text or not find_signals(text, _EMAIL_SIGNALS, language=context.language):
+            if not text or not find_signals(text, _EMAIL_SIGNALS, language=context.language, whole_words=True):
                 continue
 
             obj = self._object(text)
@@ -99,4 +114,4 @@ class EmailDraftAgent(BaseAgent):
 
 
 _FALLBACK_OBJECT = "the requested document"
-_STOP_OBJECTS = {"me", "us", "you", "over", "across", "it", "them"}
+_STOP_OBJECTS = {"me", "us", "you", "over", "across", "it", "them", "these", "those", "the", "a", "an", "my", "your"}

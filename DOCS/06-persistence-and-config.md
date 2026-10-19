@@ -1,5 +1,7 @@
 # 06 — Persistence and Configuration
 
+> Historical snapshot — Sprint 1–4 handoff. Current state: [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md), [`DOCS/FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
+
 Everything below comes from `app/insights/config/` and `app/insights/repository/` as currently on disk.
 
 ---
@@ -12,9 +14,9 @@ Everything below comes from `app/insights/config/` and `app/insights/repository/
 
 | Field | Type | Default | Env var |
 |-------|------|---------|---------|
-| `service_name` | `str` | `"voiceiq-insight-service"` | `VOICEIQ_SERVICE_NAME` |
+| `service_name` | `str` | `"VoiceIQ Insight Service"` | `VOICEIQ_SERVICE_NAME` |
 | `service_version` | `str` | `"1.0.0"` | `VOICEIQ_SERVICE_VERSION` |
-| `environment` | `Literal["dev", "staging", "prod", "test"]` | `"dev"` | `VOICEIQ_ENVIRONMENT` |
+| `environment` | `Literal["development", "staging", "production", "test"]` | `"development"` | `VOICEIQ_ENVIRONMENT` |
 | `log_level` | `str` | `"INFO"` | `VOICEIQ_LOG_LEVEL` |
 | `database_url` | `str` | `"sqlite:///./data/insights.db"` | `VOICEIQ_DATABASE_URL` |
 | `database_echo` | `bool` | `False` | `VOICEIQ_DATABASE_ECHO` |

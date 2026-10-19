@@ -7,8 +7,9 @@ isolated in-process repository without monkey-patching imports.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.insights.api.finite_json import FiniteJSONRoute
 from app.insights.config.settings import get_settings
 from app.insights.models.api_models import (
     InsightGenerateResponse,
@@ -21,6 +22,7 @@ from app.insights.models.input_models import SessionInput
 from app.insights.repository import InsightRepository, get_insight_repository
 from app.insights.service import InsightService
 from app.security import enforce_content_length, verify_api_key
+from app.security.rate_limit import insight_read_rate_limit, insight_write_rate_limit
 
 # Hard cap for /v1/insights POST bodies. Constructed once at import time
 # from settings; restart the process to pick up a new value.
@@ -29,10 +31,17 @@ _enforce_session_size = enforce_content_length(_max_payload_bytes)
 
 # Every route on this router requires a valid X-API-Key header (see
 # app.security.api_key.verify_api_key for the dev/prod behaviour matrix)
-# and POST bodies are bounded by api_max_session_payload_kb.
+# and POST bodies are bounded by api_max_session_payload_kb. JSON bodies
+# with NaN, Infinity or an out-of-range number are refused while parsing.
+# Routes that store or delete count against one rate limit per caller,
+# routes that read against another.
+_WRITE_LIMIT = [Depends(insight_write_rate_limit)]
+_READ_LIMIT = [Depends(insight_read_rate_limit)]
+
 router = APIRouter(
     prefix="/insights",
     tags=["Insights"],
+    route_class=FiniteJSONRoute,
     dependencies=[
         Depends(verify_api_key),
         Depends(_enforce_session_size),
@@ -61,6 +70,7 @@ def _store_response(repository: InsightRepository, response: InsightGenerateResp
         "persist the generated bundle, and return it."
     ),
     status_code=status.HTTP_200_OK,
+    dependencies=_WRITE_LIMIT,
 )
 def generate_insights(
     payload: SessionInput,
@@ -81,6 +91,7 @@ def generate_insights(
         "generation pipeline as `/generate`."
     ),
     status_code=status.HTTP_200_OK,
+    dependencies=_WRITE_LIMIT,
 )
 def generate_insights_from_raw(
     payload: dict,
@@ -94,6 +105,7 @@ def generate_insights_from_raw(
 @router.get(
     "/{session_id}",
     response_model=InsightGenerateResponse,
+    dependencies=_READ_LIMIT,
     summary="Fetch the full insight bundle for a session",
 )
 def get_full_insight_record(
@@ -112,6 +124,7 @@ def get_full_insight_record(
 @router.get(
     "/{session_id}/summary",
     response_model=InsightSummaryResponse,
+    dependencies=_READ_LIMIT,
     summary="Fetch the conversation-level summary for a session",
 )
 def get_summary(
@@ -137,6 +150,7 @@ def get_summary(
 @router.get(
     "/{session_id}/speakers",
     response_model=InsightSpeakersResponse,
+    dependencies=_READ_LIMIT,
     summary="Fetch per-speaker metrics, insights and summaries",
 )
 def get_speakers(
@@ -165,6 +179,7 @@ def get_speakers(
 @router.get(
     "/{session_id}/timeline",
     response_model=InsightTimelineResponse,
+    dependencies=_READ_LIMIT,
     summary="Fetch the chronological timeline markers for a session",
 )
 def get_timeline(
@@ -188,17 +203,21 @@ def get_timeline(
 @router.get(
     "/",
     response_model=list[str],
-    summary="List every persisted session_id",
+    summary="List persisted session_ids, most recently updated first",
+    dependencies=_READ_LIMIT,
 )
 def list_sessions(
+    limit: int = Query(100, ge=1, le=500, description="Most session_ids to return."),
+    offset: int = Query(0, ge=0, le=2_147_483_647, description="session_ids to skip before the first returned."),
     repository: InsightRepository = Depends(get_insight_repository),
 ) -> list[str]:
-    return repository.list_session_ids()
+    return repository.list_session_ids(limit=limit, offset=offset)
 
 
 @router.delete(
     "/{session_id}",
     summary="Delete a persisted insight record",
+    dependencies=_WRITE_LIMIT,
 )
 def delete_session(
     session_id: str,

@@ -3,4 +3,4 @@
 #   git config blame.ignoreRevsFile .git-blame-ignore-revs
 
 # style: bulk-apply ruff-format + EOF + trailing-whitespace baseline (pre-commit)
-de87406540c2e9f2529337314676477d3e0704fb
+96f2e32f941088980fcf18c560c15999ef1a888d

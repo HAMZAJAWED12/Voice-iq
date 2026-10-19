@@ -22,19 +22,19 @@ Built as the Python audio-AI service of the VoiceIQ platform (an internship proj
   - Keywords — `sentence-transformers/all-MiniLM-L6-v2` + spaCy
   - Gender/emotion — transparent heuristics (documented as such, skipped under low SNR)
 - **Insight Service:** nine explainable engines (signal aggregation, rules, timeline, scoring, summary, escalation, inconsistency, analytics, normalization/validation) — every output carries `reason` and `evidence`; all scores clamped to `[0, 1]`.
-- **Live fact-checking:** claim detection → classification → verification against five external sources (exchangerate.host, CoinGecko, OpenWeather, Alpha Vantage, Wikipedia REST) with TTL caching and SQLite persistence.
+- **Live fact-checking:** claim detection → classification → verification against five external sources (open.er-api.com, CoinGecko, OpenWeather, Alpha Vantage, Wikipedia REST) with TTL caching and SQLite persistence.
 - **Agent Brain:** five rule-based recommendation agents (Task / Follow-Up / Email Draft / Escalation / Fact-Check Review) with confidence refinement, dedup and ranking — per-agent fault isolation, so one agent failing never drops the others. Reachable two ways: a pull route the Java layer calls with its own context, or as an opt-in pipeline stage that runs over VoiceIQ's own output and can push HMAC-signed results back to Java.
 - **Language-aware extraction:** every extractor selects a vocabulary table from the language Whisper detected, falling back to English for anything unmapped. English is populated today; adding Urdu or Arabic is a data change, not a code change.
 - **PDF report:** summary, speaker stats, emotion overview, intents, flags, fact-checks, transcript excerpt and quality warnings, returned as base64.
 
 ## Engineering highlights
 
-- **Fail-soft by design.** Exactly four hard-fail gates (missing audio, normalization timeout/failure, silent input); every other stage failure degrades gracefully with a warning code instead of crashing the run. Per-stage timings are recorded in `meta.timings_ms`.
+- **Fail-soft by design.** Exactly five hard-fail gates (missing audio, normalization timeout/failure, audio over the length limit, silent input); every other stage failure degrades gracefully with a warning code instead of crashing the run. Per-stage timings are recorded in `meta.timings_ms`.
 - **Pydantic v2 contracts at every boundary** — strict, validated schemas throughout.
-- **Test suite: 795 tests**, one lane. The orchestrator's ML imports are lazy, so the whole suite — harness included, with `orchestrator.py` at 100% coverage — runs on the lightweight requirements in seconds, with no model artifact and no network. A service counts as heavy if it imports an ML library *or* loads a model artifact; heavy means mocked.
+- **Test suite: 1784 tests**, one lane. On the lightweight stack that reads 1781 passed + 1 skipped: the skip is a 3-test model-loading module that needs the ML libraries. The orchestrator's ML imports are lazy, so the whole suite — harness included, with `orchestrator.py` at 100% coverage — runs on the lightweight requirements in seconds, with no model artifact and no network. A service counts as heavy if it imports an ML library *or* loads a model artifact; heavy means mocked.
 - **CI:** GitHub Actions — ruff, mypy (hard gate), gitleaks, pytest on Python 3.10 & 3.11, ~30 s.
-- **Security tier:** X-API-Key auth (production refuses to boot without keys), per-key rate limiting, payload-size caps, magic-byte upload sniffing (415 on fakes), ffmpeg subprocess timeout, job-artifact TTL, docs hidden in production, and HMAC-SHA256-signed callbacks with a timestamp-bound v2 signature for replay resistance.
-- **Egress is opt-in and documented.** Fact-checking is off by default because claim subjects leave the host; every external destination is enumerated in [`DOCS/DATA-FLOW.md`](DOCS/DATA-FLOW.md). With it off, zero outbound calls are made.
+- **Security tier:** X-API-Key auth (production with no keys configured fails closed: every protected request returns 503), per-caller rate limiting (by API key, else client IP), payload-size caps, key and size checks that run before a request body is read, magic-byte upload sniffing (415 on fakes), ffmpeg subprocess timeout, job-artifact TTL, docs hidden in production, and HMAC-SHA256-signed callbacks with a timestamp-bound v2 signature. Replay resistance also needs the receiver to enforce the freshness window and de-duplicate on the verified v2 signature ([`DOCS/JAVA-CALLBACK-V2.md`](DOCS/JAVA-CALLBACK-V2.md)).
+- **Egress is documented.** Fact-checking sends claim subjects to external providers. `POST /v1/fact-check` does so on every call, on both entry points, and no setting turns it off. Fact-check enrichment inside `/v1/process-audio` is opt-in and off by default. Every external destination is enumerated in [`DOCS/DATA-FLOW.md`](DOCS/DATA-FLOW.md). Apart from `/v1/fact-check`, the insight-only image makes no outbound calls; the full pipeline also contacts the model hosts listed in DATA-FLOW §3.
 - **Performance work is measured, not asserted.** Speaker alignment was ~27× faster after bounding two quadratic scans, output verified byte-identical across eight fixture shapes; the Agent Brain's duplicate sweep went 5.0 s → 0.15 s on a 16-minute call. Both are pinned by call-count assertions rather than wall-clock, because a constant-size output makes wall-clock a misleading signal.
 - **Ops:** multi-stage non-root Dockerfile with healthcheck + docker-compose (lightweight insight-only image on port 8888).
 
@@ -46,9 +46,9 @@ Built as the Python audio-AI service of the VoiceIQ platform (an internship proj
 | `POST /v1/fact-check` / `GET /v1/fact-check/{id}` | Stand-alone claim verification |
 | `/v1/insights/...` | Insight-only routes (analytics, timeline, scores, summaries) |
 | `POST /internal/v1/agent-brain/recommendations/generate` | Action recommendations |
-| `GET /healthz`, `GET /version` | Ops |
+| `GET /healthz`, `GET /readyz`, `GET /version` | Ops (liveness, readiness, version) |
 
-Every response key added since v1 is additive — flags off means the key is absent, not null, so existing consumers see byte-identical output.
+Every response key added since v1 is additive. Opt-in keys such as `recommendations` are absent when their flag is off; the one exception is `fact_checks_v2`, which is always present and carries `{"status": "disabled", ...}` when fact-checking was not requested.
 
 ## Quick start
 
@@ -82,14 +82,14 @@ pytest app/insights/tests/ app/agent_brain/tests/
 ```
 app/
 ├── main.py / insight_main.py   # full vs lightweight entrypoints
-├── pipeline/                   # orchestrator — run() decomposed into named _run_<stage> methods over a _PipelineState; 4 hard-fail gates, per-stage timings
+├── pipeline/                   # orchestrator — run() decomposed into named _run_<stage> methods over a _PipelineState; 5 hard-fail gates, per-stage timings
 ├── services/                   # ASR, diarization, alignment, sentiment, topics, ...
 ├── insights/                   # 9 insight engines + models + API + SQLite repository
 ├── agent_brain/                # 5 rule-based agents + language-keyed extraction + HMAC callback client
 ├── routes/ · utils/
 DOCS/                           # handoff docs, data-flow/egress record, and the planning
                                 # + decision registers for in-flight work
-.github/workflows/test.yml      # CI (light + heavy jobs)
+.github/workflows/test.yml      # CI (lint job + light test matrix)
 Dockerfile · docker-compose.yml
 ```
 
@@ -108,6 +108,7 @@ In-flight design lives in `DOCS/`, with decisions recorded as they are signed ra
 
 | Doc | What it covers |
 |---|---|
+| [`FACT-CHECK-AGENT-STATUS.md`](DOCS/FACT-CHECK-AGENT-STATUS.md) | Live status of the fact-check agent: current phase, progress, blockers, next milestone |
 | [`FACTCHECK-AGENT-PHASE-0.md`](DOCS/FACTCHECK-AGENT-PHASE-0.md) | Open-source-LLM fact-check agent: frozen contracts, compatibility policy, privacy boundary, and a 10-row decision register |
 | [`N4B-MULTILINGUAL-STRATEGY.md`](DOCS/N4B-MULTILINGUAL-STRATEGY.md) | Urdu/Arabic support — measured as a vocabulary gap rather than a model gap |
 | [`JAVA-CALLBACK-V2.md`](DOCS/JAVA-CALLBACK-V2.md) | Replay-resistant callback signature; the Java side is outstanding |

@@ -39,13 +39,33 @@ _TITLE_SIMILARITY = 0.82
 _TitleMemo = dict[tuple[str, str], bool]
 
 
+def _normalised(text: str | None) -> str:
+    """Case- and whitespace-insensitive form of a claim text."""
+    return " ".join((text or "").lower().split())
+
+
+def _similar(a: str, b: str) -> bool:
+    """`ratio() >= _TITLE_SIMILARITY`, checking its cheap upper bounds first.
+
+    `real_quick_ratio()` and `quick_ratio()` are never below `ratio()`, so a
+    pair that fails either cannot pass; the O(L^2) `ratio()` runs only for
+    pairs that might. The verdict is the same as `ratio()` alone.
+    """
+    matcher = SequenceMatcher(None, a.lower(), b.lower())
+    return (
+        matcher.real_quick_ratio() >= _TITLE_SIMILARITY
+        and matcher.quick_ratio() >= _TITLE_SIMILARITY
+        and matcher.ratio() >= _TITLE_SIMILARITY
+    )
+
+
 def _titles_similar(a: str, b: str, memo: _TitleMemo | None = None) -> bool:
     if memo is None:
-        return SequenceMatcher(None, a.lower(), b.lower()).ratio() >= _TITLE_SIMILARITY
+        return _similar(a, b)
     key = (a, b)
     cached = memo.get(key)
     if cached is None:
-        cached = SequenceMatcher(None, a.lower(), b.lower()).ratio() >= _TITLE_SIMILARITY
+        cached = _similar(a, b)
         memo[key] = cached
     return cached
 
@@ -63,9 +83,12 @@ def is_duplicate(
     """
     if candidate.action_type != kept.action_type:
         return False
-    # Same fact-check claim.
-    if candidate.linked_claim_id and candidate.linked_claim_id == kept.linked_claim_id:
-        return True
+    # A claim identifies a fact-check recommendation; their titles are generic
+    # ("Review false claim"), so they never fall through to title similarity.
+    if candidate.linked_claim_id or kept.linked_claim_id:
+        return candidate.linked_claim_id == kept.linked_claim_id
+    if candidate.action_type == "FACT_CHECK":
+        return _normalised(candidate.source.text) == _normalised(kept.source.text)
     # Same person + same deadline.
     if (
         candidate.entities.assignee

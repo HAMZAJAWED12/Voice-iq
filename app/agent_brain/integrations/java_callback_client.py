@@ -13,10 +13,10 @@ Two signatures are sent so the Java side can migrate without downtime:
 * ``X-VoiceIQ-Signature-V2`` - HMAC-SHA256(secret, f"{timestamp}.{body}")
   together with ``X-VoiceIQ-Timestamp`` (unix seconds).
 
-v1 alone is replayable: an attacker who captures a request can resend it
-forever, because nothing in the signed material expires. v2 binds the
+v1 signs the body only, so its signature never expires. v2 binds the
 signature to a timestamp, so Java can reject anything outside a freshness
-window (a few minutes) and de-duplicate on the trace id.
+window (a few minutes). ``X-VoiceIQ-Trace-Id`` is not covered by either
+signature; it identifies the run for logging and correlation.
 
 **Migration:** Java should switch to validating v2 (checking the timestamp
 skew), after which v1 can be dropped from this client. Until Java migrates,

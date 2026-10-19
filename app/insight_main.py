@@ -26,12 +26,16 @@ except ImportError:  # pragma: no cover - optional dep
 
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from app.agent_brain.api.agent_routes import router as agent_brain_router
 from app.insights.api import router as insight_router
 from app.insights.config.settings import get_settings
 from app.insights.repository.db import init_db
-from app.utils.job_io import JobIO
+from app.security.request_guard import RequestGuardMiddleware, guarded_limits
+from app.utils.logger import configure_logging
+from app.utils.readiness import database_ready, readiness
+from app.utils.retention import run_retention
 
 load_dotenv()
 
@@ -40,11 +44,13 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    configure_logging(settings)
     init_db(settings)
-    # No-op unless job dirs exist (this image doesn't process audio), but
-    # kept for parity with app.main when both share a data/ volume.
-    JobIO().purge_expired(settings.job_retention_hours)
-    yield
+    # Purges expired stored records; the job-directory purge is a no-op
+    # unless job dirs exist (this image doesn't process audio), but kept for
+    # parity with app.main when both share a data/ volume.
+    async with run_retention():
+        yield
 
 
 # Interactive docs expose the full request/response schema of every route.
@@ -72,11 +78,19 @@ app.include_router(insight_router, prefix="/v1")
 # pure-python (no ML deps), so the lightweight image serves it too — the
 # Java Action Layer can call this image directly.
 app.include_router(agent_brain_router)
+# Checks the API key and declared size of guarded POSTs before the body is
+# read, and counts the bytes that arrive (app/security/request_guard.py).
+app.add_middleware(RequestGuardMiddleware, limits=guarded_limits(settings))
 
 
 @app.get("/healthz", tags=["Ops"], summary="Liveness probe")
 def healthz() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/readyz", tags=["Ops"], summary="Readiness probe: database reachable")
+def readyz() -> JSONResponse:
+    return readiness({"database": database_ready})
 
 
 @app.get("/version", tags=["Ops"], summary="Service version + environment")

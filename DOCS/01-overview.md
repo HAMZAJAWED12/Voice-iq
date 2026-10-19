@@ -1,5 +1,7 @@
 # 01 — System Overview
 
+> Historical snapshot — Sprint 1–4 handoff. Current state: [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md), [`DOCS/FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md).
+
 ## What the Insight Service is
 
 The **VoiceIQ Insight Service** is the conversational-intelligence layer of the larger VoiceIQ-AI platform. It consumes already-processed conversational data — speaker-attributed utterances with optional sentiment and emotion vectors — and returns a structured, scored, explainable assessment of the conversation. Outputs include session-level sentiment and emotion aggregates, per-speaker insights, a chronological timeline of behavioural markers, five normalised scores (dominance, engagement, conflict, cooperation, emotion volatility), explainable flags, an escalation assessment, an inconsistency assessment, and a written summary suite.

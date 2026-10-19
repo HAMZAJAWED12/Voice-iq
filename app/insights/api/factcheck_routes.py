@@ -63,7 +63,11 @@ def _build_engine() -> FactCheckEngine:
     """Build the production engine once per process from current settings."""
     settings = get_settings()
     router_obj = SourceRouter.from_settings(settings)
-    return FactCheckEngine(router=router_obj)
+    return FactCheckEngine(
+        router=router_obj,
+        max_claims=settings.factcheck_max_claims,
+        deadline_sec=settings.factcheck_run_deadline_sec,
+    )
 
 
 def get_factcheck_engine() -> FactCheckEngine:

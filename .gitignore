@@ -50,7 +50,7 @@ build/
 dist/
 node_modules/
 
-# Archives — never commit zips. Past leaks (see README / CLAUDE.md).
+# Archives — never commit them.
 *.zip
 *.tar
 *.tar.gz

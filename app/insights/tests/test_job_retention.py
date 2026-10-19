@@ -90,3 +90,17 @@ def test_removal_error_is_fail_soft(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
     # An unremovable dir is logged and skipped, never raised into the caller.
     assert io.purge_expired(max_age_hours=24.0) == 0
+
+
+def test_a_directory_that_could_not_be_removed_is_not_counted(tmp_path: Path, monkeypatch, caplog) -> None:
+    io = JobIO(base_dir=str(tmp_path / "jobs"))
+    stale = _make_job(io, "stale", age_hours=48.0)
+    # rmtree with ignore_errors=True fails silently; simulate a removal that failed.
+    monkeypatch.setattr(jio.shutil, "rmtree", lambda *a, **k: None)
+
+    with caplog.at_level("WARNING"):
+        removed = io.purge_expired(max_age_hours=24.0)
+
+    assert removed == 0
+    assert stale.exists()
+    assert "could not remove" in caplog.text

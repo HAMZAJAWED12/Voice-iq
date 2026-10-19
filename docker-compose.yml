@@ -21,13 +21,24 @@ services:
         PYTHON_VERSION: "3.11"
     image: voiceiq-insight:dev
     container_name: voiceiq-app
+    # Loopback only: reachable from this machine. The container serves plain
+    # HTTP; TLS terminates at the ingress. To serve other hosts, put a
+    # TLS-terminating reverse proxy or load balancer in front instead of
+    # publishing the port widely.
     ports:
-      - "8888:8888"
+      - "127.0.0.1:8888:8888"
     env_file:
       - .env
     volumes:
       - voiceiq-data:/app/data
     restart: unless-stopped
+    # Resource ceilings. The image runs the light insight service (no ML
+    # models); raise them for heavier workloads.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1g
     healthcheck:
       test:
         - "CMD"

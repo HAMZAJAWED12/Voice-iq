@@ -26,16 +26,49 @@ def break_long_words(text: str, max_len: int = 50) -> str:
     return " ".join(fixed)
 
 
+# The core Helvetica font covers Latin-1 only, and one character outside it
+# fails the whole PDF when fpdf encodes the document. Common punctuation maps
+# to its nearest Latin-1 form; `to_latin1` turns anything else into "?".
+_LATIN1_SUBSTITUTES: dict[int, str] = {
+    0x2018: "'",  # left single quotation mark
+    0x2019: "'",  # right single quotation mark / apostrophe
+    0x201A: ",",  # single low-9 quotation mark
+    0x201B: "'",  # single high-reversed-9 quotation mark
+    0x201C: '"',  # left double quotation mark
+    0x201D: '"',  # right double quotation mark
+    0x201E: '"',  # double low-9 quotation mark
+    0x2010: "-",  # hyphen
+    0x2011: "-",  # non-breaking hyphen
+    0x2012: "-",  # figure dash
+    0x2013: "-",  # en dash
+    0x2014: "-",  # em dash
+    0x2212: "-",  # minus sign
+    0x2026: "...",  # horizontal ellipsis
+    0x2022: "*",  # bullet
+    0x20AC: "EUR",  # euro sign
+    0x2009: " ",  # thin space
+    0x202F: " ",  # narrow no-break space
+    0x200B: "",  # zero-width space
+    0xFEFF: "",  # byte-order mark
+}
+
+
+def to_latin1(text: str) -> str:
+    """`text` in characters the core font can print; Latin-1 text is unchanged."""
+    return text.translate(_LATIN1_SUBSTITUTES).encode("latin-1", errors="replace").decode("latin-1")
+
+
 def safe_text(text: str) -> str:
     """
     Cleans input:
+      - map characters outside Latin-1 (see `to_latin1`)
       - remove newlines
       - break long chunks
     """
     if not isinstance(text, str):
         return ""
 
-    text = text.replace("\n", " ").strip()
+    text = to_latin1(text).replace("\n", " ").strip()
 
     safe_words = []
     for w in text.split(" "):

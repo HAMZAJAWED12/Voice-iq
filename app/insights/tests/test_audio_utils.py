@@ -20,6 +20,13 @@ from app.utils.audio_utils import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _decoded_length_is_short(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ffmpeg is mocked and writes no real WAV; the decoded-length check is
+    covered by test_audio_duration.py."""
+    monkeypatch.setattr("app.utils.audio_utils._wav_seconds", lambda _path: 1.0)
+
+
 def _completed_process() -> subprocess.CompletedProcess:
     """Stand-in for a healthy ffmpeg exit."""
     return subprocess.CompletedProcess(args=["ffmpeg"], returncode=0, stdout=b"", stderr=b"")
@@ -35,9 +42,20 @@ def test_success_returns_out_path_and_forwards_timeout() -> None:
     assert run.call_args.kwargs["check"] is True
 
 
+def _ffmpeg_raises(err: Exception):
+    """ffprobe finds no duration; ffmpeg raises `err`."""
+
+    def run(cmd, **_kwargs):
+        if cmd[0] == "ffprobe":
+            return _completed_process()
+        raise err
+
+    return run
+
+
 def test_timeout_raises_audio_normalization_timeout() -> None:
     err = subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=1.0)
-    with patch("app.utils.audio_utils.subprocess.run", side_effect=err):
+    with patch("app.utils.audio_utils.subprocess.run", side_effect=_ffmpeg_raises(err)):
         with pytest.raises(AudioNormalizationTimeout) as exc:
             normalize_to_wav("in.mp3", "out.wav", timeout_sec=1.0)
     # The detail message must mention the timeout so logs are useful.
@@ -48,7 +66,7 @@ def test_timeout_raises_audio_normalization_timeout() -> None:
 
 def test_nonzero_exit_raises_audio_normalization_error_not_timeout() -> None:
     err = subprocess.CalledProcessError(returncode=1, cmd=["ffmpeg"], stderr=b"oops")
-    with patch("app.utils.audio_utils.subprocess.run", side_effect=err):
+    with patch("app.utils.audio_utils.subprocess.run", side_effect=_ffmpeg_raises(err)):
         with pytest.raises(AudioNormalizationError) as exc:
             normalize_to_wav("in.mp3", "out.wav", timeout_sec=5.0)
     # MUST NOT be misclassified as a timeout — the HTTP layer routes them
