@@ -1,4 +1,4 @@
-Last verified: 2026-10-19, ee2e15b
+Last verified: 2026-10-19, 49063bb
 # Decisions
 
 This file lists the decisions already taken in this repository. A decision is
@@ -7,7 +7,8 @@ gives the context, the decision, its consequence, the date and the commit.
 Dates are commit dates from `git log`.
 
 Decisions that are still open are listed at the end, with links only. For the
-Sprint 7 register decisions (D1–D10), the status lives in one place: the
+Sprint 7 register decisions (D1–D10, D3b, D10-T and U1–U10), the status
+lives in one place: the
 register in [FACTCHECK-AGENT-PHASE-0.md §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register).
 This file does not repeat it.
 
@@ -36,7 +37,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 | 14 | D1: new tables only | 2026-09-04 | `2a539d3` |
 | 15 | D2: job-based execution | 2026-09-04 | `2a539d3` |
 | 16 | D10: the job re-runs every downstream consumer | 2026-09-20 | `dacc926` |
-| 17 | The v1 fact-check contract is frozen: followed in practice; formal approval of PHASE-0 §2 pending | 2026-09-04 | `c6284b6` |
+| 17 | The v1 fact-check contract is frozen (PHASE-0 §2 approved 2026-10-19) | 2026-09-04, 2026-10-19 | `c6284b6` |
 | 18 | Verdict map with no default | 2026-09-19 | `1cd5350` |
 | 19 | Agent Brain as an opt-in pipeline stage (L5) | 2026-09-20 | `f5e4d84`, `f619f7d` |
 | 20 | N4b language seam, Phase 1 | 2026-09-20 | `359cd5f`, `404de5b`, `c2fadaa` |
@@ -69,6 +70,9 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 | 47 | Container resource limits; TLS terminates at the ingress | 2026-10-17 | `fb56d7d` |
 | 48 | Currency rates come from open.er-api.com | 2026-10-17 | `45a5b22` |
 | 49 | A failed topic step returns a fixed message | 2026-10-17 | `dc97a84` |
+| 50 | One owner holds every Phase 0 role | 2026-10-19 | — (owner) |
+| 51 | Phase 0 is complete; Phase 1 may start | 2026-10-19 | — (owner) |
+| 52 | Gold-set labelling may start before the Phase 1 gate | 2026-10-19 | — (owner) |
 
 ---
 
@@ -358,8 +362,9 @@ in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
   pass (entry 16). A run needs an identity that can be looked up and a final
   status, and it must age out if nobody collects it. Nothing in today's code
   implements this yet; PHASE-0 §D2 makes these obligations binding on
-  Phases 2, 5 and 6. The job runner has not been chosen (see
-  [Open decisions](#open-decisions)).
+  Phases 2, 5 and 6. The job runner is a DB-polled worker on
+  `factcheck_agent_runs` (U1, signed 2026-10-19; see the
+  [register](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)).
 - **Date:** 2026-09-04 · **Commit:** `2a539d3`
 
 ### 16. D10: the job re-runs every downstream consumer
@@ -377,10 +382,11 @@ in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
   change. Acceptance is a test showing that exactly one callback is sent per
   session when both features are on. "At least one" does not pass. Today the
   callback fires on every Agent Brain run; that is listed as a prerequisite
-  fix in the status doc.
+  fix in the status doc. D10-T (2026-10-19) sets at-most-once delivery and
+  the accepted zero-callback cases the test must allow; see PHASE-0 §D10.
 - **Date:** 2026-09-20 (raised in `17606d6`) · **Commit:** `dacc926`
 
-### 17. The v1 fact-check contract is frozen: followed in practice; formal approval of PHASE-0 §2 pending
+### 17. The v1 fact-check contract is frozen (PHASE-0 §2 approved 2026-10-19)
 
 - **Context:** Sprint 7 adds an agent with its own verdicts. Changing the v1
   shapes would break existing consumers of `POST /v1/fact-check`,
@@ -391,15 +397,16 @@ in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
   `app/insights/models/factcheck_models.py` is added, removed, renamed or
   retyped, and no member is added to or removed from `ClaimType` or
   `Verdict`. The agent gets its own models
-  ([PHASE-0 §2.1](FACTCHECK-AGENT-PHASE-0.md#21-v1-is-frozen)). Whether
-  `ClaimSpan` joins the frozen list is open (see
-  [Open decisions](#open-decisions)).
+  ([PHASE-0 §2.1](FACTCHECK-AGENT-PHASE-0.md#21-v1-is-frozen)). Since
+  2026-10-19 the freeze also covers `ClaimSpan`, `ConfidenceLabel`,
+  `MAX_TRANSCRIPT_CHARS`, every type or field constraint reachable from the
+  v1 request and response, and the `GET /v1` row key set (W2, A2
+  amendments (a) and (e); see #51).
 - **Consequence:** `factcheck_models.py` has not changed since `e55d46c`
   (2026-05-04). M2, M3 and M4 put new failure cases into the existing
   `SOURCE_UNAVAILABLE` verdict or drop the claim; none of them added a member.
   `app/insights/tests/test_logging_hygiene.py:403-405` checks the v1 response
-  shape. Formal approval of PHASE-0 §2 as a whole is listed under
-  [Open decisions](#open-decisions).
+  shape. PHASE-0 §2 as a whole was approved on 2026-10-19 (#51).
 - **Date:** 2026-09-04 · **Commit:** `c6284b6`
 
 ### 18. Verdict map with no default
@@ -912,51 +919,84 @@ commit with its own tests, under the size rule (#27).
 - **Consequence:** `app/insights/tests/test_pipeline_error_text.py` pins this.
 - **Date:** 2026-10-17 · **Commit:** `dc97a84`
 
+## Phase 0 sign-off (2026-10-19)
+
+The project owner signed these on 2026-10-19. What each register decision
+chose, and the phase it gates, is in the
+[register](FACTCHECK-AGENT-PHASE-0.md#1-decision-register); this file does
+not repeat it.
+
+### 50. One owner holds every Phase 0 role
+
+- **Context:** The Phase 0 register names separate owner roles: tech lead,
+  engineering manager, product, senior sponsor, infrastructure and legal.
+  The project has one maintainer.
+- **Decision:** The project owner (sole maintainer) holds every one of those
+  roles and signs in each. The repository records signers by role only; a
+  private sign-off record outside the repository holds the names.
+- **Consequence:** Where a decision needs a party outside the project, the
+  owner's signature does not cover it: the Java action layer team's
+  acknowledgement of PHASE-0 §3, and the API consumer's written sign-off
+  before any later removal of v1 (D8).
+- **Date:** 2026-10-19 · **Commit:** — (owner)
+
+### 51. Phase 0 is complete; Phase 1 may start
+
+- **Context:** Phase 1 could not start until the register decisions it
+  depends on were signed and PHASE-0 §2, §3 and §6 were approved. Three of
+  ten decisions were signed, and several decisions the work needed were not
+  in the register.
+- **Decision:**
+  - The Phase 0 gate is read per phase (W1): each register row gates the
+    phase its *Needed by* column names.
+  - D3–D9 are signed, and D3b, D10-T and U1–U10 are added to the register
+    with their own phase dates and signed.
+  - PHASE-0 §2 (API contract), §3 (compatibility) and §6 (privacy and source
+    policy) are approved with their amendments. §5 and §7 are approved with
+    §3 (W7). `ClaimSpan` joins the v1 freeze list (W2), and errata against
+    plan v1.1 are recorded (W3).
+  - Gate record (G1): Phase 0 opened 2026-09-04; the decisions were recorded
+    on 2026-10-19.
+- **Consequence:** Phase 1 may start. Some values are still open, each to be
+  set before the phase that uses it; they are listed in
+  [PHASE-0 §8](FACTCHECK-AGENT-PHASE-0.md#8-exit-checklist) and under
+  [Open decisions](#open-decisions). No code changed.
+- **Date:** 2026-10-19 · **Commit:** — (owner)
+
+### 52. Gold-set labelling may start before the Phase 1 gate
+
+- **Context:** Building the evaluation set is Phase 1 work in plan v1.1.
+  Labelling is data preparation, not code.
+- **Decision:** With D3 (Option A) and D7 signed, gold-set labelling may
+  start at once. The set is English and synthetic-first. Drafts are
+  machine-assisted and the project owner checks every item; consistency is
+  checked by a blind re-label of 40 items after one week (intra-rater
+  agreement), in place of a second annotator. Only synthetic material is
+  used until a written rule for real calls exists (U10).
+- **Consequence:** The gold set is off the Phase 1 critical path. Verdict
+  labels (D3b) wait for Phase 4.
+- **Date:** 2026-10-19 · **Commit:** — (owner)
+
 ---
 
 ## Open decisions
 
-These decisions have not been taken. They are listed here only so readers
-know they exist. Their state, owners and dates are in the
-[register](FACTCHECK-AGENT-PHASE-0.md#1-decision-register) and in
-[FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md#blockers). None of
-them is in force.
+These are not settled yet. None is in force. Details are in
+[PHASE-0 §8](FACTCHECK-AGENT-PHASE-0.md#8-exit-checklist), the
+[register](FACTCHECK-AGENT-PHASE-0.md#1-decision-register) and
+[FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md#blockers).
 
-**Register decisions D3–D9**
+**Values left open at the Phase 0 sign-off (2026-10-19)**
 
-- D3: who owns and resources the gold set (see
-  [D3-GOLD-SET-BRIEF.md](D3-GOLD-SET-BRIEF.md)).
-- D4: whether "open-source" covers web search as well as the model.
-- D5: production GPU and RAM, and the maximum acceptable fact-check latency.
-- D6: whether Qwen3 is mandatory, or Qwen3.5 may win the bake-off.
-- D7: which fact domains ship first.
-- D8: how long v1 and the legacy process-audio fields must survive.
-- D9: source-authority rules for high-stakes claims.
-
-**PHASE-0 approvals and wording**
-
-- Approval of PHASE-0 §2 (API contract), §3 (compatibility) and §6 (privacy
-  and source policy).
-- How to read the Phase 0 gate: per phase, following the register's
-  *Needed by* column, or every decision before Phase 1.
-- Whether to add `ClaimSpan` to the v1 freeze list (PHASE-0 §2.1).
-
-**Not yet in the register (listed in the status doc)**
-
-- The job runner behind D2.
-- Supported languages for the agent and its report.
-- The local development model server.
-- Who hosts the search backend, and the position on robots.txt and terms of
-  service for page fetching.
-- The `POST /v2/fact-check` request schema, how non-checkable statements
-  appear in v2 output, and the `/v2` auth, payload-cap and rate-limit rules.
-- When `fact_check_report` is absent and when it is `disabled`, and how
-  `FACTCHECK_AGENT_ENABLED`, `FACTCHECK_AUTO_ENRICH` and `?fact_check`
-  combine.
-- How the D1 tables reach a deployment with
-  `VOICEIQ_DATABASE_AUTO_CREATE=false`.
-- How the D10 re-run rebuilds its inputs, how the regenerated PDF and
-  recommendations are delivered, and how run rows age out.
+- The agent's provisional run deadline (D5), and the runner and admission
+  defaults that follow from it.
+- Whether `fact_check_report` shows `disabled` or `skipped` when the agent is
+  enabled but its tables are missing (U7).
+- Whether `app.main` shares its `data/` volume with `app.insight_main`, and
+  the `app.main` deployment recipe (U9).
+- The maximum evidence age per claim type, the remaining provider and
+  Wikipedia terms, and the maximum excerpt length (PHASE-0 §6.3–§6.5).
+- The Java action layer team's acknowledgement of PHASE-0 §3.
 
 **Other open owner decisions**
 
