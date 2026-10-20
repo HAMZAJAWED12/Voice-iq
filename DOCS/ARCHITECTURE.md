@@ -1,8 +1,8 @@
-Last verified: 2026-10-19, ee2e15b
+Last verified: 2026-10-19, e4398b1
 # Architecture
 
-This document describes the code structure of VoiceIQ at commit `ee2e15b`
-(branch `sprint7/doc-sync`). It shows how the packages fit together, how data
+This document describes the code structure of VoiceIQ at commit `e4398b1`
+(branch `sprint7/phase0-decisions`; its code is that of `main` at `49063bb`). It shows how the packages fit together, how data
 moves between them, where faults are contained, what is stored, and how to
 extend the system without breaking it.
 
@@ -561,7 +561,7 @@ silent, and missing tables are created.
 ## 9. Sprint 7 fact-check agent — planned, not built
 
 **Everything in this section is planned, not built.** No Sprint 7
-application code exists at `dbae452`. A search of `app/` at that commit finds
+application code exists at `e4398b1`. A search of `app/` at that commit finds
 no `/v2` route, no `fact_check_report` key and no `factcheck_agent_*` table.
 For progress and the next milestone, see
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For each
@@ -574,8 +574,8 @@ decision and its status, see the
 | Job-based run: `/v1/process-audio` returns before the agent finishes | PHASE-0 §D2 | `process_audio.py`, after `orch.run` in `_run_pipeline` |
 | New `fact_check_report` response key, a state envelope (`pending`, `complete`, `failed`, `disabled`, `skipped`), next to the unchanged `fact_checks` and `fact_checks_v2` | PHASE-0 §2.3 | the process-audio response |
 | Four new tables: `factcheck_agent_runs`, `factcheck_agent_claims`, `factcheck_agent_evidence`, `factcheck_agent_citations`; existing tables not altered | PHASE-0 §4 | `create_all()` in `db.py:125` would create them |
-| When the job ends, re-run the Agent Brain, then the PDF, with the Java callback sent exactly once, on the final pass | PHASE-0 §D10 | `_run_agent_brain`, `_dispatch_agent_callback`, `_run_pdf` |
-| New egress destinations: a model server and a search backend | PHASE-0 §3 | [DATA-FLOW.md](DATA-FLOW.md) would change |
+| When the job ends, re-run the Agent Brain, then the PDF, with the Java callback sent only on the final pass, at most once (D10-T; the accepted zero-callback cases are in PHASE-0 §D10) | PHASE-0 §D10, D10-T | `_run_agent_brain`, `_dispatch_agent_callback`, `_run_pdf` |
+| New egress destinations: a model server, a search backend with its upstream engines, and page hosts | PHASE-0 §3, §6 | [DATA-FLOW.md](DATA-FLOW.md) would change |
 
 Planned flow (planned, not built):
 
@@ -592,5 +592,5 @@ What the current code does in its place: the in-pipeline Agent Brain
 passes `fact_check=None`, so `FactCheckReviewAgent` is dormant on that path
 (`orchestrator.py:742-750`, `780`), and the PDF shows only the legacy
 `fact_checks` list (`orchestrator.py:882`). The code contains no job runner.
-How the job will run is open and tracked in
-[FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
+The job will run on a DB-polled worker (U1, signed 2026-10-19; see the
+[register](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)).

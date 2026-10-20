@@ -1,4 +1,4 @@
-Last verified: 2026-10-19, ee2e15b
+Last verified: 2026-10-19, 49063bb
 # Changelog
 
 What changed in VoiceIQ, backfilled from git history. Newest first, grouped
@@ -22,21 +22,21 @@ Taken from git at write time.
 
 | Measure | Value | Command |
 |---|---|---|
-| Commits reachable from HEAD (`ee2e15b`) | 212 | `git rev-list --count HEAD` |
-| Non-merge commits | 211 | `git rev-list --count --no-merges HEAD` |
-| Merge commits | 1 (`032d822`) | `git rev-list --count --merges HEAD` |
-| Commits on `main` (`8fd3972`) | 141 | `git rev-list --count main` |
-| Commits on `sprint7/doc-sync` beyond `main` | 71 | `git rev-list --count main..HEAD` |
+| Commits reachable from HEAD (`49063bb`) | 214 | `git rev-list --count HEAD` |
+| Non-merge commits | 212 | `git rev-list --count --no-merges HEAD` |
+| Merge commits | 2 (`032d822`, `49063bb`) | `git rev-list --count --merges HEAD` |
+| Commits on `main` (`49063bb`) | 214 | `git rev-list --count main` |
+| Commits merged from `sprint7/doc-sync` by pull request #1 | 72 | `git rev-list --count 8fd3972..aa453f0` |
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse --format="%h %ad" --date=short` |
 
-Each of the 212 commits is listed in exactly one row below; a few hashes
+Each of the 214 commits is listed in exactly one row below; a few hashes
 also appear elsewhere as cross-references. Small commits of the same kind
 (wave-completion notes, a batch of stage extractions) share a row. Sections
 are ordered by their most recent commit. Dates are author dates.
 
 | Section | Dates | Commits |
 |---|---|---|
-| [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-19 | 71 |
+| [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-19 | 73 |
 | [Sprint 7 Phase 0 and prerequisites](#sprint-7-phase-0-and-prerequisites) | 2026-09-04 to 2026-09-20 | 7 |
 | [N4b multilingual and L5 pipeline wiring](#n4b-multilingual-and-l5-pipeline-wiring) | 2026-09-19 to 2026-09-20 | 10 |
 | [Tier 3 Wave E](#tier-3-wave-e) | 2026-06-21 to 2026-09-19 | 34 |
@@ -52,10 +52,12 @@ are ordered by their most recent commit. Dates are author dates.
 
 ## Sprint 7 on `sprint7/doc-sync`
 
-71 commits, 2026-10-11 to 2026-10-19: a documentation sync, prerequisite
+73 commits, 2026-10-11 to 2026-10-19 (72 from the branch plus the merge
+commit): a documentation sync, prerequisite
 fixes that need no pending decision (one per milestone), security and
 reliability fixes, the owner-decided changes that followed them, and the
-fix round after the pull-request review. Why
+fix round after the pull-request review. Pull request #1 merged them into
+`main` with a merge commit on 2026-10-19 (`49063bb`). Why
 the work is shaped this way: "In progress" in the
 [status doc](FACT-CHECK-AGENT-STATUS.md#in-progress).
 
@@ -68,7 +70,14 @@ pull request. Each code fix is its own commit with its own tests.
 |---|---|---|
 | 2026-10-19 | Whole-word rules list the forms they would otherwise miss: email triggers "send an", "send/share/forward these, those, them"; flags "umm", "uhh", "erm", "ahh", "crappy", "stupidity", "idiots", "hates", "hated"; intents "apologized", "upsetting". The email title drops a leading article only as a whole word. "Send an engineer" is an email suggestion too, accepted by the owner (DECISIONS #32). | `ee2e15b` |
 | 2026-10-19 | Fact-check provider requests ask for uncompressed replies; a reply in any other content encoding is refused before its body is read, so the 1 MiB cap counts the bytes that arrive. | `efdd1a9` |
+| 2026-10-19 | Doc claims brought in line with the code (fact-check egress, when the process-audio 503 and 429 come, the run deadline, the reply cap, the callback replay check, deployment requirements); the round recorded. Docs and comments only. | `aa453f0` |
 | 2026-10-19 | The test suite never reads `.env` and uses a temporary database and job folder (`app/conftest.py`). Test-only. | `8563572` |
+
+### Merge into `main`
+
+| Date | Change | Commit |
+|---|---|---|
+| 2026-10-19 | Pull request #1 merges `sprint7/doc-sync` into `main` (merge commit; the tree equals `aa453f0`). | `49063bb` |
 
 ### Milestones M1 to M7
 
@@ -83,7 +92,7 @@ pull request. Each code fix is its own commit with its own tests.
 | M2 | 2026-10-11 | Bad provider replies (non-finite numbers, JSON that is not an object or cannot be decoded, wrong nested types, over-deep metadata) end that one claim as `SOURCE_UNAVAILABLE`, never a verdict or a 500. The engine isolates each claim. No v1 model change. Tests in `app/insights/tests/test_factcheck_source_replies.py`. | `9aff207` |
 | M1 | 2026-10-11 | Outbound request URLs kept out of the logs: `setup_logging()` pins the `httpx` and `httpcore` loggers to WARNING (`app/utils/logger.py`). Follow-up: a failed Java callback logs the exception class and HTTP status only. Tests in `app/insights/tests/test_logging_hygiene.py`. | `c1b35d9`, `cedfe96` |
 
-Next: no engineering milestone is ready; the Phase 1 gate is owner-side.
+Next: Phase 0 is complete (signed 2026-10-19) and Phase 1 may start.
 See [Next milestone](FACT-CHECK-AGENT-STATUS.md#next-milestone).
 
 ### Status-document updates
@@ -420,7 +429,7 @@ handoff documentation. DOCS/00 to 10 (index:
 | Date | Change | Commit |
 |---|---|---|
 | 2026-04-25 | Tracked bytecode and a stale source archive removed; archive files blocked in `.gitignore`. | `2d017b7` |
-| 2026-04-25 | Merge of the remote `main`, keeping the local Sprint 2/3 version. The only merge commit. | `032d822` |
+| 2026-04-25 | Merge of the remote `main`, keeping the local Sprint 2/3 version. The first merge commit. | `032d822` |
 | 2026-04-25 | Insight service from Sprints 1 to 3 (`app/insights/`: engines, models, API, SQLite repository, tests), `app/insight_main.py`, Dockerfile, `.env.example`, and the Sprint 4 handoff set DOCS/00 to 10 with the handoff `.docx`. | `94f6479` |
 | 2026-02-12 | Pipeline orchestrator (`app/pipeline/orchestrator.py`), job storage (`app/utils/job_io.py`) and one sample job's artifacts. | `b4c5c86` |
 | 2026-02-10 to 2026-02-12 | README revisions. | `7220d33`, `472dfd2`, `f0c04a1` |

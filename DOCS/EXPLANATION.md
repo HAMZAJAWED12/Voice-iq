@@ -1,4 +1,4 @@
-Last verified: 2026-10-19, ee2e15b
+Last verified: 2026-10-19, e4398b1
 # VoiceIQ in Plain English
 
 This guide is for readers who do not write code: product owners, managers,
@@ -648,7 +648,7 @@ The project uses short codes for its pieces of work and its decisions. This
 glossary gives only what each code means. **For the current status of any
 decision, see the decision register in
 [FACTCHECK-AGENT-PHASE-0.md §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)
-(D1–D10) or the open-decisions table in
+(D1–D10, D3b, D10-T and U1–U10) or the open-decisions table in
 [N4B-MULTILINGUAL-STRATEGY.md §7](N4B-MULTILINGUAL-STRATEGY.md#7-open-decisions)
 (L1–L5). For where the project stands now, see
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).**
@@ -664,7 +664,7 @@ decision, see the decision register in
 | Sprint 5 | The rule-based fact-check engine described in step 10 (commit `592e8e7`) |
 | Sprint 6 | The Agent Brain described in step 8 (commits `ef5b5e8` to `ef005dd`) |
 | Sprint 7 | The **Fact-Check Agent**: a planned replacement for the rule-based fact-checker that uses an open-source LLM (large language model) to find claims, search for evidence and cite sources. It is organised in Phases 0–7. Sprint 7 Phases 1–7 are planned, not built. |
-| Phase 0 | Sprint 7's first phase: agreeing the contract and scope, and signing the decisions D1–D10. It produces documents only, with no code. |
+| Phase 0 | Sprint 7's first phase: agreeing the contract and scope, and signing the decisions in the register (D1–D10, D3b, D10-T and U1–U10). It produces documents only, with no code. Completed 2026-10-19. |
 | Phase 1 | Build a gold set (a hand-checked collection of example claims with known answers, used to measure accuracy), set up a model server, run a "bake-off" between candidate models, and pin the winner |
 | Phase 2 | New version-2 data models, the connection to the language model, and settings |
 | Phase 3 | Claim extraction that records which speaker said what and when, a check of whether a statement can be verified at all, de-duplication, and a limit on claims per call |
@@ -672,7 +672,7 @@ decision, see the decision register in
 | Phase 5 | Verdicts based only on the evidence found, checked citations, and consistent confidence scores |
 | Phase 6 | Running fact-check as a background job with its own version-2 routes and database tables, a status field in the response, and a PDF with citations that can print any character |
 | Phase 7 | Time limits, load limits, failure handling, metrics, and a staged rollout |
-| M1–M7 | Milestones: small fixes made one at a time while Sprint 7 work waits on Phase 0. M1 kept outbound request details out of the logs (`c1b35d9`, `cedfe96`). M2 made a bad reply from a data service produce `SOURCE_UNAVAILABLE` for that claim instead of a verdict or a crash (`9aff207`). M3 made currency-service errors say what went wrong (`dc03a44`). M4 stopped over-long numbers in a transcript from crashing the fact-check route or the audio route (`8e51a94`). M5 stopped the claim detector mistaking names, ages and counts for prices and taught it common price and currency phrasing (`1dbfac7`). M6 stopped characters outside Latin-1, the Western European character set the report font covers, from failing the PDF report; they now print as a close plain form or a question mark (`dc9caf3`). M7 made the keyword rules for flags, intents and email suggestions match whole words only, so that "er" no longer matches inside "internet" (`dbae452`). |
+| M1–M7 | Milestones: small fixes made one at a time while Sprint 7 work waited on Phase 0. M1 kept outbound request details out of the logs (`c1b35d9`, `cedfe96`). M2 made a bad reply from a data service produce `SOURCE_UNAVAILABLE` for that claim instead of a verdict or a crash (`9aff207`). M3 made currency-service errors say what went wrong (`dc03a44`). M4 stopped over-long numbers in a transcript from crashing the fact-check route or the audio route (`8e51a94`). M5 stopped the claim detector mistaking names, ages and counts for prices and taught it common price and currency phrasing (`1dbfac7`). M6 stopped characters outside Latin-1, the Western European character set the report font covers, from failing the PDF report; they now print as a close plain form or a question mark (`dc9caf3`). M7 made the keyword rules for flags, intents and email suggestions match whole words only, so that "er" no longer matches inside "internet" (`dbae452`). |
 | Tier 1, 2, 3 | Earlier production-readiness rounds: access keys, size limits and time limits (Tier 1), test coverage (Tier 2), clean-ups and stricter automated checks (Tier 3) |
 | Wave E (E1–E5) | Structural clean-ups from Tier 3, for example the audio content check (E4) and the faster speaker matching (E3) |
 | Tier S | Eight security-hardening items, S1–S8, such as per-caller request limits, automatic deletion of old call files, and making fact-check opt-in. Record: [SECURITY-HARDENING-PLAN.md](SECURITY-HARDENING-PLAN.md). Current controls: [SECURITY.md](SECURITY.md). |
@@ -694,6 +694,23 @@ decision, see the decision register in
 | D8 | How long must version 1 and the older response fields keep working? |
 | D9 | Which sources count as authoritative for high-stakes claims? |
 | D10 | When the fact-check job finishes, does it re-run every later consumer (the Agent Brain and the PDF), or only the PDF? |
+| D3b | Who labels the gold set's verdicts, and how? (Split from D3; done after the evidence search exists.) |
+| D10-T | Which pass sends the message to the action layer, and may it be sent at most once? |
+| U1 | What runs the background fact-check job? |
+| U2 | Which languages do the agent, its report and the gold set support? |
+| U3 | Which local model server is used during development? |
+| U4a | Who runs the self-hosted web search? |
+| U4b | Which web pages may be fetched, and on what terms? |
+| U5a | What does a version-2 fact-check request look like, and what comes back? |
+| U5b | How do statements that cannot be checked, or are out of scope, appear in the result? |
+| U5c | Who may call the version-2 routes, and how much and how often? |
+| U6 | When is the new fact-check result missing or marked switched off, and which settings control it? |
+| U7 | How do the new database tables reach a server that does not create tables itself? |
+| U8a | Where does the re-run after the job get its inputs? |
+| U8b | How are the regenerated report and final suggestions delivered? |
+| U8c | When are the job's stored records deleted? |
+| U9 | How is the full service deployed? |
+| U10 | May real customer calls be used for evaluation, and under what rules? |
 | L1 | Who supplies and reviews the Urdu, Arabic and Roman-Urdu vocabulary? |
 | L2 | How is a "mixed" language call identified, given that Whisper never reports "mixed"? |
 | L3 | Is Roman Urdu (Urdu written in Latin letters) treated as Urdu or as mixed? |
@@ -728,7 +745,7 @@ and git (`94f6479`, `592e8e7`, `ef5b5e8`–`ef005dd`, `c6284b6`); phases in
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) (*Remaining*);
 milestones in git (`c1b35d9`, `cedfe96`, `9aff207`, `dc03a44`, `8e51a94`,
 `1dbfac7`, `dc9caf3`, `dbae452`) and
-[FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) (*Next milestone*);
+[FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) (*Completed*);
 Tier S in [SECURITY-HARDENING-PLAN.md](SECURITY-HARDENING-PLAN.md) and
 `ec8dc1e`; Tier N in [TIER-N-PLAN.md](TIER-N-PLAN.md); decisions in
 [FACTCHECK-AGENT-PHASE-0.md §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)

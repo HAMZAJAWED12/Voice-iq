@@ -87,9 +87,11 @@ voiceiq-AI/
 | Tier 3 | Waves A/B/D: cleanups, schema fixes, mypy hard-gate | ✅ Done |
 | Sprint 6 | Agent Brain (`app/agent_brain/`): 5 rule-based agents (Task/FollowUp/Email/Escalation/FactCheckReview), confidence refine, difflib dedup, ranker, runner w/ per-agent fault isolation, internal API, pipeline adapter, HMAC Java callback; 103 tests, 100% | ✅ Done |
 | Tier S | Security hardening (8 items): rate limiting, job-artifact TTL, opt-in fact-check + `DOCS/DATA-FLOW.md`, error-detail leak, filename guard, URL encoding, callback replay/TLS, prod docs gating. See `DOCS/SECURITY-HARDENING-PLAN.md` | ✅ Done |
-| Sprint 7 | **Fact-Check Agent** — open-source LLM (Qwen3) claim extraction, hybrid retrieval, evidence-grounded reasoning, citations. Phases 0–7. Phase 0 (contract lock, no code) in `DOCS/FACTCHECK-AGENT-PHASE-0.md` | 🟡 Phase 0 — see [`DOCS/FACT-CHECK-AGENT-STATUS.md`](DOCS/FACT-CHECK-AGENT-STATUS.md) |
+| Sprint 7 | **Fact-Check Agent** — open-source LLM (Qwen3) claim extraction, hybrid retrieval, evidence-grounded reasoning, citations. Phases 0–7. Phase 0 (contract lock, no code) in `DOCS/FACTCHECK-AGENT-PHASE-0.md`, complete 2026-10-19 | 🟡 Phase 1 may start — see [`DOCS/FACT-CHECK-AGENT-STATUS.md`](DOCS/FACT-CHECK-AGENT-STATUS.md) |
 
-**Currently open:** Sprint 7 Fact-Check Agent, at Phase 0. Live status, progress
+**Currently open:** Sprint 7 Fact-Check Agent. Phase 0 is complete (signed
+2026-10-19) and Phase 1 may start; gold-set labelling may start at once
+(DECISIONS #52). A few values are still open (PHASE-0 §8). Live status, progress
 and the next milestone: [`DOCS/FACT-CHECK-AGENT-STATUS.md`](DOCS/FACT-CHECK-AGENT-STATUS.md).
 Decision status lives **only** in the register,
 [`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1](DOCS/FACTCHECK-AGENT-PHASE-0.md#1-decision-register) —
@@ -143,8 +145,11 @@ all done.
 >    (`pending|complete|failed|disabled|skipped`) and
 >    `GET /v2/fact-check/{runId}` is required, not optional. The PDF must
 >    not ship with a silently empty fact-check section.
-> 3. **v1 is frozen.** `FactCheckRequest`/`Response`, `ClaimType`, `Verdict`
->    take no new members. The agent gets its own models.
+> 3. **v1 is frozen.** `FactCheckRequest`/`Response`, `ClaimType`, `Verdict`,
+>    `ClaimSpan`, `ConfidenceLabel` and every type, field constraint and
+>    `GET /v1` row key reachable from the v1 request, response and GET row
+>    may not be added to, removed, renamed or retyped (PHASE-0 §2.1, W2, A2
+>    amendments (a) and (e)). The agent gets its own models.
 > 4. **No default in the verdict map.** Done for v1 in `1cd5350`:
 >    `pipeline_adapter._VERDICT_TO_STATUS` is typed
 >    `dict[Verdict, FactCheckStatus]`, indexed directly, and pinned by
@@ -165,7 +170,9 @@ all done.
 >    genuinely differ, so Java
 >    would treat them as two legitimate recommendation sets for one
 >    `sessionId` with no rule for which wins. Test for *exactly* one
->    dispatch, not "at least one".
+>    dispatch, not "at least one". Exceptions and delivery rule: D10-T
+>    (at most once, record then send); the accepted zero-callback cases are
+>    listed in PHASE-0 §D10, and the tests use exactly that list.
 
 > **Owner working rules** (2026-10-16):
 >
@@ -180,6 +187,12 @@ all done.
 >   the Java backend calls the service and that it stays off the public
 >   internet; a deployment must meet that. No per-session ownership. Revisit
 >   before any direct customer access (DECISIONS #33).
+> - **One owner holds every role** (2026-10-19): the project owner (sole
+>   maintainer) holds every role the Phase 0 register names (tech lead,
+>   engineering manager, product, senior sponsor, infrastructure, legal) and
+>   signs in each. Repo text names roles, never people. Parties outside the
+>   project, such as the Java action layer team and API consumers, are not
+>   covered by that signature (DECISIONS #50).
 
 ## Project knowledge set (DOCS/)
 

@@ -1,6 +1,6 @@
 # Fact-Check Agent — Live Status
 
-Owner: engineering · Status: **Phase 0 in sign-off** · Created: 2026-10-11 · Updated: 2026-10-19
+Owner: engineering · Status: **Phase 0 complete; Phase 1 may start** · Created: 2026-10-11 · Updated: 2026-10-19
 
 The one place that says where Sprint 7 stands. Update it with every
 milestone. Decision status is **not** kept here — it lives only in the
@@ -15,9 +15,9 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 | | |
 |---|---|
 | Date | 2026-10-19 |
-| Branch | `sprint7/doc-sync` (from `main` @ `8fd3972`); M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b` |
-| Current phase | **Phase 0 — Contract and scope lock: partially complete.** Phases 1–7 not started (no Sprint 7 application code exists). |
-| Overall progress | **0.83 %** |
+| Branch | `main` @ `49063bb` (pull request #1 merged `sprint7/doc-sync`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions` |
+| Current phase | **Phase 0 — Contract and scope lock: complete** (signed 2026-10-19). **Phase 1 may start**; gold-set labelling may start at once (D3). Phases 1–7 not started; no Sprint 7 application code exists. |
+| Overall progress | **4.17 %** |
 
 **How the percentage is computed** — countable plan deliverables only. Each
 phase's bullets are its "Implementation work" plus "Exit deliverables" items
@@ -28,26 +28,34 @@ that predates Sprint 7 counts as reusable, not done.
 overall = Σ_phase (effort_weight / Σ effort_weight) × (bullets done / bullets total)
 
 weights (weeks, plan estimates):  P0 0.5 · P1 2 · P2 1 · P3 1.5 · P4 2 · P5 2 · P6 1.5 · P7 1.5  = 12.0
-done / total:                     P0 2/10 · P1–P7 0 of 48                                       = 2/58
+done / total:                     P0 10/10 · P1–P7 0 of 48                                      = 10/58
 
-overall = (0.5 / 12.0) × (2 / 10) = 0.0083 → 0.83 %
+overall = (0.5 / 12.0) × (10 / 10) = 0.0417 → 4.17 %
 ```
 
-Other countable measures: decisions signed **3 / 10**; Phase 0 exit
-deliverables approved **0 / 3**. Prerequisite fixes (such as M1) are not
-plan deliverables and do not move the percentage.
+Other countable measures: the 10 original register decisions are all
+signed, and D3b, D10-T and U1–U10 were added and signed; Phase 0 exit
+deliverables approved **3 / 3**. Some values are still open (see
+*Blockers*); none blocks the start of Phase 1, and the earliest is needed
+before the first bake-off run. Prerequisite fixes (such
+as M1) are not plan deliverables and do not move the percentage.
 
 ## Completed
 
-Verified against the repository on 2026-10-19 (`ee2e15b`).
+Verified against the repository on 2026-10-19 (`49063bb`).
 
-- **Phase 0: 3 of 10 register decisions signed** — see
-  [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)
-  (`2a539d3`, `dacc926`).
-- **Phase 0 policies written** (`c6284b6`) — §2 API contract, §3
-  compatibility, §5 verdict mapping, §6 privacy and source policy and §7
-  configuration are drafted, not yet approved; §4 persistence is binding
-  through the signed persistence decision.
+- **Phase 0 complete (2026-10-19).** The project owner (sole maintainer),
+  who holds every role in the register, signed the remaining register
+  decisions, added D3b, D10-T and U1–U10 to the register with their own
+  phase dates, approved §2, §3 and §6 with their amendments (§5 and §7 with
+  §3), confirmed the per-phase gate reading and the `ClaimSpan` freeze-list
+  change, and recorded the gate dates: Phase 0 opened 2026-09-04. See
+  [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register) and §8, and
+  [DECISIONS #50–#52](DECISIONS.md#phase-0-sign-off-2026-10-19). D1, D2 and
+  D10 were signed earlier (`2a539d3`, `dacc926`).
+- **Phase 0 policies written** (`c6284b6`) and approved on 2026-10-19: §2 API
+  contract, §3 compatibility, §5 verdict mapping, §6 privacy and source
+  policy and §7 configuration; §4 persistence is binding through D1.
 - **D3 gold-set scoping brief** written — [`D3-GOLD-SET-BRIEF.md`](D3-GOLD-SET-BRIEF.md)
   (`8fd3972`). A recommendation, not a decision.
 - **Prerequisites landed early** (not counted as phase deliverables):
@@ -208,14 +216,15 @@ Verified against the repository on 2026-10-19 (`ee2e15b`).
 
 ## In progress
 
-- **Phase 0 sign-off** — owner-side: the 7 pending register decisions, the
-  §2/§3/§6 approvals, and confirmation of the two pending PHASE-0 wording
-  changes (per-phase gate reading, `ClaimSpan` in the v1 freeze list).
-- **Prerequisite fixes** — until Phase 0 lets a phase start, no Sprint 7
-  application code is written; only fixes that need no pending decision, one
+- **Phase 1, gold set** — labelling may start now, before the rest of
+  Phase 1 (D3's clause; [DECISIONS #52](DECISIONS.md#52-gold-set-labelling-may-start-before-the-phase-1-gate)).
+  English, synthetic-first, Layers A+B; drafts are machine-assisted and the
+  project owner checks every item; consistency is a blind re-label of 40
+  items after one week. Data preparation, no code.
+- **Prerequisite fixes** — only fixes that need no pending decision, one
   per milestone, smallest first. M1–M7, the old-rows fix, the decision-free
-  hardening items and the owner-decided items are done. The items the
-  owner parked are tracked privately.
+  hardening items, the owner-decided items and the pull-request review fix
+  round are done. The items the owner parked are tracked privately.
 - **Working rules** (project owner, 2026-10-16): the claim detector gets no
   new heuristics until Phase 3, only crash, security or performance fixes
   ([DECISIONS #26](DECISIONS.md#26-claim-detector-no-new-heuristics-until-phase-3));
@@ -227,19 +236,14 @@ Verified against the repository on 2026-10-19 (`ee2e15b`).
 
 Ordered backlog. Phase numbers are the plan's.
 
-1. **Phase 1 gate.** Sign every register decision due before Phase 1; approve
-   §2, §3 and §6; confirm the per-phase gate reading; record the kick-off date
-   and signer names; add the unregistered decisions listed under *Blockers*
-   to §1. Until the per-phase gate reading is confirmed, every register
-   decision must be signed before Phase 1; once confirmed, those due later
-   (before Phase 1 ends, Phase 5 or Phase 6 — see PHASE-0 §8) can follow.
+1. **Open values** (see *Blockers*), each set before the phase that uses it.
 2. **Prerequisite fixes**, smallest first (earliest phase each one gates
    in brackets):
    1. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test; lands with Phase 6, which adds the re-run [6].
    2. Claim-detector limits left after M5 — past prices read as current ("I bought ETH at 1200"), capitalised acronyms read as tickers, any number after a coin, ticker or commodity read as a price ("Gold is 29.99 with free shipping"); listed in [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector). *Wait for Phase 3* (DECISIONS #26) [3].
    3. A Unicode-capable PDF font — M6 only contains the failure (DECISIONS #31) [6].
-3. **Phase 1** — gold set, model server, bake-off, pinned model.
-4. **Phase 2** — typed v2 models, OpenAI-compatible client, `VOICEIQ_FACTCHECK_*` settings, stubbed boundary.
+3. **Phase 1** — gold set (may start now, DECISIONS #52), local model server (U3), the D6 criteria note before the first bake-off run, the bake-off, a pinned model and runtime.
+4. **Phase 2** — typed v2 models, OpenAI-compatible client, the `VOICEIQ_` settings named in PHASE-0 §7 (claim cap and run deadline renamed `FACTCHECK_AGENT_*`; no key reuses an existing name), stubbed boundary, the DB-polled runner's run model (U1).
 5. **Phase 3** — claim extraction with segment/speaker/timestamp traceability, checkability gate, dedup, claim cap.
 6. **Phase 4** — retrieval interface, trusted clients first, SearXNG adapter, `url_guard` SSRF controls, frozen fixtures.
 7. **Phase 5** — evidence extraction, evidence-only verdicts, citation-ID validation, deterministic confidence, evidence cache.
@@ -249,62 +253,55 @@ Ordered backlog. Phase numbers are the plan's.
 ## Decisions
 
 Register: [`FACTCHECK-AGENT-PHASE-0.md` §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register).
-Summary counts only: **10** decisions in the register — **3** signed,
-**7** pending. Phase 0 exit deliverables: **0 / 3** approved. Decisions not
-yet in the register are listed under *Blockers*.
+Summary counts only: the **10** original register decisions are signed, and
+**17** rows were added and signed on 2026-10-19 (D3b, D10-T, U1–U3, U4a–b,
+U5a–c, U6, U7, U8a–c, U9, U10), so the register has 27 rows. Phase 0
+exit deliverables: **3 / 3** approved. One project owner (sole maintainer)
+holds every role ([DECISIONS #50](DECISIONS.md#50-one-owner-holds-every-phase-0-role)).
 
 ## Blockers
 
-Real blockers only.
+Real blockers only. None blocks the start of Phase 1; the D5 run deadline
+is needed before the first bake-off run. Each open value below is listed in
+[PHASE-0 §8](FACTCHECK-AGENT-PHASE-0.md#8-exit-checklist) and must be set
+before the phase that uses it:
 
-- **Phase 1 cannot start:** not every register decision due before Phase 1
-  is signed, and §2, §3 and §6 are not approved (PHASE-0 §1, §8).
-- **Pending owner confirmation (not in force):** two PHASE-0 wording changes
-  of 2026-10-11 — the per-phase gate reading that follows the register's
-  *Needed by* column (plan v1.1 §11 said every decision blocks Phase 1), and
-  `ClaimSpan` added to the §2.1 v1 freeze list. Until the tech lead and the
-  engineering manager confirm, every register decision blocks Phase 1.
-- **Decisions missing from the register** — no document settles them, and
-  each gates a phase:
-  - the job runner behind D2 (in-process thread, DB-polled worker or queue) —
-    Phase 6, and the Phase 2 run/status models; today there is no runner, a
-    single uvicorn worker, and in-memory state that other workers would not share;
-  - supported languages for the agent and its report — Phases 1, 3 and 6;
-  - local development model server (Ollama or llama.cpp) — Phase 1;
-  - who hosts SearXNG, and the robots.txt / terms-of-service position for
-    page fetching — Phase 4;
-  - the `POST /v2/fact-check` request schema, how non-checkable statements
-    appear in v2 output, and the `/v2` auth, payload-cap and rate-limit
-    rules — Phases 2 and 6;
-  - when `fact_check_report` is absent versus `disabled`, and how
-    `FACTCHECK_AGENT_ENABLED`, `FACTCHECK_AUTO_ENRICH` and `?fact_check`
-    combine — Phase 6;
-  - how the D1 tables reach a deployment with
-    `VOICEIQ_DATABASE_AUTO_CREATE=false` (`init_db` then skips
-    `create_all`) — Phase 6;
-  - how the D10 re-run rebuilds its inputs after the response has gone, how
-    the regenerated PDF and recommendations are delivered, and how run rows
-    age out (the retention sweep knows only `data/jobs/` directories and the
-    v1 insight and fact-check tables) — Phase 6.
+- the agent's provisional run deadline (D5) — before the D6 criteria note
+  is signed (first bake-off run), then the Phase 2 runner and admission
+  defaults that follow it;
+- the maximum evidence age per claim type, the remaining provider and
+  Wikipedia terms, and the maximum excerpt length (PHASE-0 §6.3–§6.5) —
+  Phases 4 and 5;
+- whether `fact_check_report` shows `disabled` or `skipped` when the agent is
+  enabled but its tables are missing (U7) — Phase 6;
+- the `app.main` deployment recipe (U9) — before Phase 6 testing;
+- whether `app.main` shares its `data/` volume with `app.insight_main` (U9)
+  — phase not set (open);
+- the Java action layer team's acknowledgement of PHASE-0 §3 — before the
+  callback changes of Phase 6.
 
 ## Next milestone
 
-**None ready for engineering.** M7 was the last fix that needed no pending
-decision, and the owner-decided items are done. The next step is owner-side:
-the **Phase 1 gate** (*Remaining*, item 1). The prerequisites left wait for
-Phase 3 or Phase 6.
+**Phase 1 — model bake-off** (plan v1.1, Phase 1). It starts with the gold
+set, which may begin now: labelling is data preparation and needs no code.
+Before the first bake-off run: D5's open run deadline is set, the D6
+criteria note (who may win, the thresholds and the licence check), whose
+per-claim latency gate uses that figure, is signed, and the local model server of
+record is set up (U3: llama.cpp with model files pinned by revision and
+SHA-256). Fetching model files needs the project owner's go.
 
 ## Acceptance evidence
 
-The Phase 1 gate (*Remaining*, item 1) is met when all of the following hold (the first two items are the PHASE-0 §8 checklist):
+Phase 1 is complete when all of the following hold (plan v1.1, Phase 1 exit
+deliverables):
 
-- every register decision is signed, with signer and date in
-  [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register) (only those
-  due before Phase 1, if the per-phase gate reading is confirmed; until then
-  every decision counts);
-- §2, §3 and §6 are approved;
-- the per-phase gate reading and the `ClaimSpan` freeze-list change are
-  confirmed or withdrawn;
-- the decisions listed under *Blockers* that gate Phase 1 are added to the
-  register;
-- this document records the kick-off date and moves Phase 0 to *Completed*.
+- the Layer A+B gold set is frozen and versioned, with its intra-rater
+  agreement reported (D3);
+- the bake-off has run on the gold set with the D6 criteria note signed
+  first, and its report gives the measured baseline (extraction precision and
+  recall, checkability F1, JSON validity, memory and latency on the D5
+  machine);
+- a model and its serving runtime are pinned;
+- the operating limits move from provisional to binding where Phase 1
+  measured them, including D5's open run deadline;
+- this document moves Phase 1 to *Completed*.
