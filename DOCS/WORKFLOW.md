@@ -1,11 +1,11 @@
-Last verified: 2026-10-19, ee2e15b
+Last verified: 2026-10-19, e4398b1
 # Workflow
 
 How work gets done in this repository: branches, the local Python environment, the checks, the commit rules and the milestone loop. AI assistants read [CLAUDE.md](../CLAUDE.md) first. For where Sprint 7 stands, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For what the project is, see [CONTEXT.md](CONTEXT.md).
 
 ## Before every commit
 
-Run these from the repository root. At `dbae452` (2026-10-17) the tests, both ruff commands and mypy over `app/insights/` and `app/agent_brain/` passed. The mypy command below is the wider gate added in `6aa8990`, so the `dbae452` result does not cover it. *Lint and types* below says where each check ran.
+Run these from the repository root. At `e4398b1` (2026-10-19) the tests (1781 passed, 1 skipped), both ruff commands and the mypy command below passed (commit message of `e4398b1`). *Lint and types* below says where each check ran.
 
 ```powershell
 .venv\Scripts\python.exe -m pytest -v app/insights/tests/ app/agent_brain/tests/
@@ -22,9 +22,9 @@ Then stage files by explicit path and commit. The pre-commit hooks run on their 
 | Rule | Detail |
 |---|---|
 | Base branch | `main`. |
-| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/doc-sync`, cut from `main` at `8fd3972`. It holds the 2026-10-11 documentation sync, milestones M1 to M7, the project knowledge set, a set of security and reliability fixes, the fixes the owner decided on 2026-10-17, the docs, code-comment and CI type-check updates that followed, and the pull-request review fix round: 71 commits beyond `main` at `ee2e15b` (`git rev-list --count main..HEAD`). |
+| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/phase0-decisions`, cut from `main` at `49063bb`; it records the Phase 0 sign-off. The previous one, `sprint7/doc-sync` (cut from `main` at `8fd3972`: the 2026-10-11 documentation sync, milestones M1 to M7, the project knowledge set, security and reliability fixes, the fixes the owner decided on 2026-10-17, the updates that followed and the pull-request review fix round, 72 commits), was merged into `main` by pull request #1 with a merge commit (`49063bb`). |
 | `main` | Never commit to `main` directly. |
-| Push | Never push without the owner's go-ahead. `sprint7/doc-sync` tracks `origin/sprint7/doc-sync` (`git rev-parse --abbrev-ref sprint7/doc-sync@{upstream}`). |
+| Push | Never push without the owner's go-ahead. `sprint7/phase0-decisions` was created with `--no-track` and has no upstream (`git rev-parse --abbrev-ref sprint7/phase0-decisions@{upstream}` fails), so a bare `git push` stops with an error instead of pushing anywhere. Push it only with `git push origin sprint7/phase0-decisions`, which does not set an upstream. |
 | CI trigger | CI runs on a push to `main` and on a pull request into `main`, nothing else ([.github/workflows/test.yml](../.github/workflows/test.yml), lines 3-7). Until a pull request is open, nothing checks a branch except the local checks. |
 
 The repository sits in a synced OneDrive folder, which sometimes causes `index.lock` collisions. If git starts fighting itself, pause the sync ([CLAUDE.md](../CLAUDE.md), *Working with this repo*).
@@ -118,7 +118,7 @@ Configuration lives in [pyproject.toml](../pyproject.toml):
 - **Ruff:** line length 120, target `py310`, rule sets E, F, I, B and UP, with `B008` ignored for the FastAPI `Depends` idiom. It excludes `.venv`, `samples`, `DOCS`, `data`, `tmp`, `uploads` and `outputs` (lines 1-9).
 - **Mypy:** pydantic plugin, `ignore_missing_imports`, `check_untyped_defs`. Test directories are excluded (lines 11-18).
 
-At `dbae452` (2026-10-17): the tests gave 1730 passed and 1 skipped, ruff reported "All checks passed!" with 207 files already formatted, and mypy over `app/insights/` and `app/agent_brain/` found no issues in 84 source files. The wider gate, which adds `app/utils/` and `app/security/` (99 source files), ran clean in the local Python 3.12 venv, last at `2966527` just before the gate was committed, then in CI run 39119444804 at `6aa8990` (lint job: Python 3.11, `requirements-insight.txt`, mypy 1.13.0). Local runs with `--python-version 3.10` and `3.11` plus `--no-site-packages` were also clean, but they skip installed third-party packages, so they are weaker than CI and not equivalent to it.
+At `dbae452` (2026-10-17): the tests gave 1730 passed and 1 skipped, ruff reported "All checks passed!" with 207 files already formatted, and mypy over `app/insights/` and `app/agent_brain/` found no issues in 84 source files. The wider gate, which adds `app/utils/` and `app/security/` (99 source files), ran clean in the local Python 3.12 venv, first at `2966527` just before the gate was committed and most recently at `e4398b1` (commit message), and in CI run 39119444804 at `6aa8990` (lint job: Python 3.11, `requirements-insight.txt`, mypy 1.13.0). Local runs with `--python-version 3.10` and `3.11` plus `--no-site-packages` were also clean, but they skip installed third-party packages, so they are weaker than CI and not equivalent to it.
 
 ## Pre-commit hooks
 
@@ -173,7 +173,7 @@ The body says what was wrong, what changed, which tests pin it, the red-check re
 
 ## The milestone loop
 
-Each Sprint 7 prerequisite fix is one milestone: the smallest first, and only fixes that need no pending decision ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *In progress*). M1 to M6 followed this loop; M6 landed in one batch with security fixes and shares their docs commit. M7 (keyword rules match whole words only), a tech-debt fix that came after the prerequisites, followed the same loop (`dbae452`). The fixes the owner decided on 2026-10-17 landed as small commits under the size rule below, one per decision that needed code (`dc97a84` to `45a5b22`; [DECISIONS.md](DECISIONS.md) #34 to #49; #33 was recorded without code). No engineering milestone is ready now; the next step is owner-side ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *Next milestone*).
+Each Sprint 7 prerequisite fix is one milestone: the smallest first, and only fixes that need no pending decision ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *In progress*). M1 to M6 followed this loop; M6 landed in one batch with security fixes and shares their docs commit. M7 (keyword rules match whole words only), a tech-debt fix that came after the prerequisites, followed the same loop (`dbae452`). The fixes the owner decided on 2026-10-17 landed as small commits under the size rule below, one per decision that needed code (`dc97a84` to `45a5b22`; [DECISIONS.md](DECISIONS.md) #34 to #49; #33 was recorded without code). Phase 0 is complete (2026-10-19) and Phase 1 may start ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *Next milestone*).
 
 | Step | What happens | Evidence |
 |---|---|---|

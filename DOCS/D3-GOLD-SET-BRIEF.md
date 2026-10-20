@@ -1,6 +1,6 @@
 # D3 — gold set: scoping brief
 
-Status: **decision brief, awaiting sign-off** · Created: 2026-09-20
+Status: **decision brief; D3 signed 2026-10-19 (Option A, with changes), see the [register](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)** · Created: 2026-09-20
 For: `DOCS/FACTCHECK-AGENT-PHASE-0.md` §1 D3 · No code proposed.
 
 D3 is currently one register row — *"Who owns and resources the gold set?"* —

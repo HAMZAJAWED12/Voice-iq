@@ -109,7 +109,7 @@ In-flight design lives in `DOCS/`, with decisions recorded as they are signed ra
 | Doc | What it covers |
 |---|---|
 | [`FACT-CHECK-AGENT-STATUS.md`](DOCS/FACT-CHECK-AGENT-STATUS.md) | Live status of the fact-check agent: current phase, progress, blockers, next milestone |
-| [`FACTCHECK-AGENT-PHASE-0.md`](DOCS/FACTCHECK-AGENT-PHASE-0.md) | Open-source-LLM fact-check agent: frozen contracts, compatibility policy, privacy boundary, and a 10-row decision register |
+| [`FACTCHECK-AGENT-PHASE-0.md`](DOCS/FACTCHECK-AGENT-PHASE-0.md) | Open-source-LLM fact-check agent: frozen contracts, compatibility policy, privacy boundary, and the signed decision register |
 | [`N4B-MULTILINGUAL-STRATEGY.md`](DOCS/N4B-MULTILINGUAL-STRATEGY.md) | Urdu/Arabic support — measured as a vocabulary gap rather than a model gap |
 | [`JAVA-CALLBACK-V2.md`](DOCS/JAVA-CALLBACK-V2.md) | Replay-resistant callback signature; the Java side is outstanding |
 | [`DATA-FLOW.md`](DOCS/DATA-FLOW.md) | Every point where data leaves the host |
