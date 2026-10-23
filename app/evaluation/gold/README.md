@@ -24,10 +24,12 @@ edited afterwards; a correction makes a new version.
 |---|---|---|
 | `v0.1` | Calibration batch: 20 conversations, 65 items | labelled under v0.3, re-checked under v0.4 |
 | `v0.2` | Batches 01 and 02: 35 conversations, 116 items (`gs_0001`-`gs_0116`) | batch 02 labelled under v0.4; both re-checked under v0.5 |
+| `v0.3` | Batches 01 to 03: 53 conversations, 166 items (`gs_0001`-`gs_0166`) | batch 03 labelled under v0.5; all re-checked under v0.6 |
 
 From `v0.1` to `v0.2`, three deliberately false values in batch 01 moved closer to their range, following ruling G22
 (a false value lies outside the range but within half its width): silver USD 12 to 20 (`gs_0020`), USD/JPY 110 to
-132 (`gs_0023`), and the Dow 30,000 to 34,000 (`gs_0057`). No other batch 01 row changed.
+132 (`gs_0023`), and the Dow 30,000 to 34,000 (`gs_0057`). No other batch 01 row changed. From `v0.2` to `v0.3` no batch 01 or 02 item changed; only each conversation's
+`guide_version` moved to v0.6.
 
 ## Files
 
@@ -39,16 +41,18 @@ From `v0.1` to `v0.2`, three deliberately false values in batch 01 moved closer 
 | `MANIFEST.sha256` | SHA-256 of the three files above. |
 
 The hashes are of the files as stored in git, with LF line endings. Check them from a clone with
-`git show HEAD:app/evaluation/gold/v0.2/items.csv | sha256sum`, or run `sha256sum -c MANIFEST.sha256` in a checkout
+`git show HEAD:app/evaluation/gold/v0.3/items.csv | sha256sum`, or run `sha256sum -c MANIFEST.sha256` in a checkout
 that keeps LF endings. A Windows checkout with `core.autocrlf=true` writes CRLF and will not match.
 
-## v0.2 in numbers
+## v0.3 in numbers
 
 | Slice | Items |
 |---|---|
-| In scope, `CHECKABLE` | 56: `GENERAL` 21, `MARKET_FINANCE` 21, `WEATHER` 14 (16 compound, 33 time-sensitive, 22 deliberately false) |
-| In scope, not checkable | 33: `OPINION` 9, `PREDICTION` 9, `VAGUE` 8, `REQUEST` 7 |
-| Out of scope | 27. `CHECKABLE` 24: `OWN_COMPANY` 5, `NEWS` 5 (one about a private individual), `PERSONAL_FINANCE` 3, `HEALTH` 3, `LEGAL` 3, `OTHER` 2, and three `MARKET_FINANCE` claims about a private individual. Not checkable 3: two own-company requests and a personal-finance opinion |
-| `confidence_in_label` `low` | 20 |
+| In scope, `CHECKABLE` | 80: `GENERAL` 31, `MARKET_FINANCE` 29, `WEATHER` 20 (25 compound, 44 time-sensitive, 32 deliberately false) |
+| In scope, not checkable | 49: `OPINION` 13, `PREDICTION` 13, `VAGUE` 12, `REQUEST` 11 |
+| Out of scope | 37. `CHECKABLE` 33: `OWN_COMPANY` 7, `NEWS` 6 (one about a private individual), `PERSONAL_FINANCE` 5, `HEALTH` 5, `LEGAL` 4, `OTHER` 3, and three `MARKET_FINANCE` claims about a private individual. Not checkable 4: two own-company requests, an own-company prediction and a personal-finance opinion |
+| `confidence_in_label` `low` | 26 |
 
-The set grows to at least 200 items before `v1.0` (guide section 12).
+The set grows to at least 200 items before `v1.0` (guide section 12). The guide's phrase check (ruling G31) on
+`v0.3` finds no phrase that occurs only on deliberately false rows. A few occur only on rows not written to be
+false ("°C and", "did you see", "yeah it's", "bitcoin's"); the next batch balances them, and `v1.0` has none.

@@ -1,8 +1,9 @@
 # Fact-Check Agent gold set: labelling guide
 
-Status: **v0.5, approved by the project owner (sole maintainer) on 2026-10-23**: every section 14 proposal
-accepted, plus rulings G1-G10 from the calibration batch and G11-G23 from batch 02 (section 15). The approved
-data lives in [`app/evaluation/gold/`](../app/evaluation/gold/) (synthetic only; see its README).
+Status: **v0.6, approved by the project owner (sole maintainer) on 2026-10-24**: every section 14 proposal
+accepted, plus rulings G1-G10 from the calibration batch, G11-G23 from batch 02 and G24-G31 from batch 03
+(section 15). The approved data lives in [`app/evaluation/gold/`](../app/evaluation/gold/) (synthetic only; see
+its README).
 Follows [D3-GOLD-SET-BRIEF.md](D3-GOLD-SET-BRIEF.md) Option A as signed on 2026-10-19
 (register row D3 in [FACTCHECK-AGENT-PHASE-0.md §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)),
 together with D7 (domains), U2 (English only), U10 (synthetic only), U5b (reason kinds), A6 (private
@@ -203,7 +204,10 @@ and stop at the first `yes`.
 3. **Is it an evaluation whose point is the speaker's judgement of quality, value or preference** (good, bad,
    best, too expensive, a scam, worth it), **advice framed as the speaker's judgement** ("you should", "I'd"),
    or the speaker's feelings, hopes or attitudes about the subject? `OPINION`. A loose descriptive word ("mad",
-   "weird", "crazy") attached to an unspecified change or level is not an evaluation: go to rule 5.
+   "weird", "crazy") attached to an unspecified change or level is not an evaluation: go to rule 5. Nor is a
+   performance word about a market asset's unmeasured movement ("done all right", "had a good run", "crept up"):
+   it describes direction and is `VAGUE`. A judgement measured against the speaker's expectations or interests
+   ("better than I thought", "good for us") is `OPINION` (G26).
 4. **Does it ask or tell the listener to do, find or confirm something?** `REQUEST`, including questions and
    instructions.
 5. **Otherwise it asserts something, but without the subject, quantity, place or time a checker would need.**
@@ -285,7 +289,7 @@ sunny here today" resolves its place only when a segment names the place; otherw
 | Reported speech about a present or past fact ("my manager said the pound is at 1.25 against the dollar") | `CHECKABLE`. The embedded proposition is the claim; who said it is not. | `high` |
 | A future weather state attributed to a published forecast, warning or outlook ("the forecast says", "the Met Office says it'll", "my weather app says") | `CHECKABLE`, `WEATHER`; `claim_text` keeps the source ("The published forecast for Leeds for 2025-03-13 is heavy rain") | `high` |
 | A future state attributed to a person or an unnamed "they" ("my mate says it'll rain all weekend", "they reckon it'll snow") | `PREDICTION` | `low` |
-| A scheduled, timetabled or booked event stated as fact, marked by "is scheduled", "meets on", "is booked on", "is due" or a timetable time ("the ECB meets next Thursday", "the 7:40 gets in at 10:10", "your container is booked on Thursday's sailing"). The markers are examples: an announced or legislated change, or a scheduled event, stated as fact in the present simple or progressive with a date ("is going up by 4.1% this April", "the clocks go back this Sunday") is a schedule too (G15) | `CHECKABLE`; `claim_text` says "is scheduled for <date>"; `time_sensitive` `yes` | `high` |
+| A scheduled, timetabled or booked event stated as fact, marked by "is scheduled", "meets on", "is booked on", "is due" or a timetable time ("the ECB meets next Thursday", "the 7:40 gets in at 10:10", "your container is booked on Thursday's sailing"). The markers are examples: an announced or legislated change, or a scheduled event, stated as fact in the present simple or progressive with a date ("is going up by 4.1% this April", "the clocks go back this Sunday") is a schedule too (G15). A date that a calendar rule fixes and no one can move (Easter, a solstice) is not a schedule but a reference fact: `claim_text` says "falls on <date>", `time_sensitive` `no` (G29) | `CHECKABLE`; `claim_text` says "is scheduled for <date>"; `time_sensitive` `yes` | `high` |
 | An expectation, estimate or intention, or a modal or hedged form of a schedule ("should arrive Thursday", "probably lands about six", "we'll ship it Friday") | `PREDICTION` | `high` |
 | Tag, negative or presupposing question that states a specific value as believed ("gold's over two thousand isn't it", "isn't Canberra the capital", "did you see gold hit 2,500 yesterday", "have you heard the pound's below 1.20") | `CHECKABLE` | `low` |
 | Question that asks whether a value holds or asks for it ("is X still above Y?", "what's X at?") | `REQUEST` | `high` |
@@ -357,7 +361,7 @@ in scope.
 | `LEGAL` | Law, regulation and legal rights not covered by `PERSONAL_FINANCE`. | "you've got thirty days to reject faulty goods by law" |
 | `NEWS` | Events the conversation places within 30 days before the call date ("on Monday", "last week", "just announced"), or presents as an ongoing story. Excludes market prices and levels, and weather readings, forecasts and warnings, whatever their date: those are `MARKET_FINANCE` or `WEATHER`. | "the port strike was called off on Monday" |
 | `OWN_COMPANY` | Claims about either speaker's own organisation, or this call's own order, booking, invoice or account: products, own prices and fees, policies, performance, staff, delivery. | "our uptime last quarter was 99.9%", "your container left Rotterdam on Tuesday" |
-| `OTHER` | A subject in none of the domains above: third-party consumer products and services, retail prices, timetables, local business details, including past events about third-party products, services or local businesses, whatever their date. | "the 7:40 from Leeds gets into King's Cross at ten past ten" |
+| `OTHER` | A subject in none of the domains above: third-party consumer products and services, retail prices, timetables, local business details, including events about third-party products, services or local businesses, whatever their date: such an event is `OTHER` even within the `NEWS` window, because `NEWS` is for events about public matters (strikes, public bodies, and generic public or industry events) (G30). | "the 7:40 from Leeds gets into King's Cross at ten past ten" |
 
 The brief's rows `gs_0001` and `gs_0003` (uptime, ISO certification) predate D7. Under D7, which puts
 own-company claims out of scope, they are `OWN_COMPANY` and out of scope.
@@ -368,7 +372,7 @@ own-company claims out of scope, they are `OWN_COMPANY` and out of scope.
 |---|---|
 | Central-bank policy rate ("the base rate is 4%") | Not a market quote, so not `MARKET_FINANCE`. `NEWS` when the conversation places the change within 30 days, otherwise `GENERAL`. |
 | Official statistics (inflation, unemployment, house-price indices) | As the policy rate: `NEWS` when the conversation places the release within 30 days, otherwise `GENERAL`. |
-| A predicted policy-rate change, statistic or company result ("they'll cut again before the summer") (G6) | `GENERAL`; `NEWS` only when the conversation presents it as part of a current story. |
+| A predicted event of any kind, weather consequences included: a policy-rate change, statistic, company result, closure or disruption ("they'll cut again before the summer") (G6, G28) | `GENERAL`; `NEWS` only when the conversation presents it as part of a current news story. |
 | Company results ("a listed retailer's profits were up last year") | `NEWS` when the conversation places them within 30 days, otherwise `GENERAL`. Drafted only in this unnamed form, which makes the row `VAGUE` (drafting rule 4 bars real companies' results). |
 | Scheduled event ("the ECB meets again next Thursday") | `NEWS` when the conversation presents it as part of a current story, otherwise `GENERAL`. |
 | A law or regulation coming into force (a speed limit, a parking scheme, a new rule) (G16) | `LEGAL`, even when placed within 30 days, with confidence `low`. |
@@ -434,7 +438,8 @@ The proposition a checker would look up, as one plain sentence.
 - Resolve pronouns and ellipsis from other segments (segment text only, never `setting`): "it's dropped
   below 80" after "Brent's at $82 a barrel" becomes "Brent crude is below USD 80 per barrel on 2025-03-12".
 - Anchor time: "today" becomes the call date; "yesterday" the day before; "last quarter" the quarter before
-  the call date.
+  the call date. A time-of-day word ("this morning", "this afternoon", "overnight", "tonight") is anchored as "on
+  the morning of <date>" or the matching part of the day; the span still leaves it out at the edge (G4, G24).
 - Numbers as digits, units stated explicitly, currencies as ISO codes ("USD", "GBP/USD"): "one oh eight"
   becomes "1.08"; "quid" becomes "GBP". Add a currency or unit only when the conversation makes it clear;
   otherwise keep it as said and set `confidence_in_label` to `low`.
@@ -485,12 +490,13 @@ every row. A compound row is `yes` if any checkable part is.
 | A forecast as currently published | `yes` |
 | A price, rate or weather reading for a past date or closed period, stated or resolved by 7.2 ("on 3 March", "yesterday") | `no`: the answer for that date no longer changes |
 | States, totals and movements over a period still running at the call date ("this week") | `yes` |
+| A trend over a trailing window of about a year or more ("in the last few years") (G27) | `no`, unless its subject is a market price or level, which is `yes` |
 | A completed event inside a period still running ("earlier this month") (G5) | `no`: it counts as a past date |
 | Weather for a whole month or season, or mostly beyond the forecast horizon (G9) | `no`: a climate normal |
 | Stable reference facts (capitals, dates of history, physical constants) | `no` |
 | An office holder ("the current UN Secretary-General is...") | `no`, unless the office is known to change within the month |
 | A schedule ("the meeting is next Thursday") | `yes` |
-| A request or stated want (G11) | By what it asks about: a price, rate, level, condition or availability is `yes`; a booking want, destination or order with no time-varying value is `no` |
+| A request or stated want (G11, G25) | By what it asks about, with the rows above applied to it: a price, rate, level, condition or availability at the present or a future date is `yes`; at a past date or in a closed period it is `no`; a booking want, destination or order with no time-varying value is `no` |
 
 For non-checkable rows, label what the statement is about: "bitcoin's going to crash" is `yes`.
 
@@ -576,7 +582,10 @@ silently dropped.
     least a short clause. No row mixes in-scope and out-of-scope parts, checkable or not, and in-scope
     `CHECKABLE` rows carry no high-stakes aside. No item reuses the wording or template of a guide example or an
     earlier batch item (same construction and same kind of subject); each batch varies structure and subjects
-    (G20).
+    (G20). No phrase, frame or hedge is used only on deliberately false rows or only on rows not written to be
+    false. A script reports every two-to-four-word phrase (with "'s" counted as its own token, and phrases made
+    only of function words left out) that appears on three or more in-scope `CHECKABLE` rows that are all false
+    or all not false; the next batch balances what it reports, and the frozen `v1.0` set has none (G31).
 12. **Every item and conversation** carries `provenance` `synthetic` and `drafted_by` `claude-draft`.
 
 ---
@@ -624,7 +633,7 @@ batch; the owner approves it.
 
 **Guide changes.** The calibration batch also updates this guide. Each batch records the guide version it
 was labelled or last re-checked under (calibration batch `v0.1`: labelled under v0.3, re-checked under v0.4;
-set `v0.2`, batches 01 and 02, re-checked under v0.5). When the guide changes, every approved row the change affects is re-checked,
+set `v0.2`, batches 01 and 02, re-checked under v0.5; set `v0.3`, batches 01 to 03, re-checked under v0.6). When the guide changes, every approved row the change affects is re-checked,
 calibration rows included, before `v1.0`. The owner times the first half-day of checking so that the cost
 estimate in brief §8 can be corrected.
 
@@ -681,7 +690,7 @@ recorded here for the D6 criteria note, not settled by this guide.
 
 ---
 
-## 15. Rulings added in v0.4 and v0.5
+## 15. Rulings added in v0.4 to v0.6
 
 The calibration batch was labelled twice, blind, by two independent agents that had not seen the draft labels; a
 judge ruled on every disagreement. Checkability agreed on every item. Ten cases where v0.3 did not settle the
@@ -718,3 +727,17 @@ project owner on 2026-10-23 for v0.5.
 | G21 | A threshold on a `no` row stays clearly on its side all day; otherwise "about". | 11 |
 | G22 | False values within half a range-width of the range; at most a third of false rows are tag questions. | 11, 12 |
 | G23 | Reference levels are recorded for time-sensitive in-scope `CHECKABLE` rows. | 11 |
+
+Batch 03 was checked the same way (checkability agreed on every item), then rechecked three times. These eight
+rulings were approved by the project owner on 2026-10-24 for v0.6.
+
+| # | Ruling | Section |
+|---|---|---|
+| G24 | A time-of-day word is anchored as the matching part of the day. | 7.2 |
+| G25 | A request about a past-dated value is not time-sensitive. | 9 |
+| G26 | A performance word about an asset's unmeasured movement is `VAGUE`; a judgement against expectations is `OPINION`. | 5 (rule 3) |
+| G27 | A trend over a year or more is not time-sensitive, unless its subject is a market price or level. | 9 |
+| G28 | Every predicted event, weather consequences included, is `GENERAL` unless part of a current news story. | 6.2 |
+| G29 | A date fixed by a calendar rule is a reference fact, not a schedule. | 5.6 |
+| G30 | An event about a third-party product, service or local business is `OTHER` whatever its date. | 6.2 |
+| G31 | No phrase, frame or hedge marks false rows or rows not written to be false; a script checks it. | 11 |
