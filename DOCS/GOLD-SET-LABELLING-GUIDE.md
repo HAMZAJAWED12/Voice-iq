@@ -1,8 +1,8 @@
 # Fact-Check Agent gold set: labelling guide
 
-Status: **v0.4, approved by the project owner (sole maintainer) on 2026-10-23**: every section 14 proposal
-accepted, plus rulings G1-G10 from the calibration batch (section 15). The approved data lives in
-[`app/evaluation/gold/`](../app/evaluation/gold/) (synthetic only; see its README).
+Status: **v0.5, approved by the project owner (sole maintainer) on 2026-10-23**: every section 14 proposal
+accepted, plus rulings G1-G10 from the calibration batch and G11-G23 from batch 02 (section 15). The approved
+data lives in [`app/evaluation/gold/`](../app/evaluation/gold/) (synthetic only; see its README).
 Follows [D3-GOLD-SET-BRIEF.md](D3-GOLD-SET-BRIEF.md) Option A as signed on 2026-10-19
 (register row D3 in [FACTCHECK-AGENT-PHASE-0.md §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)),
 together with D7 (domains), U2 (English only), U10 (synthetic only), U5b (reason kinds), A6 (private
@@ -65,7 +65,10 @@ or question.
 **Not items** (they stay in the conversation text): greetings, thanks and goodbyes; acknowledgements of
 what the other speaker said ("okay", "mm-hm", "right"), including a reply that only agrees with a checkable
 tag, negative or presupposing question ("yeah", "yeah it is", "that's right"); turns that only manage the
-call ("one moment", "bear with me", "let me just check"); and small talk with no content ("how are you?").
+call ("one moment", "bear with me", "let me just check"), including an opener that only names the call's topic
+("I'm calling about a refund", "it's about the export issue"); and small talk with no content ("how are you?").
+An opener that states a specific want the listener can act on (a destination, date, amount or product) is a
+`REQUEST` item (5.6; G19).
 A reply that adds or changes a value is an item. A statement about the speaker's own feelings is an item
 only when it is about the subject matter (section 5.6).
 
@@ -282,14 +285,15 @@ sunny here today" resolves its place only when a segment names the place; otherw
 | Reported speech about a present or past fact ("my manager said the pound is at 1.25 against the dollar") | `CHECKABLE`. The embedded proposition is the claim; who said it is not. | `high` |
 | A future weather state attributed to a published forecast, warning or outlook ("the forecast says", "the Met Office says it'll", "my weather app says") | `CHECKABLE`, `WEATHER`; `claim_text` keeps the source ("The published forecast for Leeds for 2025-03-13 is heavy rain") | `high` |
 | A future state attributed to a person or an unnamed "they" ("my mate says it'll rain all weekend", "they reckon it'll snow") | `PREDICTION` | `low` |
-| A scheduled, timetabled or booked event stated as fact, marked by "is scheduled", "meets on", "is booked on", "is due" or a timetable time ("the ECB meets next Thursday", "the 7:40 gets in at 10:10", "your container is booked on Thursday's sailing") | `CHECKABLE`; `claim_text` says "is scheduled for <date>" | `high` |
-| An expectation, estimate or intention ("should arrive Thursday", "probably lands about six", "we'll ship it Friday") | `PREDICTION` | `high` |
+| A scheduled, timetabled or booked event stated as fact, marked by "is scheduled", "meets on", "is booked on", "is due" or a timetable time ("the ECB meets next Thursday", "the 7:40 gets in at 10:10", "your container is booked on Thursday's sailing"). The markers are examples: an announced or legislated change, or a scheduled event, stated as fact in the present simple or progressive with a date ("is going up by 4.1% this April", "the clocks go back this Sunday") is a schedule too (G15) | `CHECKABLE`; `claim_text` says "is scheduled for <date>"; `time_sensitive` `yes` | `high` |
+| An expectation, estimate or intention, or a modal or hedged form of a schedule ("should arrive Thursday", "probably lands about six", "we'll ship it Friday") | `PREDICTION` | `high` |
 | Tag, negative or presupposing question that states a specific value as believed ("gold's over two thousand isn't it", "isn't Canberra the capital", "did you see gold hit 2,500 yesterday", "have you heard the pound's below 1.20") | `CHECKABLE` | `low` |
 | Question that asks whether a value holds or asks for it ("is X still above Y?", "what's X at?") | `REQUEST` | `high` |
 | Tag question on a statement that states no specific value ("it'll be hot, won't it?") (G2) | The label of the statement | as for the statement |
 | A stated need or want addressed to someone who can meet it ("I need about 800 euros", "I'd like a quote") (G3) | `REQUEST`; `OWN_COMPANY` when it is this call's own order | `high` |
 | "you know X" | A statement: "you know" is a filler (section 7.1) | as for X |
 | Bare "yes"/"no" answering a question that asks whether a value holds | `CHECKABLE`; `claim_text` built from the question; `span_text` is the answer word (the one exception to 7.1) | `low` |
+| An answer word ("yes", "no", "not yet") to a question that asks whether a value or condition holds, followed by a clause ("Not yet, it's about 12°C and sunny here") (G13) | The answer is a part of its own, with its `claim_text` built from the question, unless the clause restates it ("Yeah, it's chucking it down" restates "raining"). A "yes", "yeah" or "that's right" agreeing with a tag, negative or presupposing question is not a part (section 2). A negated word of degree ("not really" to "is it roasting?") is vague and not a part | as for the row |
 | An observable condition at a named place and time with no number ("raining", "snowing", "sunny", "below freezing") | `CHECKABLE` | `high` |
 | A word of degree with no number about a present or past state ("boiling", "roasting", "freezing" without "below", "really weak") | `VAGUE`; a number or "below freezing" makes it `CHECKABLE` | `high` |
 | A future state stated with a word of degree ("it'll be properly hot") (G2) | `PREDICTION` | `high` |
@@ -367,6 +371,7 @@ own-company claims out of scope, they are `OWN_COMPANY` and out of scope.
 | A predicted policy-rate change, statistic or company result ("they'll cut again before the summer") (G6) | `GENERAL`; `NEWS` only when the conversation presents it as part of a current story. |
 | Company results ("a listed retailer's profits were up last year") | `NEWS` when the conversation places them within 30 days, otherwise `GENERAL`. Drafted only in this unnamed form, which makes the row `VAGUE` (drafting rule 4 bars real companies' results). |
 | Scheduled event ("the ECB meets again next Thursday") | `NEWS` when the conversation presents it as part of a current story, otherwise `GENERAL`. |
+| A law or regulation coming into force (a speed limit, a parking scheme, a new rule) (G16) | `LEGAL`, even when placed within 30 days, with confidence `low`. |
 | Rates at a currency desk | A market rate stated as the market's ("the euro's at 1.08 against the dollar today") is `MARKET_FINANCE`. The desk's own buy or sell price, margin or fee ("we're selling at 1.12") is `OWN_COMPANY`. Timing advice from the desk is `OWN_COMPANY` only when it names the desk's product or quote or says "with us"; otherwise `MARKET_FINANCE` (G10). |
 | Retail or consumer prices (pump prices, a bureau's or airport's exchange rate, energy tariffs) | `OTHER`, or `OWN_COMPANY` for the speakers' own prices. Only a market quote is `MARKET_FINANCE`. |
 | General judgement of a market ("crypto is just gambling") | `MARKET_FINANCE`. |
@@ -436,7 +441,10 @@ The proposition a checker would look up, as one plain sentence.
 - Temperatures (G1): drafts write the scale in the utterance ("-2°C", drafting rule 8). If no segment gives the
   scale, write "(scale not stated)" in `claim_text` and set `confidence_in_label` to `low`, unless the segment's
   own words rule out one scale.
-- Normalise names: "the Met" to "the Met Office" when context makes it clear.
+- Normalise names: "the Met" to "the Met Office" when context makes it clear. Colloquial index names mean the
+  headline index: "the FTSE" is the FTSE 100, "the Dow" the Dow Jones Industrial Average, "the Nasdaq" the Nasdaq
+  Composite, unless segment text points elsewhere (G14).
+- A gold, silver, platinum or palladium price said "an ounce" is written "per troy ounce" (G12).
 - Keep the value as asserted, even when it is false. Never correct the claim.
 - Drop hedges and attributions, except a published forecast or warning (section 5.6): "my manager says the
   pound is at 1.25 against the dollar" becomes "GBP/USD is 1.25 on 2025-03-12".
@@ -482,6 +490,7 @@ every row. A compound row is `yes` if any checkable part is.
 | Stable reference facts (capitals, dates of history, physical constants) | `no` |
 | An office holder ("the current UN Secretary-General is...") | `no`, unless the office is known to change within the month |
 | A schedule ("the meeting is next Thursday") | `yes` |
+| A request or stated want (G11) | By what it asks about: a price, rate, level, condition or availability is `yes`; a booking want, destination or order with no time-varying value is `no` |
 
 For non-checkable rows, label what the statement is about: "bitcoin's going to crash" is `yes`.
 
@@ -516,7 +525,9 @@ silently dropped.
    entities, or none.
 4. **Real people and companies.** No deliberately false row names a real company, organisation or person, or
    identifies one by implication: any real organisation or person whose records are the only way to check the
-   claim counts, named or not (G8);
+   claim counts, named or not (G8). A false row may name a place, landmark or historical event, but not a name
+   that also denotes a real organisation or institution (the Houses of Parliament, the White House, the Bank of
+   England) (G18); the market indices that this rule allows are the exception;
    false market rows use indices, currencies, commodities or crypto assets, never a named company's share
    price. Real people and real companies appear only in rows that are not deliberately false and state a
    neutral, checkable public fact. They never appear in an opinion, prediction, vague remark or request about
@@ -529,14 +540,20 @@ silently dropped.
    particular investment; or says that someone may ignore a legal, tax or debt obligation. Neutral public
    facts (allowances, statutory periods) and harmless advice ("talk to an adviser first") are allowed.
    Out-of-scope rows are never deliberately false (section 4.4).
-6. **News rows use fictional or generic events** ("the port strike", "the council's new parking scheme"),
-   never invented events about real named people or companies, and always carry a time cue.
+6. **News rows use fictional or generic events** ("the port strike", "the hauliers' strike"), never invented
+   events about real named people or companies, and always carry a time cue. An invented event must not be
+   placeable, through any segment, on a real organisation or real local body (a named city's council, a named
+   port's operators); if the conversation names a place, the event is not local to it (G17). True published
+   rates, forecasts, warnings and schedules of public institutions (rule 4) are not invented events.
 7. **Call dates and reference levels.** Call dates fall in the past, within the drafter's knowledge (proposal:
-   2025, Q12). For every time-sensitive in-scope row, the drafter records in the private review sheet the
-   reference level it used for that date, from its own knowledge and marked unverified; the owner
-   spot-checks them (Q12). A deliberately false value lies outside the asset's range over the 12 months
-   before the call date, or outside the place's recorded range for that month: realistic in form, never
-   absurd. A `no` row is written close to the recorded level. False values are said sincerely (for example
+   2025, Q12). For every time-sensitive in-scope `CHECKABLE` row, the drafter records in the private review
+   sheet the reference level it used for that date, from its own knowledge and marked unverified (for a
+   `PREDICTION` that names a level, optionally the current level) (G23); the owner spot-checks them (Q12). A
+   deliberately false value lies outside the asset's range over the 12 months before the call date, or outside
+   the place's recorded range for that month, but no further beyond the nearest edge than about half the
+   range's width: realistic in form, never absurd (G22). A `no` row is written close to the recorded level; a
+   `no` row that states a threshold ("over", "below") keeps the recorded level clearly on the stated side for
+   the whole day, and otherwise uses "about" (G21). False values are said sincerely (for example
    mis-remembered) and left uncorrected in the call, never as an obvious joke.
 8. **ASR style** (a judgement of this guide, not measured; Q14). Fillers ("um", "uh", "you know"), false
    starts, missing punctuation and occasional mild recognition slips that do not change what is claimed,
@@ -557,7 +574,9 @@ silently dropped.
     the text length at roughly 140 words a minute; synthetic ASR confidence between 0.75 and 0.98. No claim is
     repeated in two items of one conversation. Questions that ask whether a value holds are answered with at
     least a short clause. No row mixes in-scope and out-of-scope parts, checkable or not, and in-scope
-    `CHECKABLE` rows carry no high-stakes aside.
+    `CHECKABLE` rows carry no high-stakes aside. No item reuses the wording or template of a guide example or an
+    earlier batch item (same construction and same kind of subject); each batch varies structure and subjects
+    (G20).
 12. **Every item and conversation** carries `provenance` `synthetic` and `drafted_by` `claude-draft`.
 
 ---
@@ -576,7 +595,8 @@ the extraction metrics and D3b's verdict labels use. The plan's code-switched sl
 | **Total** | **200** | |
 
 Cross-cutting minimums, all within in-scope `CHECKABLE` rows: at least 30 compound, at least 30
-time-sensitive, and at least 40 deliberately false. The owner's check can move rows between slices; batch 4
+time-sensitive, and at least 40 deliberately false. Across the 40 false rows, at most about a third are tag or
+presupposing questions, and their domains roughly follow the mix above (G22). The owner's check can move rows between slices; batch 4
 closes any shortfall. The frozen `v1.0` set never holds fewer than 200 items, or fewer than any plan minimum.
 
 **Batches.**
@@ -603,7 +623,8 @@ number word or a domain keyword. The owner checks every row. The drafter applies
 batch; the owner approves it.
 
 **Guide changes.** The calibration batch also updates this guide. Each batch records the guide version it
-was labelled or last re-checked under (calibration batch `v0.1`: labelled under v0.3, re-checked under v0.4). When the guide changes, every approved row the change affects is re-checked,
+was labelled or last re-checked under (calibration batch `v0.1`: labelled under v0.3, re-checked under v0.4;
+set `v0.2`, batches 01 and 02, re-checked under v0.5). When the guide changes, every approved row the change affects is re-checked,
 calibration rows included, before `v1.0`. The owner times the first half-day of checking so that the cost
 estimate in brief §8 can be corrected.
 
@@ -660,7 +681,7 @@ recorded here for the D6 criteria note, not settled by this guide.
 
 ---
 
-## 15. Rulings added in v0.4 (from the calibration batch)
+## 15. Rulings added in v0.4 and v0.5
 
 The calibration batch was labelled twice, blind, by two independent agents that had not seen the draft labels; a
 judge ruled on every disagreement. Checkability agreed on every item. Ten cases where v0.3 did not settle the
@@ -678,3 +699,22 @@ label became these rulings, each approved by the project owner on 2026-10-23 and
 | G8 | Drafting rule 4 also covers a real organisation or person identified by implication. | 11 |
 | G9 | Weather for a whole month or season, or beyond about 14 days, is a climate normal: `GENERAL`. | 6.1, 9 |
 | G10 | The desk's timing advice is `OWN_COMPANY` only when it names the desk's product or quote. | 6.2 |
+
+Batch 02 was checked the same way (checkability agreed on every item). These thirteen rulings were approved by the
+project owner on 2026-10-23 for v0.5.
+
+| # | Ruling | Section |
+|---|---|---|
+| G11 | A request or stated want is time-sensitive by what it asks about. | 9 |
+| G12 | Precious-metal prices said "an ounce" are written "per troy ounce". | 7.2 |
+| G13 | An answer word plus a clause to a whether-question is a part of its own unless the clause restates it. | 5.6 |
+| G14 | Colloquial index names mean the headline index. | 7.2 |
+| G15 | Scheduled-event markers are examples; an announced change stated as fact with a date is a schedule. | 5.6 |
+| G16 | A law or regulation coming into force is `LEGAL`, confidence `low`. | 6.2, 11 |
+| G17 | An invented news event is not placeable on a real organisation or local body. | 11 |
+| G18 | A false row does not use a name that also denotes a real institution. | 11 |
+| G19 | A topic-only call opener is call management; one stating a specific want is a `REQUEST` item. | 2 |
+| G20 | No item reuses a guide example's or earlier item's wording or template. | 11 |
+| G21 | A threshold on a `no` row stays clearly on its side all day; otherwise "about". | 11 |
+| G22 | False values within half a range-width of the range; at most a third of false rows are tag questions. | 11, 12 |
+| G23 | Reference levels are recorded for time-sensitive in-scope `CHECKABLE` rows. | 11 |

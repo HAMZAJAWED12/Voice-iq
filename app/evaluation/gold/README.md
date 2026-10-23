@@ -23,6 +23,11 @@ edited afterwards; a correction makes a new version.
 | Version | Contents | Guide |
 |---|---|---|
 | `v0.1` | Calibration batch: 20 conversations, 65 items | labelled under v0.3, re-checked under v0.4 |
+| `v0.2` | Batches 01 and 02: 35 conversations, 116 items (`gs_0001`-`gs_0116`) | batch 02 labelled under v0.4; both re-checked under v0.5 |
+
+From `v0.1` to `v0.2`, three deliberately false values in batch 01 moved closer to their range, following ruling G22
+(a false value lies outside the range but within half its width): silver USD 12 to 20 (`gs_0020`), USD/JPY 110 to
+132 (`gs_0023`), and the Dow 30,000 to 34,000 (`gs_0057`). No other batch 01 row changed.
 
 ## Files
 
@@ -34,14 +39,16 @@ edited afterwards; a correction makes a new version.
 | `MANIFEST.sha256` | SHA-256 of the three files above. |
 
 The hashes are of the files as stored in git, with LF line endings. Check them from a clone with
-`git show HEAD:app/evaluation/gold/v0.1/items.csv | sha256sum`, or run `sha256sum -c MANIFEST.sha256` in a checkout
+`git show HEAD:app/evaluation/gold/v0.2/items.csv | sha256sum`, or run `sha256sum -c MANIFEST.sha256` in a checkout
 that keeps LF endings. A Windows checkout with `core.autocrlf=true` writes CRLF and will not match.
 
-## v0.1 in numbers
+## v0.2 in numbers
 
 | Slice | Items |
 |---|---|
-| In scope, `CHECKABLE` | 31: `GENERAL` 12, `MARKET_FINANCE` 12, `WEATHER` 7 (8 compound, 16 time-sensitive, 12 deliberately false) |
-| In scope, not checkable | 18: `OPINION` 5, `PREDICTION` 5, `VAGUE` 4, `REQUEST` 4 |
-| Out of scope | 16. `CHECKABLE` 14: `OWN_COMPANY` 3, `NEWS` 3 (one about a private individual), `PERSONAL_FINANCE` 2, `HEALTH` 2, `LEGAL` 2, `OTHER` 1, and one `MARKET_FINANCE` claim about a private individual. Not checkable 2: an own-company request and a personal-finance opinion |
-| `confidence_in_label` `low` | 10 |
+| In scope, `CHECKABLE` | 56: `GENERAL` 21, `MARKET_FINANCE` 21, `WEATHER` 14 (16 compound, 33 time-sensitive, 22 deliberately false) |
+| In scope, not checkable | 33: `OPINION` 9, `PREDICTION` 9, `VAGUE` 8, `REQUEST` 7 |
+| Out of scope | 27. `CHECKABLE` 24: `OWN_COMPANY` 5, `NEWS` 5 (one about a private individual), `PERSONAL_FINANCE` 3, `HEALTH` 3, `LEGAL` 3, `OTHER` 2, and three `MARKET_FINANCE` claims about a private individual. Not checkable 3: two own-company requests and a personal-finance opinion |
+| `confidence_in_label` `low` | 20 |
+
+The set grows to at least 200 items before `v1.0` (guide section 12).
