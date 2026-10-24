@@ -1,9 +1,9 @@
 # Fact-Check Agent gold set: labelling guide
 
-Status: **v0.6, approved by the project owner (sole maintainer) on 2026-10-24**: every section 14 proposal
-accepted, plus rulings G1-G10 from the calibration batch, G11-G23 from batch 02 and G24-G31 from batch 03
-(section 15). The approved data lives in [`app/evaluation/gold/`](../app/evaluation/gold/) (synthetic only; see
-its README).
+Status: **v0.7, approved by the project owner (sole maintainer) on 2026-10-24**: every section 14 proposal
+accepted, plus rulings G1-G10 from the calibration batch, G11-G23 from batch 02, G24-G31 from batch 03 and
+G32-G45 from batch 04 (section 15). The approved data lives in [`app/evaluation/gold/`](../app/evaluation/gold/)
+(synthetic only; see its README).
 Follows [D3-GOLD-SET-BRIEF.md](D3-GOLD-SET-BRIEF.md) Option A as signed on 2026-10-19
 (register row D3 in [FACTCHECK-AGENT-PHASE-0.md §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)),
 together with D7 (domains), U2 (English only), U10 (synthetic only), U5b (reason kinds), A6 (private
@@ -68,6 +68,8 @@ what the other speaker said ("okay", "mm-hm", "right"), including a reply that o
 tag, negative or presupposing question ("yeah", "yeah it is", "that's right"); turns that only manage the
 call ("one moment", "bear with me", "let me just check"), including an opener that only names the call's topic
 ("I'm calling about a refund", "it's about the export issue"); and small talk with no content ("how are you?").
+A goodbye or closing line that only repeats a detail already
+given in the call, adding or changing no value ("see you Friday then"), is a goodbye (G45).
 An opener that states a specific want the listener can act on (a destination, date, amount or product) is a
 `REQUEST` item (5.6; G19).
 A reply that adds or changes a value is an item. A statement about the speaker's own feelings is an item
@@ -207,7 +209,10 @@ and stop at the first `yes`.
    "weird", "crazy") attached to an unspecified change or level is not an evaluation: go to rule 5. Nor is a
    performance word about a market asset's unmeasured movement ("done all right", "had a good run", "crept up"):
    it describes direction and is `VAGUE`. A judgement measured against the speaker's expectations or interests
-   ("better than I thought", "good for us") is `OPINION` (G26).
+   ("better than I thought", "good for us") is `OPINION` (G26). A metaphor of an asset's standing or status with
+   no word of movement or level ("the underdog", "the poor relation", "a safe haven") is a judgement of
+   standing: `OPINION`, confidence `high`; a metaphor of movement ("on a tear", "through the roof") is `VAGUE`
+   (G34).
 4. **Does it ask or tell the listener to do, find or confirm something?** `REQUEST`, including questions and
    instructions.
 5. **Otherwise it asserts something, but without the subject, quantity, place or time a checker would need.**
@@ -296,6 +301,7 @@ sunny here today" resolves its place only when a segment names the place; otherw
 | Tag question on a statement that states no specific value ("it'll be hot, won't it?") (G2) | The label of the statement | as for the statement |
 | A stated need or want addressed to someone who can meet it ("I need about 800 euros", "I'd like a quote") (G3) | `REQUEST`; `OWN_COMPANY` when it is this call's own order | `high` |
 | "you know X" | A statement: "you know" is a filler (section 7.1) | as for X |
+| A rule, rate, right or allowance that differs between jurisdictions (a tax rate, a legal right, a driving rule) (G38) | `CHECKABLE` only when segment text names or clearly implies the jurisdiction (a named country or a place in it, a "£" amount, a named authority, a product or scheme that exists in one jurisdiction only); otherwise `VAGUE` (missing place, rule 5) | `high` |
 | Bare "yes"/"no" answering a question that asks whether a value holds | `CHECKABLE`; `claim_text` built from the question; `span_text` is the answer word (the one exception to 7.1) | `low` |
 | An answer word ("yes", "no", "not yet") to a question that asks whether a value or condition holds, followed by a clause ("Not yet, it's about 12°C and sunny here") (G13) | The answer is a part of its own, with its `claim_text` built from the question, unless the clause restates it ("Yeah, it's chucking it down" restates "raining"). A "yes", "yeah" or "that's right" agreeing with a tag, negative or presupposing question is not a part (section 2). A negated word of degree ("not really" to "is it roasting?") is vague and not a part | as for the row |
 | An observable condition at a named place and time with no number ("raining", "snowing", "sunny", "below freezing") | `CHECKABLE` | `high` |
@@ -344,9 +350,9 @@ When a row could fit two domains, take the first that fits in this order (this g
 
 | Domain | Covers | Examples |
 |---|---|---|
-| `GENERAL` | Public facts of the kind a reference work or official statistics record: geography, history, science, units and measures, public institutions' public facts, sports records, and past events of public record (history, science, sport, public institutions) not placed within 30 days of the call date. Climate normals and records are `GENERAL`, not `WEATHER`. | "Mount Everest is 8,849 metres", "the Treaty of Rome was signed in 1957", "London gets about 600 mil of rain a year" |
+| `GENERAL` | Public facts of the kind a reference work or official statistics record: geography, history, science, units and measures, public institutions' public facts, sports records, and past events of public record (history, science, sport, public institutions) not placed within 30 days of the call date. Climate normals and records are `GENERAL`, not `WEATHER`; a reading is a record only when segment text presents it as one ("the hottest day ever"), otherwise it is an observed reading, `WEATHER`, even when the labeller knows it is a record (G44). | "Mount Everest is 8,849 metres", "the Treaty of Rome was signed in 1957", "London gets about 600 mil of rain a year" |
 | `MARKET_FINANCE` | Any statement about the price, rate, level or movement of a currency, crypto asset, listed stock, stock index or commodity on its market, including forecasts of and opinions about it, whatever its date. D7 names currency, crypto, stock and commodity prices, and D9 clause 1 says market-data quotes are not high-stakes. Including stock-index levels, and predictions and opinions about prices, is this guide's reading (Q6). | "sterling's at 1.27 against the dollar", "Brent's at $82 a barrel", "the FTSE's at eight thousand two hundred" |
-| `WEATHER` | Observed, current or forecast weather at a named place, and published weather warnings, whatever their date. The consequences of weather (a port closed, flights cancelled, flood damage) are `NEWS` within the `NEWS` window, otherwise `GENERAL`. Weather for a whole month or season, or for a period mostly beyond published forecasts (more than about 14 days after the call date), is a climate normal: `GENERAL`, `time_sensitive` `no`; within the forecast horizon it is `WEATHER` (G9). | "it's 34 in Dubai today", "the Met Office has a wind warning out for Cornwall" |
+| `WEATHER` | Observed, current or forecast weather at a named place, and published weather warnings, whatever their date. The consequences of weather (a port closed, flights cancelled, flood damage) are `NEWS` within the `NEWS` window, otherwise `GENERAL`. Weather for a whole month or season, or for a period mostly beyond published forecasts (more than about 14 days after the call date), is a climate normal: `GENERAL`, `time_sensitive` `no`; within the forecast horizon it is `WEATHER` (G9). G9 covers typical or expected weather and weather beyond the forecast horizon: observed weather over a month or season still running, or ended within 30 days of the call date, is `WEATHER`, and section 9 decides `time_sensitive` (G35). | "it's 34 in Dubai today", "the Met Office has a wind warning out for Cornwall" |
 
 D7 enables weather and stock-price checks only once their provider keys are confirmed in the target
 deployment, or D4's web fallback exists. That is a deployment switch, not a labelling rule: label these rows
@@ -357,7 +363,7 @@ in scope.
 | Domain | Covers | Examples |
 |---|---|---|
 | `PERSONAL_FINANCE` | D9 clause 1's personal-financial definition: tax, pensions, benefits, credit, loans and mortgages, insurance, and how suitable an investment is or what it promises to return. Includes neutral facts on these topics as well as statements that recommend or judge buying, holding or selling an investment, or say what return a product promises or guarantees. D7's signed exclusion says "personal-financial advice"; reading it through D9 clause 1, so that neutral facts on these topics are out of scope too, is this guide's reading (Q6). | "the ISA allowance is twenty thousand", "mortgage rates are about 5% now", "I'd talk to an adviser before you put savings into crypto" |
-| `HEALTH` | Health and medical claims: conditions, treatments, medicines, health services, health effects. | "flu jabs are free for over-65s in England" |
+| `HEALTH` | Health and medical claims: conditions, treatments, medicines, health services, health effects. A population statistic that names no condition, treatment, medicine, service or health effect (life expectancy, birth or death rates) is official statistics, `GENERAL` or `NEWS` by the boundary ruling below; a statistic about a named condition, treatment or service (prevalence, vaccine uptake, waiting times) is `HEALTH` (G33). | "flu jabs are free for over-65s in England" |
 | `LEGAL` | Law, regulation and legal rights not covered by `PERSONAL_FINANCE`. | "you've got thirty days to reject faulty goods by law" |
 | `NEWS` | Events the conversation places within 30 days before the call date ("on Monday", "last week", "just announced"), or presents as an ongoing story. Excludes market prices and levels, and weather readings, forecasts and warnings, whatever their date: those are `MARKET_FINANCE` or `WEATHER`. | "the port strike was called off on Monday" |
 | `OWN_COMPANY` | Claims about either speaker's own organisation, or this call's own order, booking, invoice or account: products, own prices and fees, policies, performance, staff, delivery. | "our uptime last quarter was 99.9%", "your container left Rotterdam on Tuesday" |
@@ -442,7 +448,12 @@ The proposition a checker would look up, as one plain sentence.
   the morning of <date>" or the matching part of the day; the span still leaves it out at the edge (G4, G24).
 - Numbers as digits, units stated explicitly, currencies as ISO codes ("USD", "GBP/USD"): "one oh eight"
   becomes "1.08"; "quid" becomes "GBP". Add a currency or unit only when the conversation makes it clear;
-  otherwise keep it as said and set `confidence_in_label` to `low`.
+  otherwise keep it as said and set `confidence_in_label` to `low`. A bare "dollar" or "$" is the US dollar and
+  a bare "pound" or "sterling" the pound sterling, as in this guide's examples, unless segment text points to
+  another ("an Aussie dollar"); a name that only one traded currency carries (the yen, the won) is clear. Other
+  names shared by several traded currencies (krone, peso, franc, rupee, crown) are clear only when segment text
+  names the country, or a place in it, as the call's subject at or before that turn; a cue that comes only later,
+  or only inside a conditional, still sets the ISO code, at confidence `low` (G40).
 - Temperatures (G1): drafts write the scale in the utterance ("-2°C", drafting rule 8). If no segment gives the
   scale, write "(scale not stated)" in `claim_text` and set `confidence_in_label` to `low`, unless the segment's
   own words rule out one scale.
@@ -451,6 +462,9 @@ The proposition a checker would look up, as one plain sentence.
   Composite, unless segment text points elsewhere (G14).
 - A gold, silver, platinum or palladium price said "an ounce" is written "per troy ounce" (G12).
 - Keep the value as asserted, even when it is false. Never correct the claim.
+- A comparison with an earlier date that gives no value for that date ("about the same as a year ago", "higher
+  than last week") stays a comparison, with both dates anchored; it is never turned into a value for the
+  earlier date (G41).
 - Drop hedges and attributions, except a published forecast or warning (section 5.6): "my manager says the
   pound is at 1.25 against the dollar" becomes "GBP/USD is 1.25 on 2025-03-12".
 - Fix an evident transcription slip only when the intended word is unambiguous, say so in the notes, and set
@@ -487,12 +501,14 @@ every row. A compound row is `yes` if any checkable part is.
 | Case | `time_sensitive` |
 |---|---|
 | A present-tense price, rate, level or weather condition | `yes` |
+| A statutory or officially set rate, allowance, threshold or fee (tax rates and bands, allowances, the minimum wage) (G42) | `no`, unless the conversation places a change within a month of the call date |
 | A forecast as currently published | `yes` |
 | A price, rate or weather reading for a past date or closed period, stated or resolved by 7.2 ("on 3 March", "yesterday") | `no`: the answer for that date no longer changes |
 | States, totals and movements over a period still running at the call date ("this week") | `yes` |
 | A trend over a trailing window of about a year or more ("in the last few years") (G27) | `no`, unless its subject is a market price or level, which is `yes` |
 | A completed event inside a period still running ("earlier this month") (G5) | `no`: it counts as a past date |
-| Weather for a whole month or season, or mostly beyond the forecast horizon (G9) | `no`: a climate normal |
+| A movement, reading or event stated in the past simple for an earlier part of the call date ("jumped this morning", "rained overnight") (G43) | `no`, as G5; a state or total over a part of the day still running ("has been", "since this morning") is `yes` |
+| Typical weather for a whole month or season, or weather mostly beyond the forecast horizon (G9, G35) | `no`: a climate normal; observed weather over a month or season still running follows the rows above |
 | Stable reference facts (capitals, dates of history, physical constants) | `no` |
 | An office holder ("the current UN Secretary-General is...") | `no`, unless the office is known to change within the month |
 | A schedule ("the meeting is next Thursday") | `yes` |
@@ -554,13 +570,20 @@ silently dropped.
 7. **Call dates and reference levels.** Call dates fall in the past, within the drafter's knowledge (proposal:
    2025, Q12). For every time-sensitive in-scope `CHECKABLE` row, the drafter records in the private review
    sheet the reference level it used for that date, from its own knowledge and marked unverified (for a
-   `PREDICTION` that names a level, optionally the current level) (G23); the owner spot-checks them (Q12). A
+   `PREDICTION` that names a level, optionally the current level) (G23); the owner spot-checks them (Q12). The
+   same record is kept for every in-scope `CHECKABLE` row not written to be false that states a date-dependent
+   value (a past-dated reading, a past market close); a row whose level the drafter does not know is not
+   drafted (G36). A
    deliberately false value lies outside the asset's range over the 12 months before the call date, or outside
    the place's recorded range for that month, but no further beyond the nearest edge than about half the
-   range's width: realistic in form, never absurd (G22). A `no` row is written close to the recorded level; a
+   range's width: realistic in form, never absurd (G22). A false value is also physically possible at that place
+   and date: where a physical limit sets the edge of the range (sunshine longer than the day), any value beyond
+   it counts as absurd (G37). A `no` row is written close to the recorded level; a
    `no` row that states a threshold ("over", "below") keeps the recorded level clearly on the stated side for
    the whole day, and otherwise uses "about" (G21). False values are said sincerely (for example
-   mis-remembered) and left uncorrected in the call, never as an obvious joke.
+   mis-remembered) and left uncorrected in the call, never as an obvious joke. Realism note, not a rule
+   (batch 04 proposal G46, not adopted): a few approved rows have a market professional state a false value
+   or leave one uncorrected; their labels are unaffected, and the D6 criteria note may mention it.
 8. **ASR style** (a judgement of this guide, not measured; Q14). Fillers ("um", "uh", "you know"), false
    starts, missing punctuation and occasional mild recognition slips that do not change what is claimed,
    because clean prose would overstate extraction recall on real calls. Casing, punctuation and numbers
@@ -585,7 +608,13 @@ silently dropped.
     (G20). No phrase, frame or hedge is used only on deliberately false rows or only on rows not written to be
     false. A script reports every two-to-four-word phrase (with "'s" counted as its own token, and phrases made
     only of function words left out) that appears on three or more in-scope `CHECKABLE` rows that are all false
-    or all not false; the next batch balances what it reports, and the frozen `v1.0` set has none (G31).
+    or all not false; the next batch balances what it reports, and the frozen `v1.0` set has none (G31). The same
+    script reports, per in-scope domain, the false and not-false split of each value band (10 °C bands for
+    temperatures, counted per row) and each construction (past-dated reading, tag or presupposing question,
+    compound) that holds three or more in-scope `CHECKABLE` rows; none is all false or all not false, and false
+    values err both above and below the recorded range (G32). A frame carried onto the other truth value to
+    balance a G31 report is exempt from G20 for that frame only: the carrier varies everything else, carries
+    one balancing frame, and its rationale names it (G39).
 12. **Every item and conversation** carries `provenance` `synthetic` and `drafted_by` `claude-draft`.
 
 ---
@@ -633,7 +662,7 @@ batch; the owner approves it.
 
 **Guide changes.** The calibration batch also updates this guide. Each batch records the guide version it
 was labelled or last re-checked under (calibration batch `v0.1`: labelled under v0.3, re-checked under v0.4;
-set `v0.2`, batches 01 and 02, re-checked under v0.5; set `v0.3`, batches 01 to 03, re-checked under v0.6). When the guide changes, every approved row the change affects is re-checked,
+set `v0.2`, batches 01 and 02, re-checked under v0.5; set `v0.3`, batches 01 to 03, re-checked under v0.6; set `v0.4`, batches 01 to 04, re-checked under v0.7). When the guide changes, every approved row the change affects is re-checked,
 calibration rows included, before `v1.0`. The owner times the first half-day of checking so that the cost
 estimate in brief §8 can be corrected.
 
@@ -690,7 +719,7 @@ recorded here for the D6 criteria note, not settled by this guide.
 
 ---
 
-## 15. Rulings added in v0.4 to v0.6
+## 15. Rulings added in v0.4 to v0.7
 
 The calibration batch was labelled twice, blind, by two independent agents that had not seen the draft labels; a
 judge ruled on every disagreement. Checkability agreed on every item. Ten cases where v0.3 did not settle the
@@ -741,3 +770,25 @@ rulings were approved by the project owner on 2026-10-24 for v0.6.
 | G29 | A date fixed by a calendar rule is a reference fact, not a schedule. | 5.6 |
 | G30 | An event about a third-party product, service or local business is `OTHER` whatever its date. | 6.2 |
 | G31 | No phrase, frame or hedge marks false rows or rows not written to be false; a script checks it. | 11 |
+
+Batch 04 was checked in four rounds: a blind double re-label, a rules check and a judge, and from the second
+round two skeptics on every proposed change. These fourteen rulings were approved by the project owner on
+2026-10-24 for v0.7. Proposal G46 (a speaker whose job is to know a value never states a false one or leaves
+it uncorrected) was not adopted; it is kept as the realism note in drafting rule 7.
+
+| # | Ruling | Section |
+|---|---|---|
+| G32 | No value band or construction is all false or all not false; false values err both ways. | 11 |
+| G33 | A population statistic that names no condition or service is official statistics, not `HEALTH`. | 6.2 |
+| G34 | A metaphor of an asset's standing is `OPINION`; a metaphor of movement is `VAGUE`. | 5 (rule 3) |
+| G35 | Observed weather over a running or recent month or season is `WEATHER`. | 6.1, 9 |
+| G36 | Every not-false row with a date-dependent value has a reference level; with none known, it is not drafted. | 11 |
+| G37 | A false value is physically possible. | 11 |
+| G38 | A rule or rate that differs by jurisdiction is `CHECKABLE` only when the jurisdiction is named or clear. | 5.6 |
+| G39 | A frame carried to balance a G31 report is exempt from G20 for that frame only. | 11 |
+| G40 | A name shared by several traded currencies gets its ISO code at `high` only with a country cue at or before the turn; a bare dollar or pound is USD or GBP. | 7.2 |
+| G41 | A comparison with an earlier date stays a comparison in `claim_text`. | 7.2 |
+| G42 | Statutory rates and allowances are not time-sensitive unless a change is placed within a month. | 9 |
+| G43 | A past-simple movement earlier on the call date is not time-sensitive. | 9 |
+| G44 | A reading is a record only when the conversation presents it as one. | 6.1 |
+| G45 | A closing line that only repeats a detail already given is a goodbye. | 2 |
