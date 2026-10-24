@@ -1,4 +1,4 @@
-Last verified: 2026-10-19, 49063bb
+Last verified: 2026-10-24, 9887e0b
 # Decisions
 
 This file lists the decisions already taken in this repository. A decision is
@@ -73,6 +73,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 | 50 | One owner holds every Phase 0 role | 2026-10-19 | — (owner) |
 | 51 | Phase 0 is complete; Phase 1 may start | 2026-10-19 | — (owner) |
 | 52 | Gold-set labelling may start before the Phase 1 gate | 2026-10-19 | — (owner) |
+| 53 | Diarization uses pyannote 3.1 under the weights-only loader | 2026-10-24 | `9887e0b` |
 
 ---
 
@@ -97,7 +98,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 - **Consequence:** `test_exactly_five_hard_fail_gates` (named
   `test_exactly_four_hard_fail_gates` until #36) and
   `test_late_stage_exception_never_flips_status`
-  (`app/insights/tests/test_orchestrator.py:1029-1104`) pin this, and
+  (`app/insights/tests/test_orchestrator.py:1032-1107`) pin this, and
   `test_full_success_stage_order` pins the stage order. A new stage is a
   `_run_<stage>` method plus a `_PipelineState` field, and it must be
   fail-soft.
@@ -187,9 +188,11 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
   The lint job runs ruff, mypy and a gitleaks scan of the working tree. A
   service counts as **heavy** if it imports an ML library **or** loads a
   model artifact. Heavy services are mocked in tests and are never installed
-  in CI. The only module that needs the heavy stack,
-  `app/insights/tests/test_model_load_concurrency.py`, skips itself through
-  `pytest.importorskip`.
+  in CI. The tests that need the heavy stack skip themselves through
+  `pytest.importorskip`: the 3-test module
+  `app/insights/tests/test_model_load_concurrency.py` and, since `9887e0b`,
+  `test_the_allowlisted_names_are_the_real_classes` in
+  `app/insights/tests/test_diarization_service.py`.
 - **Consequence:** There is one lane, and the local and CI test counts
   reconcile ([CLAUDE.md](../CLAUDE.md)). A test that really needs the heavy
   stack belongs in a separate workflow or job.
@@ -446,7 +449,7 @@ in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md).
   not the response. A failure in this stage is soft (`AGENT_BRAIN_FAILED`).
 - **Consequence:** `FactCheckReviewAgent` stays dormant on this path until
   the D10 re-run exists; the other four agents are live. `TestAgentBrainStage`
-  (`app/insights/tests/test_orchestrator.py:788`) and
+  (`app/insights/tests/test_orchestrator.py:791`) and
   `app/agent_brain/tests/test_pipeline_callback.py` cover this, and
   `1d8f2f6` proves `to_context` is reached from production code.
 - **Date:** 2026-09-20 · **Commit:** `f5e4d84`, `f619f7d`
@@ -979,6 +982,34 @@ not repeat it.
 
 ---
 
+## Diarization model (2026-10-24)
+
+### 53. Diarization uses pyannote 3.1 under the weights-only loader
+
+- **Context:** The default pipeline, `pyannote/speaker-diarization` (2.x),
+  no longer loaded with the pinned stack: its speaker-embedding model
+  rejects an argument pyannote passes. `pyannote/speaker-diarization-3.1`
+  failed PyTorch's weights-only loader. Every job therefore fell back to
+  the one-speaker mock.
+- **Decision:** The project owner approved the fix round on 2026-10-24.
+  The default model is `pyannote/speaker-diarization-3.1`. The service
+  allows the six classes its checkpoints store and keeps PyTorch's
+  weights-only loader on; turning it off
+  (`TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD`) is not a supported setting.
+  `requirements.txt` declares matplotlib, which pyannote.audio 3.3.2
+  imports without declaring. A run whose pipeline never loaded carries
+  `DIARIZATION_UNAVAILABLE`, and the mock reads the duration from the
+  file header.
+- **Consequence:** The token's account must accept the conditions of the
+  gated `pyannote/speaker-diarization-3.1` and `pyannote/segmentation-3.0`.
+  The 0.65 clustering threshold set in code still overrides the 3.1
+  default (about 0.70); whether to keep it is open (below).
+  `app/insights/tests/test_diarization_service.py` and
+  `test_mock_diarization_is_flagged` pin this.
+- **Date:** 2026-10-24 · **Commit:** `9887e0b`
+
+---
+
 ## Open decisions
 
 These are not settled yet. None is in force. Details are in
@@ -1002,3 +1033,5 @@ These are not settled yet. None is in force. Details are in
 
 - Items from the security and reliability review that the owner parked,
   most of them waiting on the partner team (tracked privately).
+- The diarization clustering threshold: keep the 0.65 set in code, or use
+  the pyannote 3.1 default ([#53](#53-diarization-uses-pyannote-31-under-the-weights-only-loader)).

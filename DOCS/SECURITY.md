@@ -1,4 +1,4 @@
-Last verified: 2026-10-19, ee2e15b
+Last verified: 2026-10-24, 9887e0b
 # Security
 
 This page covers the security controls in the VoiceIQ service at the commit
@@ -78,6 +78,7 @@ container. The limitations below assume this setup.
 | 14 | Bounded admission for audio processing | `app/routes/process_audio.py` | `test_process_audio_concurrency.py` | `2bb6593`, `948c49d` |
 | 15 | Audio length limit | `app/utils/audio_utils.py`, `app/pipeline/orchestrator.py` | `test_audio_duration.py`, `test_orchestrator.py` | `6c17c72` |
 | 16 | Fact-check run caps | `app/insights/core/factcheck/factcheck_engine.py` | `test_factcheck_run_limits.py` | `da92ae4` |
+| 17 | Weights-only loading of the diarization checkpoints | `app/services/diarization_service.py` | `test_diarization_service.py` | `9887e0b` |
 
 Test files without a path are in `app/insights/tests/`.
 
@@ -394,6 +395,20 @@ network operation rather than in total
 (`app/insights/core/factcheck/factcheck_engine.py:201-211`,
 `settings.py:288-305`, `da92ae4`).
 
+### 17. Weights-only loading of the diarization checkpoints
+
+The pyannote checkpoints load through PyTorch's weights-only loader, the
+default since PyTorch 2.6, which restores tensors and a short list of
+allowed classes instead of running arbitrary unpickling. The service
+allows the six classes the pyannote 3.1 checkpoints store, by name, and
+nothing else (`app/services/diarization_service.py:33-61`, `9887e0b`).
+The allowance applies to the whole process from the first load attempt,
+whether or not the model then loads. The
+service never sets `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD`; setting it turns
+this protection off for every model the process loads, so do not use it
+outside a local test. The model repositories are fetched at their latest
+revision; no revision is pinned.
+
 ### Also in place
 
 - The container runs as a non-root user (`Dockerfile:63`, `Dockerfile:82`).
@@ -414,7 +429,7 @@ network operation rather than in total
 | Alpha Vantage key | `VOICEIQ_ALPHAVANTAGE_API_KEY` | `settings.py:278-281` |
 | Callback HMAC secret | `VOICEIQ_AGENT_CALLBACK_SECRET` | `app/agent_brain/config/settings.py:17` |
 | Callback URL (a secret if it embeds a token) | `VOICEIQ_AGENT_CALLBACK_URL` | `app/agent_brain/config/settings.py:16` |
-| Hugging Face token (full pipeline only) | `PYANNOTE_AUTH_TOKEN`, then `HUGGINGFACE_TOKEN` | `app/services/diarization_service.py:90` |
+| Hugging Face token (full pipeline only) | `PYANNOTE_AUTH_TOKEN`, then `HUGGINGFACE_TOKEN` | `app/services/diarization_service.py:121` |
 | Database credentials, if the URL has any | `VOICEIQ_DATABASE_URL` | `settings.py:65-71` |
 
 This table lists only the settings that hold secrets. Every setting, with
@@ -432,7 +447,7 @@ its default, is in [SYSTEM.md §3](SYSTEM.md#3-configuration).
   provider key turns that client off. An empty callback URL or secret turns
   the callback off (`settings.py:223-231`, `:271-281`,
   `app/agent_brain/config/settings.py:16-17`, `:26-28`,
-  `diarization_service.py:90-93`).
+  `diarization_service.py:121-124`).
 - The service's own code does not write key values to its logs (control 10).
   Do not add log lines that print settings objects, source-client request
   URLs or httpx exception text.
@@ -442,7 +457,7 @@ its default, is in [SYSTEM.md §3](SYSTEM.md#3-configuration).
   `app/agent_brain/config/settings.py:31-33`). A rotated key takes effect
   only after a restart.
 - Each cold load of the diarization model calls `huggingface_hub.login()`
-  (`diarization_service.py:99`). Per [DATA-FLOW.md](DATA-FLOW.md) §3, that
+  (`diarization_service.py:130`). Per [DATA-FLOW.md](DATA-FLOW.md) §3, that
   call sends the token to huggingface.co and writes it to the local Hugging
   Face cache. Protect that directory as you would the `.env` file.
 
