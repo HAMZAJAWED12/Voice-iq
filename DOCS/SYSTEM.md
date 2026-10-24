@@ -1,4 +1,4 @@
-Last verified: 2026-10-19, ee2e15b
+Last verified: 2026-10-24, 9887e0b
 # System: Runtime View
 
 This page covers how VoiceIQ runs: the two entrypoints, the Docker image, configuration, where data is stored, which outside services it calls, logging and CI. It does not cover:
@@ -93,7 +93,7 @@ One service, `voiceiq-app`:
 
 - **Insight settings** (`app/insights/config/settings.py:28-41`) use the prefix `VOICEIQ_`. They are read from the process environment and from a `.env` file in the working directory. Names are case-insensitive and unknown keys are ignored.
 - **Agent Brain settings** (`app/agent_brain/config/settings.py:11-14`) use the prefix `VOICEIQ_AGENT_` and the same `.env` file.
-- **Pyannote token.** Two variables have no prefix and are read with `os.getenv` (`app/services/diarization_service.py:90`). `load_dotenv()` copies `.env` into the environment so that this read also sees values in `.env`.
+- **Pyannote token.** Two variables have no prefix and are read with `os.getenv` (`app/services/diarization_service.py:121`). `load_dotenv()` copies `.env` into the environment so that this read also sees values in `.env`.
 - **Restart to apply changes.** Each settings object is built once per process and cached with `lru_cache` (`settings.py:313-321`; `agent_brain/config/settings.py:31-33`). Some values are also copied into module constants when the module is imported (marked "at import" below).
 - **Invalid values stop startup.** Both entrypoints build the insight settings when they are imported (`app/main.py:29`, `app/insight_main.py:42`). An enum value outside its list (`VOICEIQ_ENVIRONMENT`, `VOICEIQ_LOG_LEVEL`, `VOICEIQ_THRESHOLD_PROFILE`) or a number outside its bounds raises a pydantic `ValidationError`, and the process does not start. Checked on 2026-10-16 with an invalid value for each of the three enums, and with `VOICEIQ_API_MAX_UPLOAD_MB=0`, `VOICEIQ_API_MAX_SESSION_PAYLOAD_KB=0` and `VOICEIQ_JOB_RETENTION_HOURS=-1`. The settings added since then declare bounds the same way (`settings.py:113-138, :164-173, :288-305`).
 - **Startup logging.** Each app's lifespan calls `configure_logging(settings)`, which sets the root log level from `VOICEIQ_LOG_LEVEL` and logs a warning when `VOICEIQ_THRESHOLD_PROFILE` is set, whatever its value (`app/utils/logger.py:31-42`; `e25a3b2`).
@@ -140,8 +140,8 @@ This table lists names and defaults only. The template is [`.env.example`](../.e
 | `VOICEIQ_AGENT_CALLBACK_SECRET` | empty | `java_callback_client.py:78` | HMAC signing key |
 | `VOICEIQ_AGENT_CALLBACK_TIMEOUT_SEC` | `5.0` (1–60) | `java_callback_client.py:97` | |
 | `VOICEIQ_AGENT_MIN_CONFIDENCE` | `0.50` (0–1) | `app/pipeline/orchestrator.py:838` | Filters the callback only. The API response keeps every recommendation |
-| `PYANNOTE_AUTH_TOKEN` | unset | `app/services/diarization_service.py:90` | No prefix. Full pipeline only |
-| `HUGGINGFACE_TOKEN` | unset | `diarization_service.py:90` | Used when `PYANNOTE_AUTH_TOKEN` is unset. Without either token, diarization falls back to a single-speaker mock (`diarization_service.py:91-93, :133-146`) |
+| `PYANNOTE_AUTH_TOKEN` | unset | `app/services/diarization_service.py:121` | No prefix. Full pipeline only |
+| `HUGGINGFACE_TOKEN` | unset | `diarization_service.py:121` | Used when `PYANNOTE_AUTH_TOKEN` is unset. Without either token, diarization falls back to a single-speaker mock (`diarization_service.py:122-124, :156-170`) |
 
 The repository does not set or read `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE` or any model cache path variable. [DATA-FLOW.md](DATA-FLOW.md) §3 explains what that means for model downloads.
 
@@ -174,7 +174,7 @@ The light image loads no models.
 | Model | Where it is cached |
 |---|---|
 | Whisper `base` (`app/routes/process_audio.py:249`) | Whisper's default download folder; the code passes no `download_root` (`app/services/asr_service.py:37`). [DATA-FLOW.md](DATA-FLOW.md) §3 gives the path as `~/.cache/whisper`. Each process also keeps loaded models in memory (`asr_service.py:7`) |
-| Hugging Face models: `pyannote/speaker-diarization`, `cardiffnlp/twitter-roberta-base-sentiment-latest`, `facebook/bart-large-mnli`, `sshleifer/distilbart-cnn-12-6`, `sentence-transformers/all-MiniLM-L6-v2` | The Hugging Face libraries' default cache. The repository sets no cache path (`diarization_service.py:47`, `sentiment_service.py:31`, `topic_service.py:34-36`, `summary_service.py:27-29`, `keyword_service.py:26`) |
+| Hugging Face models: `pyannote/speaker-diarization-3.1` (with `pyannote/segmentation-3.0` and `pyannote/wespeaker-voxceleb-resnet34-LM`), `cardiffnlp/twitter-roberta-base-sentiment-latest`, `facebook/bart-large-mnli`, `sshleifer/distilbart-cnn-12-6`, `sentence-transformers/all-MiniLM-L6-v2` | The Hugging Face libraries' default cache; pyannote keeps its models in its own cache, `~/.cache/torch/pyannote` unless `PYANNOTE_CACHE` is set. The repository sets no cache path (`diarization_service.py:78`, `sentiment_service.py:31`, `topic_service.py:34-36`, `summary_service.py:27-29`, `keyword_service.py:26`) |
 | spaCy `en_core_web_sm` | Loaded with `spacy.load`, which does not download it (`app/services/keyword_service.py:20`). It must be installed separately as a Python package; no requirements file declares it |
 
 ---
@@ -220,7 +220,7 @@ CI is defined in `.github/workflows/test.yml` and runs on pushes to `main` and o
 | `lint` ("Lint, types, secrets") | 3.11 | Installs `requirements-insight.txt`, ruff 0.7.4 and mypy 1.13.0. Then runs `ruff check .` and `mypy --ignore-missing-imports --check-untyped-defs app/insights/ app/agent_brain/ app/utils/ app/security/` (`app/utils/` and `app/security/` joined the gate after `2966527`). It downloads the gitleaks 8.21.2 archive and the release's checksums file, checks the archive with `sha256sum --check` and installs it only on a match, in a step that runs with `set -euo pipefail` (`:37-48`, `c661bad`). It then runs `gitleaks dir . --no-banner --redact` (`:53-54`). Job: `:10-54` |
 | `test` ("Run Insight Service unit tests") | 3.10 and 3.11 (matrix) | Installs `requirements-insight.txt` only, then runs `pytest -v app/insights/tests/ app/agent_brain/tests/` with `PYTHONPATH=.`. On failure, the end of the output is posted as an `::error::` annotation (`:56-100`) |
 
-- **Expected test result:** 1781 passed and 1 skipped on the light stack, measured 2026-10-19 at `ee2e15b`. The skipped item is `app/insights/tests/test_model_load_concurrency.py`, a 3-test module that needs the ML libraries ([CLAUDE.md](../CLAUDE.md), "One test lane").
+- **Expected test result:** 1790 passed and 2 skipped on the light stack, measured 2026-10-24 at `9887e0b`. The skips are `app/insights/tests/test_model_load_concurrency.py`, a 3-test module that needs the ML libraries, and `test_the_allowlisted_names_are_the_real_classes` in `app/insights/tests/test_diarization_service.py` ([CLAUDE.md](../CLAUDE.md), "One test lane").
 - **Not in CI:** a Docker build, the heavy ML stack, and the legacy top-level `tests/` folder.
 - **Tool settings:** ruff and mypy are configured in `pyproject.toml`: line length 120, target `py310`, and the pydantic mypy plugin.
 - **Python versions in use:** Docker 3.11, CI 3.10 and 3.11, README "Python 3.10+" (`README.md:66`).

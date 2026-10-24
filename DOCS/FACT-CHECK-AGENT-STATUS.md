@@ -1,6 +1,6 @@
 # Fact-Check Agent — Live Status
 
-Owner: engineering · Status: **Phase 0 complete; Phase 1 may start** · Created: 2026-10-11 · Updated: 2026-10-19
+Owner: engineering · Status: **Phase 0 complete; Phase 1 may start** · Created: 2026-10-11 · Updated: 2026-10-24
 
 The one place that says where Sprint 7 stands. Update it with every
 milestone. Decision status is **not** kept here — it lives only in the
@@ -14,8 +14,8 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 
 | | |
 |---|---|
-| Date | 2026-10-19 |
-| Branch | `main` @ `49063bb` (pull request #1 merged `sprint7/doc-sync`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions` |
+| Date | 2026-10-24 |
+| Branch | `main` @ `6e92898` (pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix is on `sprint7/diarization-fix` (`9887e0b`), not merged |
 | Current phase | **Phase 0 — Contract and scope lock: complete** (signed 2026-10-19). **Phase 1 may start**; gold-set labelling may start at once (D3). Phases 1–7 not started; no Sprint 7 application code exists. |
 | Overall progress | **4.17 %** |
 
@@ -42,7 +42,7 @@ as M1) are not plan deliverables and do not move the percentage.
 
 ## Completed
 
-Verified against the repository on 2026-10-19 (`49063bb`).
+Verified against the repository on 2026-10-24 (`9887e0b`).
 
 - **Phase 0 complete (2026-10-19).** The project owner (sole maintainer),
   who holds every role in the register, signed the remaining register
@@ -210,6 +210,19 @@ Verified against the repository on 2026-10-19 (`49063bb`).
       requirements.
 
     Light suite 1781 passed, 1 skipped; ruff and mypy clean.
+  - **Diarization fix** (2026-10-24), approved by the owner; on
+    `sprint7/diarization-fix`, not merged:
+    - `9887e0b` — diarization loads `pyannote/speaker-diarization-3.1`
+      with PyTorch's weights-only loader on (six checkpoint classes
+      allowed by name); `requirements.txt` declares matplotlib; a run
+      whose pipeline never loaded carries `DIARIZATION_UNAVAILABLE`; the
+      mock reads the duration from the file header
+      ([DECISIONS #53](DECISIONS.md#53-diarization-uses-pyannote-31-under-the-weights-only-loader)).
+      10 new tests, red-checked (6 of the first 7 failed on the previous
+      code), plus a check on the real models.
+
+    Suite 1794 passed locally; light stack 1790 passed, 2 skipped; ruff
+    clean; mypy clean with `--no-site-packages`.
 - **2026-10-11 audit and documentation sync** (this branch): stale
   operational docs corrected, PHASE-0 wording made consistent with its own
   register, this status document created.

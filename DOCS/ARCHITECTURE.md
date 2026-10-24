@@ -1,8 +1,8 @@
-Last verified: 2026-10-19, e4398b1
+Last verified: 2026-10-24, 9887e0b
 # Architecture
 
-This document describes the code structure of VoiceIQ at commit `e4398b1`
-(branch `sprint7/phase0-decisions`; its code is that of `main` at `49063bb`). It shows how the packages fit together, how data
+This document describes the code structure of VoiceIQ at commit `9887e0b`
+(branch `sprint7/diarization-fix`, cut from `main` at `6e92898`; its code differs from `main` only in the diarization fix). It shows how the packages fit together, how data
 moves between them, where faults are contained, what is stored, and how to
 extend the system without breaking it.
 
@@ -224,7 +224,7 @@ artifacts back from disk; for example, alignment loads `asr/whisper.json` and
 
 The order below is the production order. The test harness pins it through
 the insertion order of `timings_ms` (`app/insights/tests/test_orchestrator.py:121-140`,
-asserted at `:1027`).
+asserted at `:1030`).
 
 | # | Method (`orchestrator.py` line) | `timings_ms` key | On failure | Warning code(s) | Imported inside the method's `try` |
 |---|---|---|---|---|---|
@@ -253,7 +253,10 @@ failures, such as skip codes (`ALIGNMENT_SKIPPED_MISSING_INPUT`,
 `orchestrator.py:450`; `GENDER_SKIPPED_LOW_SNR`, `orchestrator.py:555`),
 `SINGLE_SPEAKER_MODE` (`orchestrator.py:440`) and `MOCK_DIARIZATION_USED`,
 added whenever a diarization segment came from the single-speaker fallback
-(`orchestrator.py:406-409`, `2721a73`).
+(`orchestrator.py:406-409`, `2721a73`). The diarization service adds its own
+codes, which the stage passes on: `DIARIZATION_UNAVAILABLE` when no pipeline
+loaded and `DIARIZATION_FAILED_FALLBACK` when a loaded pipeline failed to run
+(`app/services/diarization_service.py:287-292`, `354-357`; `9887e0b`).
 
 The eight ML-backed imports in the last column (stages 3–5, 8–10, 12 and
 13) sit inside each stage's `try` (`0f9c4c1`). A package that cannot be imported therefore fails only that
@@ -432,10 +435,10 @@ reasoning; do not harmonise the two.
 
 | Boundary | Where | Rule | Pinned by |
 |---|---|---|---|
-| Five hard-fail gates | `orchestrator.py:70-79`, `186-191`, `279-293` | Only `MISSING_INPUT_AUDIO`, `AUDIO_NORMALIZATION_TIMEOUT`, `AUDIO_TOO_LONG` (added in `6c17c72`; `normalize.status.json` status `too_long`), `AUDIO_NORMALIZATION_FAILED` and `AUDIO_SILENT_OR_NEAR_SILENT` stop the run. Each gate sets `status="failed"`, saves `meta.json` and raises `_HardFail`; `run()` catches it once. The three normalisation gates go through `_normalize_failed`. | `test_exactly_five_hard_fail_gates` (`test_orchestrator.py:1079`) |
-| Fail-soft stages | every other `_run_<stage>` | Catch, record a warning code and a status file, continue. A late failure never changes `status` from `ok`. | `test_late_stage_exception_never_flips_status` (`test_orchestrator.py:1029`) |
-| Stage imports | the eight ML-backed `_run_<stage>` methods | The service import sits inside the stage's `try`, so a package that cannot be imported fails only that stage with its usual warning (`DIARIZATION_FAILED_FALLBACK` for diarization), never the request (`0f9c4c1`). | `test_a_missing_stage_package_fails_only_that_stage` (`test_orchestrator.py:1119`) |
-| Insight stage on an error result | `orchestrator.py:677-692`, `764-766` | When `InsightService` returns `status="error"`, the stage records `failed` in `insight.status.json` and warns `INSIGHTS_FAILED`, and the Agent Brain stage, when on, is skipped with `AGENT_BRAIN_SKIPPED_NO_INSIGHTS`. The error result is still returned under `insights`, and the run stays `ok` (`c53c71d`). | `test_an_insight_error_result_fails_the_stage_and_skips_the_agent_brain` (`test_orchestrator.py:754`) |
+| Five hard-fail gates | `orchestrator.py:70-79`, `186-191`, `279-293` | Only `MISSING_INPUT_AUDIO`, `AUDIO_NORMALIZATION_TIMEOUT`, `AUDIO_TOO_LONG` (added in `6c17c72`; `normalize.status.json` status `too_long`), `AUDIO_NORMALIZATION_FAILED` and `AUDIO_SILENT_OR_NEAR_SILENT` stop the run. Each gate sets `status="failed"`, saves `meta.json` and raises `_HardFail`; `run()` catches it once. The three normalisation gates go through `_normalize_failed`. | `test_exactly_five_hard_fail_gates` (`test_orchestrator.py:1082`) |
+| Fail-soft stages | every other `_run_<stage>` | Catch, record a warning code and a status file, continue. A late failure never changes `status` from `ok`. | `test_late_stage_exception_never_flips_status` (`test_orchestrator.py:1032`) |
+| Stage imports | the eight ML-backed `_run_<stage>` methods | The service import sits inside the stage's `try`, so a package that cannot be imported fails only that stage with its usual warning (`DIARIZATION_FAILED_FALLBACK` for diarization), never the request (`0f9c4c1`). | `test_a_missing_stage_package_fails_only_that_stage` (`test_orchestrator.py:1122`) |
+| Insight stage on an error result | `orchestrator.py:677-692`, `764-766` | When `InsightService` returns `status="error"`, the stage records `failed` in `insight.status.json` and warns `INSIGHTS_FAILED`, and the Agent Brain stage, when on, is skipped with `AGENT_BRAIN_SKIPPED_NO_INSIGHTS`. The error result is still returned under `insights`, and the run stays `ok` (`c53c71d`). | `test_an_insight_error_result_fails_the_stage_and_skips_the_agent_brain` (`test_orchestrator.py:757`) |
 | `InsightService` | `service.py:64-108` | The single boundary for the insight engines. One `try/except` around analytics → rule → summary turns any engine fault into a `status="error"` response that keeps the validation result. The error carries the fixed message "Insight pipeline failed." (code `pipeline_execution_error`), and the warning log names the exception class only (`service.py:87-99`, `0011dd7`). `InsightRuleEngine.run` deliberately has no `try/except` (`rule_engine.py:23-98`). | `test_a_failed_insight_run_does_not_return_the_exception_text` (`app/insights/tests/test_error_text.py:62`) |
 | `AgentRunner` | `agent_runner.py:52-59` | Per-agent `try/except`: a failing agent is logged and skipped, and the other agents' recommendations are still returned. | `test_per_agent_fault_isolation` (`app/agent_brain/tests/test_agent_runner.py:41`) |
 | Fact-check, per claim | `factcheck_engine.py:274-293`, `227-240` | A client fault, an unusable reply, a compressed reply, a reply over 1 MiB or a non-finite value means no evidence. The comparator then returns `SOURCE_UNAVAILABLE` for that claim only, and the run continues. Clients return `None`, or raise only `SourceUnavailable` with a short reason (`base_client.py:93-102`); `_get_json` refuses a reply in any content encoding but identity before reading it, and stops reading a reply past `MAX_REPLY_BYTES` (`base_client.py:38-79`, `178-189`). A subject whose fetch failed is remembered for the rest of that run, so a repeated claim gets the same reason without a second fetch (`factcheck_engine.py:196-198`, `227-233`). Hardened in `9aff207`, `83803b5` and `efdd1a9`. | `test_one_bad_reply_affects_only_its_own_claim`, `test_engine_contains_a_client_that_breaks_its_contract`, `test_fact_check_api_never_500s_on_a_bad_reply` (`test_factcheck_source_replies.py:338`, `365`, `406`); `test_an_oversized_reply_is_not_read_to_the_end`, `test_an_encoded_reply_is_refused_before_its_body_is_read`, `test_a_failed_subject_is_fetched_once_per_run` (`app/insights/tests/test_factcheck_reply_limits.py:37`, `94`, `134`) |

@@ -1,4 +1,4 @@
-Last verified: 2026-10-19, 49063bb
+Last verified: 2026-10-24, 9887e0b
 # Changelog
 
 What changed in VoiceIQ, backfilled from git history. Newest first, grouped
@@ -22,20 +22,23 @@ Taken from git at write time.
 
 | Measure | Value | Command |
 |---|---|---|
-| Commits reachable from HEAD (`49063bb`) | 214 | `git rev-list --count HEAD` |
-| Non-merge commits | 212 | `git rev-list --count --no-merges HEAD` |
-| Merge commits | 2 (`032d822`, `49063bb`) | `git rev-list --count --merges HEAD` |
-| Commits on `main` (`49063bb`) | 214 | `git rev-list --count main` |
+| Commits reachable from HEAD (`9887e0b`) | 218 | `git rev-list --count HEAD` |
+| Non-merge commits | 215 | `git rev-list --count --no-merges HEAD` |
+| Merge commits | 3 (`032d822`, `49063bb`, `6e92898`) | `git rev-list --count --merges HEAD` |
+| Commits on `origin/main` (`6e92898`) | 217 | `git rev-list --count origin/main` |
 | Commits merged from `sprint7/doc-sync` by pull request #1 | 72 | `git rev-list --count 8fd3972..aa453f0` |
+| Commits merged from `sprint7/phase0-decisions` by pull request #2 | 2 | `git rev-list --count 49063bb..415dd88` |
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse --format="%h %ad" --date=short` |
 
-Each of the 214 commits is listed in exactly one row below; a few hashes
+Each of the 218 commits is listed in exactly one row below; a few hashes
 also appear elsewhere as cross-references. Small commits of the same kind
 (wave-completion notes, a batch of stage extractions) share a row. Sections
 are ordered by their most recent commit. Dates are author dates.
 
 | Section | Dates | Commits |
 |---|---|---|
+| [Diarization fix on `sprint7/diarization-fix`](#diarization-fix-on-sprint7diarization-fix) | 2026-10-24 | 1 |
+| [Phase 0 sign-off on `sprint7/phase0-decisions`](#phase-0-sign-off-on-sprint7phase0-decisions) | 2026-10-19 to 2026-10-20 | 3 |
 | [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-19 | 73 |
 | [Sprint 7 Phase 0 and prerequisites](#sprint-7-phase-0-and-prerequisites) | 2026-09-04 to 2026-09-20 | 7 |
 | [N4b multilingual and L5 pipeline wiring](#n4b-multilingual-and-l5-pipeline-wiring) | 2026-09-19 to 2026-09-20 | 10 |
@@ -49,6 +52,25 @@ are ordered by their most recent commit. Dates are author dates.
 | [Tooling, first CI and Docker](#tooling-first-ci-and-docker) | 2026-04-25 to 2026-05-20 | 12 |
 | [Sprint 5: fact-check engine](#sprint-5-fact-check-engine) | 2026-05-03 | 2 |
 | [Initial code and Sprints 1 to 4](#initial-code-and-sprints-1-to-4) | 2026-02-10 to 2026-04-25 | 9 |
+
+## Diarization fix on `sprint7/diarization-fix`
+
+1 commit, 2026-10-24, on a branch cut from `main` at `6e92898`; not merged.
+
+| Date | Change | Commit |
+|---|---|---|
+| 2026-10-24 | Diarization loads `pyannote/speaker-diarization-3.1` with PyTorch's weights-only loader on: the six classes its checkpoints store are allowed by name. `requirements.txt` declares matplotlib, which pyannote.audio 3.3.2 imports without declaring. A run whose pipeline never loaded carries `DIARIZATION_UNAVAILABLE`, and the mock reads the duration from the file header instead of loading the audio. 10 new tests (DECISIONS #53). | `9887e0b` |
+
+## Phase 0 sign-off on `sprint7/phase0-decisions`
+
+3 commits, 2026-10-19 to 2026-10-20 (2 from the branch plus the merge
+commit). Pull request #2 merged them into `main` on 2026-10-20.
+
+| Date | Change | Commit |
+|---|---|---|
+| 2026-10-19 | The Phase 0 sign-off is recorded; Phase 1 may start. Docs only. | `e4398b1` |
+| 2026-10-20 | The knowledge docs are brought up to date with the merge and Phase 0. Docs only. | `415dd88` |
+| 2026-10-20 | Pull request #2 merges `sprint7/phase0-decisions` into `main` (merge commit; the tree equals `415dd88`). | `6e92898` |
 
 ## Sprint 7 on `sprint7/doc-sync`
 

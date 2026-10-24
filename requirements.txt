@@ -23,6 +23,10 @@ librosa==0.10.2.post1
 soundfile==0.12.1
 
 pyannote.audio==3.3.2
+# pyannote.audio 3.3.2 imports matplotlib when it loads a diarization
+# pipeline (pyannote.audio.tasks) but does not declare it; without it every
+# job falls back to the one-speaker mock.
+matplotlib
 fpdf==1.7.2
 # Direct import in app/services/keyword_service.py. Satisfied transitively
 # today (sentence-transformers depends on it), declared explicitly so the

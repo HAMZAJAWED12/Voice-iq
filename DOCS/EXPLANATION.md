@@ -1,4 +1,4 @@
-Last verified: 2026-10-19, e4398b1
+Last verified: 2026-10-24, 9887e0b
 # VoiceIQ in Plain English
 
 This guide is for readers who do not write code: product owners, managers,
@@ -199,13 +199,14 @@ It does not know who anyone is. This step is called diarization.
   the operator has not supplied its access token, VoiceIQ treats the whole
   call as one speaker and adds the warnings `SINGLE_SPEAKER_MODE` and
   `MOCK_DIARIZATION_USED`. The second one says plainly that speaker
-  separation did not happen.
+  separation did not happen. When the model never loaded at all,
+  `DIARIZATION_UNAVAILABLE` is added too.
 
 For the example, assume the customer is labelled SPEAKER_00 and the agent
 SPEAKER_01.
 
-*Source:* `app/services/diarization_service.py:45-66, 76-128, 133-146,
-246-329`; `app/pipeline/orchestrator.py:386-440`;
+*Source:* `app/services/diarization_service.py:76-97, 107-151, 156-170,
+270-357`; `app/pipeline/orchestrator.py:386-440`;
 `app/routes/process_audio.py:132, 248`.
 
 ### Step 5: Matching words to speakers
@@ -533,7 +534,7 @@ The field names below are the labels a reader will see in the raw response.
 |---|---|---|
 | Call refused | `MISSING_INPUT_AUDIO`, `AUDIO_NORMALIZATION_FAILED`, `AUDIO_NORMALIZATION_TIMEOUT`, `AUDIO_TOO_LONG`, `AUDIO_SILENT_OR_NEAR_SILENT` | The call stopped before any analysis, and the code comes back with the error |
 | Audio quality | `LOW_SNR_AUDIO`, `HEAVY_NOISE_AUDIO`, `AUDIO_QUALITY_FAILED` | Noisy audio, or the quality check itself could not run |
-| Speakers | `SINGLE_SPEAKER_MODE`, `MOCK_DIARIZATION_USED`, `SPEAKER_CAP_APPLIED`, `LOW_SNR_DIARIZATION_UNRELIABLE`, `DIARIZATION_FAILED_FALLBACK`, `FLAGS_LIMITED_SINGLE_SPEAKER` | Only one voice, speaker separation not done, extra voices merged, or speaker separation unreliable or unavailable |
+| Speakers | `SINGLE_SPEAKER_MODE`, `MOCK_DIARIZATION_USED`, `DIARIZATION_UNAVAILABLE`, `SPEAKER_CAP_APPLIED`, `LOW_SNR_DIARIZATION_UNRELIABLE`, `DIARIZATION_FAILED_FALLBACK`, `FLAGS_LIMITED_SINGLE_SPEAKER` | Only one voice, speaker separation not done, extra voices merged, or speaker separation unreliable or unavailable |
 | No words | `EMPTY_TRANSCRIPT`, `ASR_FAILED` | Speech-to-text found no words, or failed |
 | Stage skipped | Codes containing `_SKIPPED_`, for example `GENDER_SKIPPED_LOW_SNR` | The stage did not run; the code says why |
 | Stage failed | Any other code ending `_FAILED`, for example `TOPIC_FAILED`, `INSIGHTS_FAILED`, `PDF_FAILED` | The stage broke and its part of the response is empty; everything else continued |
@@ -622,7 +623,7 @@ terms, the known limitations.
 `app/services/emotion_service.py:17-24, 56-66`;
 `app/services/gender_service.py:9-17`;
 `app/services/alignment_service.py:446-455`;
-`app/services/diarization_service.py:49-51, 202, 264`;
+`app/services/diarization_service.py:80-82, 226, 292`;
 `app/agent_brain/extraction/language.py`;
 `app/agent_brain/core/email_draft_agent.py:19-44, 72`;
 `app/services/sentiment_service.py:91`;

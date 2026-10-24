@@ -1,11 +1,11 @@
-Last verified: 2026-10-19, e4398b1
+Last verified: 2026-10-24, 9887e0b
 # Workflow
 
 How work gets done in this repository: branches, the local Python environment, the checks, the commit rules and the milestone loop. AI assistants read [CLAUDE.md](../CLAUDE.md) first. For where Sprint 7 stands, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For what the project is, see [CONTEXT.md](CONTEXT.md).
 
 ## Before every commit
 
-Run these from the repository root. At `e4398b1` (2026-10-19) the tests (1781 passed, 1 skipped), both ruff commands and the mypy command below passed (commit message of `e4398b1`). *Lint and types* below says where each check ran.
+Run these from the repository root. At `9887e0b` (2026-10-24) the tests (1794 passed locally; 1790 passed, 2 skipped on the light stack) and both ruff commands passed, and the mypy command below passed with `--no-site-packages` added (commit message of `9887e0b`). As written, it reports one error locally (`app/utils/audio_quality.py:97`, from numpy's stubs), because the `.venv` now also holds numpy; CI's light stack has no numpy. *Lint and types* below says where each check ran.
 
 ```powershell
 .venv\Scripts\python.exe -m pytest -v app/insights/tests/ app/agent_brain/tests/
@@ -22,9 +22,9 @@ Then stage files by explicit path and commit. The pre-commit hooks run on their 
 | Rule | Detail |
 |---|---|
 | Base branch | `main`. |
-| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/phase0-decisions`, cut from `main` at `49063bb`; it records the Phase 0 sign-off. The previous one, `sprint7/doc-sync` (cut from `main` at `8fd3972`: the 2026-10-11 documentation sync, milestones M1 to M7, the project knowledge set, security and reliability fixes, the fixes the owner decided on 2026-10-17, the updates that followed and the pull-request review fix round, 72 commits), was merged into `main` by pull request #1 with a merge commit (`49063bb`). |
+| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/diarization-fix`, cut from `main` at `6e92898`; it holds the diarization fix. `sprint7/phase0-decisions` (the Phase 0 sign-off, cut from `main` at `49063bb`) was merged into `main` by pull request #2 with a merge commit (`6e92898`). Before it, `sprint7/doc-sync` (cut from `main` at `8fd3972`: the 2026-10-11 documentation sync, milestones M1 to M7, the project knowledge set, security and reliability fixes, the fixes the owner decided on 2026-10-17, the updates that followed and the pull-request review fix round, 72 commits), was merged into `main` by pull request #1 with a merge commit (`49063bb`). |
 | `main` | Never commit to `main` directly. |
-| Push | Never push without the owner's go-ahead. `sprint7/phase0-decisions` was created with `--no-track` and has no upstream (`git rev-parse --abbrev-ref sprint7/phase0-decisions@{upstream}` fails), so a bare `git push` stops with an error instead of pushing anywhere. Push it only with `git push origin sprint7/phase0-decisions`, which does not set an upstream. |
+| Push | Never push without the owner's go-ahead. `sprint7/diarization-fix` was created with `--no-track` and has no upstream (`git rev-parse --abbrev-ref sprint7/diarization-fix@{upstream}` fails), so a bare `git push` stops with an error instead of pushing anywhere. Push it only with `git push origin sprint7/diarization-fix`, which does not set an upstream. |
 | CI trigger | CI runs on a push to `main` and on a pull request into `main`, nothing else ([.github/workflows/test.yml](../.github/workflows/test.yml), lines 3-7). Until a pull request is open, nothing checks a branch except the local checks. |
 
 The repository sits in a synced OneDrive folder, which sometimes causes `index.lock` collisions. If git starts fighting itself, pause the sync ([CLAUDE.md](../CLAUDE.md), *Working with this repo*).
@@ -33,7 +33,7 @@ The repository sits in a synced OneDrive folder, which sometimes causes `index.l
 
 ### What `.venv` holds
 
-`.venv` lives at the repository root and git ignores it ([.gitignore](../.gitignore)). It holds the light stack only:
+`.venv` lives at the repository root and git ignores it ([.gitignore](../.gitignore)). It is built from the light stack only, as below. On the current development machine it now also holds heavy packages (torch 2.8.0, pyannote.audio 3.3.2, numpy) installed outside this recipe, so light-stack counts there are measured with those imports blocked:
 
 | Package set | Source |
 |---|---|
@@ -53,7 +53,7 @@ To rebuild `.venv`, use any CPython from 3.10 to 3.12:
 
 ### Rules
 
-- **Do not install `requirements.txt` for routine work.** It pulls the heavy ML stack: torch, torchaudio, transformers, pyannote.audio, openai-whisper, librosa, sentence-transformers and spaCy ([requirements.txt](../requirements.txt)). The whole test suite runs without it. Only one 3-test module skips on the light stack (see [Tests](#tests)). Ask the owner before installing it.
+- **Do not install `requirements.txt` for routine work.** It pulls the heavy ML stack: torch, torchaudio, transformers, pyannote.audio, openai-whisper, librosa, sentence-transformers and spaCy ([requirements.txt](../requirements.txt)). The whole test suite runs without it. Two items skip on the light stack, a 3-test module and one diarization check (see [Tests](#tests)). Ask the owner before installing it.
 - **Run every tool as `.venv\Scripts\python.exe -m <tool>`.** A bare `python` or `pytest` on PATH may be a different interpreter that lacks the project's dependencies ([CLAUDE.md](../CLAUDE.md), *Working with this repo*). On some Windows machines, Application Control also blocks the unsigned `.exe` console-script launchers that pre-commit generates, while the venv's `python.exe` is not blocked (`7b25b3f`). `python.exe -m` avoids both problems.
 - **Never open, read, print or search `.env`.** It holds live secrets and git ignores it. Take environment variable names and defaults from [app/insights/config/settings.py](../app/insights/config/settings.py), [app/agent_brain/config/settings.py](../app/agent_brain/config/settings.py) and [.env.example](../.env.example). Exclude `.env` from every search, for example `rg --glob '!.env'` or `grep --exclude=.env`.
 
@@ -87,15 +87,15 @@ pins this (`8563572`).
 
 ### Current count
 
-On the light stack, at `ee2e15b`: **1781 passed, 1 skipped**, measured on 2026-10-19 on `.venv` (CPython 3.12.10). The CI-equivalent run with `--ignore=app/insights/tests/test_model_load_concurrency.py` gives 1781 passed.
+On the light stack, at `9887e0b`: **1790 passed, 2 skipped**, measured on 2026-10-24 on `.venv` (CPython 3.12.10) with the heavy packages blocked from import, because this `.venv` now also holds them. The CI-equivalent run with `--ignore=app/insights/tests/test_model_load_concurrency.py` gives 1790 passed, 1 skipped.
 
-The skip is `app/insights/tests/test_model_load_concurrency.py`. It holds 3 tests and calls `pytest.importorskip` on torch, transformers, soundfile, huggingface_hub and pyannote.audio at module level (lines 25-29). The full reconciliation (1784 on the heavy stack, derived rather than measured) lives in [CLAUDE.md](../CLAUDE.md), section *One test lane*. Update it there, not here.
+The skips are `app/insights/tests/test_model_load_concurrency.py`, which holds 3 tests and calls `pytest.importorskip` on torch, transformers, soundfile, huggingface_hub and pyannote.audio at module level (lines 25-29), and `test_the_allowlisted_names_are_the_real_classes` in `app/insights/tests/test_diarization_service.py`, which skips itself without the heavy packages. The full reconciliation (1794 on the heavy stack, measured 2026-10-24) lives in [CLAUDE.md](../CLAUDE.md), section *One test lane*. Update it there, not here.
 
 ### Why a bare `pytest` at the root fails
 
 | Invocation | pytest rootdir and config | Result |
 |---|---|---|
-| `pytest app/insights/tests/ app/agent_brain/tests/` | rootdir `app/`, config `app/pytest.ini` | 1781 passed, 1 skipped |
+| `pytest app/insights/tests/ app/agent_brain/tests/` | rootdir `app/`, config `app/pytest.ini` | 1790 passed, 2 skipped |
 | `pytest` (no paths, from the root) | rootdir is the repository root. The config is `pyproject.toml`, which has no pytest settings, so `app/pytest.ini` (`testpaths = app/insights/tests`) does not apply. | pytest walks the whole tree, collects the legacy `tests/` folder and stops: `Interrupted: 2 errors during collection` |
 
 The two errors come from the legacy folder. `tests/test_diarization.py` imports `app.services.diarization_service`, which needs `soundfile`. `tests/test_diarization_load.py` imports `huggingface_hub`. The light stack includes neither. Always pass the two paths.
@@ -118,7 +118,7 @@ Configuration lives in [pyproject.toml](../pyproject.toml):
 - **Ruff:** line length 120, target `py310`, rule sets E, F, I, B and UP, with `B008` ignored for the FastAPI `Depends` idiom. It excludes `.venv`, `samples`, `DOCS`, `data`, `tmp`, `uploads` and `outputs` (lines 1-9).
 - **Mypy:** pydantic plugin, `ignore_missing_imports`, `check_untyped_defs`. Test directories are excluded (lines 11-18).
 
-At `dbae452` (2026-10-17): the tests gave 1730 passed and 1 skipped, ruff reported "All checks passed!" with 207 files already formatted, and mypy over `app/insights/` and `app/agent_brain/` found no issues in 84 source files. The wider gate, which adds `app/utils/` and `app/security/` (99 source files), ran clean in the local Python 3.12 venv, first at `2966527` just before the gate was committed and most recently at `e4398b1` (commit message), and in CI run 39119444804 at `6aa8990` (lint job: Python 3.11, `requirements-insight.txt`, mypy 1.13.0). Local runs with `--python-version 3.10` and `3.11` plus `--no-site-packages` were also clean, but they skip installed third-party packages, so they are weaker than CI and not equivalent to it.
+At `dbae452` (2026-10-17): the tests gave 1730 passed and 1 skipped, ruff reported "All checks passed!" with 207 files already formatted, and mypy over `app/insights/` and `app/agent_brain/` found no issues in 84 source files. The wider gate, which adds `app/utils/` and `app/security/` (99 source files), ran clean in the local Python 3.12 venv, first at `2966527` just before the gate was committed and last with site packages at `e4398b1` (commit message); at `9887e0b` it ran clean with `--no-site-packages`, and in CI run 39119444804 at `6aa8990` (lint job: Python 3.11, `requirements-insight.txt`, mypy 1.13.0). Local runs with `--python-version 3.10` and `3.11` plus `--no-site-packages` were also clean, but they skip installed third-party packages, so they are weaker than CI and not equivalent to it.
 
 ## Pre-commit hooks
 
@@ -204,7 +204,7 @@ The repository is public. Everything committed must be safe to publish:
 | [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) | Every milestone. Move the milestone to *Completed* with its commit and test evidence, promote the next one, and refresh the date and branch rows. The doc says to update it with every milestone (lines 5-6). |
 | [FACTCHECK-AGENT-PHASE-0.md §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register) | The owner signs or changes a decision. This is the only place decision status is written. |
 | [DATA-FLOW.md](DATA-FLOW.md) | Anything about data leaving the host changes: an external call is added or removed, a destination changes, or what is sent or logged changes. `b1054be` and `2350738` updated it alongside M1 and M3. |
-| [CLAUDE.md](../CLAUDE.md) and [README.md](../README.md) test counts | The test count changes. Re-measure with the CI command, then update the *One test lane* table in CLAUDE.md and the test line in README.md (line 34). The heavy figure is the light figure plus 3. `b370390`, `2350738` and `793e02e` did this. |
+| [CLAUDE.md](../CLAUDE.md) and [README.md](../README.md) test counts | The test count changes. Re-measure with the CI command, then update the *One test lane* table in CLAUDE.md and the test line in README.md (line 34). The heavy figure is the light passed figure plus 4: the 3-test model-loading module and the heavy-only diarization check. `b370390`, `2350738` and `793e02e` did this. |
 | [DECISIONS.md](DECISIONS.md) | A decision is signed in the register, or a decision is implemented. Pending items stay listed as open, with links to the register and the status doc. |
 | [WORKFLOW.md](WORKFLOW.md) | Branch, environment, CI, hook or commit practice changes: [test.yml](../.github/workflows/test.yml), [.pre-commit-config.yaml](../.pre-commit-config.yaml), [pyproject.toml](../pyproject.toml), [app/pytest.ini](../app/pytest.ini) or a `requirements*.txt` file. |
 | [CHANGES.md](CHANGES.md) | Every milestone. Add the new commits and refresh the counts from git. |
