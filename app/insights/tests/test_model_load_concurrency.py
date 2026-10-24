@@ -118,7 +118,6 @@ def test_diarization_loader_runs_constructor_once_under_concurrency() -> None:
         with (
             patch.object(diarization_service, "_HAS_PYANNOTE", True),
             patch.dict("os.environ", {"PYANNOTE_AUTH_TOKEN": "test"}, clear=False),
-            patch("app.services.diarization_service.login"),
             patch("app.services.diarization_service.Pipeline") as mock_pipe_cls,
         ):
             # The real chain is Pipeline.from_pretrained(...).to(DEVICE),

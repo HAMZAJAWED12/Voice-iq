@@ -1,10 +1,10 @@
-"""DiarizationService: model choice, checkpoint allowlist and the mock fallback.
+"""DiarizationService: model choice, checkpoint allowlist, token handling and the mock fallback.
 
-The service imports torch, soundfile, huggingface_hub and pyannote at module
-level. Each test imports it against stand-in modules instead, so the suite
-runs on the light lane and never loads a model. Whether the real pyannote
-checkpoints load under the allowlist is checked by hand in a heavy
-environment; these tests pin the wiring.
+The service imports torch, soundfile and pyannote at module level. Each test
+imports it against stand-in modules instead, so the suite runs on the light
+lane and never loads a model. Whether the real pyannote checkpoints load
+under the allowlist is checked by hand in a heavy environment; these tests
+pin the wiring.
 """
 
 from __future__ import annotations
@@ -31,11 +31,13 @@ def diar(monkeypatch):
     """The service module, freshly imported against stand-in heavy modules.
 
     pyannote.audio is made unimportable, so no pipeline loads unless a test
-    installs a fake one.
+    installs a fake one. huggingface_hub is a stand-in whose login() only
+    records calls: the service must never log in.
     """
     import app.services as services
 
     add_safe_globals = MagicMock(name="add_safe_globals")
+    login = MagicMock(name="login")
     torch = _module(
         "torch",
         cuda=SimpleNamespace(is_available=lambda: False),
@@ -50,7 +52,7 @@ def diar(monkeypatch):
     for name, module in {
         "torch": torch,
         "soundfile": soundfile,
-        "huggingface_hub": _module("huggingface_hub", login=MagicMock(name="login")),
+        "huggingface_hub": _module("huggingface_hub", login=login),
         "pyannote.audio": None,
     }.items():
         monkeypatch.setitem(sys.modules, name, module)
@@ -60,7 +62,7 @@ def diar(monkeypatch):
     del sys.modules[_SERVICE]
     monkeypatch.setattr(services, "diarization_service", None, raising=False)
     module = importlib.import_module(_SERVICE)
-    return SimpleNamespace(module=module, add_safe_globals=add_safe_globals, soundfile=soundfile)
+    return SimpleNamespace(module=module, add_safe_globals=add_safe_globals, soundfile=soundfile, login=login)
 
 
 def _checkpoint_classes(monkeypatch) -> dict[str, type]:
@@ -193,3 +195,47 @@ def test_loading_allowlists_the_classes_before_the_checkpoint_loads(diar, monkey
 
     assert order == ["allowlist", "load pyannote/speaker-diarization-3.1"]
     assert service.pipeline is pipeline
+
+
+def _install_pipeline(diar, monkeypatch) -> MagicMock:
+    """A stand-in pyannote Pipeline class, a token, and the checkpoint classes: a cold load succeeds."""
+    _checkpoint_classes(monkeypatch)
+    pipeline = MagicMock(name="pipeline")
+    pipeline.to.return_value = pipeline
+    pipeline_cls = MagicMock(name="Pipeline")
+    pipeline_cls.from_pretrained.return_value = pipeline
+    monkeypatch.setattr(diar.module, "_HAS_PYANNOTE", True)
+    monkeypatch.setattr(diar.module, "Pipeline", pipeline_cls)
+    monkeypatch.setenv("PYANNOTE_AUTH_TOKEN", "test-token")
+    return pipeline_cls
+
+
+def test_a_cold_load_does_not_log_in_to_hugging_face(diar, monkeypatch):
+    # login() made a network call on every cold load and wrote the token to
+    # the Hugging Face cache on disk; offline, it failed and every job got the mock.
+    _install_pipeline(diar, monkeypatch)
+
+    service = diar.module.DiarizationService()
+
+    diar.login.assert_not_called()
+    assert service.pipeline is not None
+
+
+def test_the_token_still_goes_to_from_pretrained(diar, monkeypatch):
+    # Control: the gated models still get the token, passed explicitly.
+    pipeline_cls = _install_pipeline(diar, monkeypatch)
+
+    diar.module.DiarizationService()
+
+    pipeline_cls.from_pretrained.assert_called_once_with(
+        "pyannote/speaker-diarization-3.1", use_auth_token="test-token"
+    )
+
+
+def test_the_service_imports_without_huggingface_hub(diar, monkeypatch):
+    monkeypatch.setitem(sys.modules, "huggingface_hub", None)
+    del sys.modules[_SERVICE]
+
+    module = importlib.import_module(_SERVICE)  # ImportError while the service imported login
+
+    assert not hasattr(module, "login")
