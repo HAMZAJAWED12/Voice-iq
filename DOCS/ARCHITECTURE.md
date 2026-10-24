@@ -1,4 +1,4 @@
-Last verified: 2026-10-24, 9887e0b
+Last verified: 2026-10-24, 670b4de
 # Architecture
 
 This document describes the code structure of VoiceIQ at commit `9887e0b`
@@ -256,7 +256,7 @@ added whenever a diarization segment came from the single-speaker fallback
 (`orchestrator.py:406-409`, `2721a73`). The diarization service adds its own
 codes, which the stage passes on: `DIARIZATION_UNAVAILABLE` when no pipeline
 loaded and `DIARIZATION_FAILED_FALLBACK` when a loaded pipeline failed to run
-(`app/services/diarization_service.py:287-292`, `354-357`; `9887e0b`).
+(`app/services/diarization_service.py:285-290`, `352-355`; `9887e0b`).
 
 The eight ML-backed imports in the last column (stages 3–5, 8–10, 12 and
 13) sit inside each stage's `try` (`0f9c4c1`). A package that cannot be imported therefore fails only that

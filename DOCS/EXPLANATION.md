@@ -1,4 +1,4 @@
-Last verified: 2026-10-24, 9887e0b
+Last verified: 2026-10-24, 670b4de
 # VoiceIQ in Plain English
 
 This guide is for readers who do not write code: product owners, managers,
@@ -205,8 +205,8 @@ It does not know who anyone is. This step is called diarization.
 For the example, assume the customer is labelled SPEAKER_00 and the agent
 SPEAKER_01.
 
-*Source:* `app/services/diarization_service.py:76-97, 107-151, 156-170,
-270-357`; `app/pipeline/orchestrator.py:386-440`;
+*Source:* `app/services/diarization_service.py:75-96, 106-149, 154-168,
+268-355`; `app/pipeline/orchestrator.py:386-440`;
 `app/routes/process_audio.py:132, 248`.
 
 ### Step 5: Matching words to speakers
@@ -623,7 +623,7 @@ terms, the known limitations.
 `app/services/emotion_service.py:17-24, 56-66`;
 `app/services/gender_service.py:9-17`;
 `app/services/alignment_service.py:446-455`;
-`app/services/diarization_service.py:80-82, 226, 292`;
+`app/services/diarization_service.py:79-81, 224, 290`;
 `app/agent_brain/extraction/language.py`;
 `app/agent_brain/core/email_draft_agent.py:19-44, 72`;
 `app/services/sentiment_service.py:91`;

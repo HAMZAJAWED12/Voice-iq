@@ -1,4 +1,4 @@
-Last verified: 2026-10-24, 9887e0b
+Last verified: 2026-10-24, 670b4de
 # Changelog
 
 What changed in VoiceIQ, backfilled from git history. Newest first, grouped
@@ -22,22 +22,24 @@ Taken from git at write time.
 
 | Measure | Value | Command |
 |---|---|---|
-| Commits reachable from HEAD (`9887e0b`) | 218 | `git rev-list --count HEAD` |
-| Non-merge commits | 215 | `git rev-list --count --no-merges HEAD` |
-| Merge commits | 3 (`032d822`, `49063bb`, `6e92898`) | `git rev-list --count --merges HEAD` |
-| Commits on `origin/main` (`6e92898`) | 217 | `git rev-list --count origin/main` |
+| Commits reachable from HEAD (`670b4de`) | 221 | `git rev-list --count HEAD` |
+| Non-merge commits | 217 | `git rev-list --count --no-merges HEAD` |
+| Merge commits | 4 (`032d822`, `49063bb`, `6e92898`, `4025199`) | `git rev-list --count --merges HEAD` |
+| Commits on `origin/main` (`4025199`) | 220 | `git rev-list --count origin/main` |
 | Commits merged from `sprint7/doc-sync` by pull request #1 | 72 | `git rev-list --count 8fd3972..aa453f0` |
 | Commits merged from `sprint7/phase0-decisions` by pull request #2 | 2 | `git rev-list --count 49063bb..415dd88` |
+| Commits merged from `sprint7/diarization-fix` by pull request #3 | 2 | `git rev-list --count 6e92898..378d748` |
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse --format="%h %ad" --date=short` |
 
-Each of the 218 commits is listed in exactly one row below; a few hashes
+Each of the 221 commits is listed in exactly one row below; a few hashes
 also appear elsewhere as cross-references. Small commits of the same kind
 (wave-completion notes, a batch of stage extractions) share a row. Sections
 are ordered by their most recent commit. Dates are author dates.
 
 | Section | Dates | Commits |
 |---|---|---|
-| [Diarization fix on `sprint7/diarization-fix`](#diarization-fix-on-sprint7diarization-fix) | 2026-10-24 | 1 |
+| [Diarization login removal on `sprint7/diarization-no-login`](#diarization-login-removal-on-sprint7diarization-no-login) | 2026-10-24 | 1 |
+| [Diarization fix on `sprint7/diarization-fix`](#diarization-fix-on-sprint7diarization-fix) | 2026-10-24 | 3 |
 | [Phase 0 sign-off on `sprint7/phase0-decisions`](#phase-0-sign-off-on-sprint7phase0-decisions) | 2026-10-19 to 2026-10-20 | 3 |
 | [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-19 | 73 |
 | [Sprint 7 Phase 0 and prerequisites](#sprint-7-phase-0-and-prerequisites) | 2026-09-04 to 2026-09-20 | 7 |
@@ -53,13 +55,24 @@ are ordered by their most recent commit. Dates are author dates.
 | [Sprint 5: fact-check engine](#sprint-5-fact-check-engine) | 2026-05-03 | 2 |
 | [Initial code and Sprints 1 to 4](#initial-code-and-sprints-1-to-4) | 2026-02-10 to 2026-04-25 | 9 |
 
+## Diarization login removal on `sprint7/diarization-no-login`
+
+1 commit, 2026-10-24, on a branch cut from `main` at `4025199`; not merged.
+
+| Date | Change | Commit |
+|---|---|---|
+| 2026-10-24 | The diarization service no longer calls `huggingface_hub.login()` on each cold load: the token still goes to pyannote with the load, nothing writes it to disk, and with the models cached diarization loads offline (`HF_HUB_OFFLINE=1`). 3 new tests. | `670b4de` |
+
 ## Diarization fix on `sprint7/diarization-fix`
 
-1 commit, 2026-10-24, on a branch cut from `main` at `6e92898`; not merged.
+3 commits, 2026-10-24 (2 from the branch plus the merge commit). Pull
+request #3 merged them into `main` on 2026-10-24.
 
 | Date | Change | Commit |
 |---|---|---|
 | 2026-10-24 | Diarization loads `pyannote/speaker-diarization-3.1` with PyTorch's weights-only loader on: the six classes its checkpoints store are allowed by name. `requirements.txt` declares matplotlib, which pyannote.audio 3.3.2 imports without declaring. A run whose pipeline never loaded carries `DIARIZATION_UNAVAILABLE`, and the mock reads the duration from the file header instead of loading the audio. 10 new tests (DECISIONS #53). | `9887e0b` |
+| 2026-10-24 | The diarization fix is recorded and the test counts refreshed. Docs only. | `378d748` |
+| 2026-10-24 | Pull request #3 merges `sprint7/diarization-fix` into `main` (merge commit; the tree equals `378d748`). | `4025199` |
 
 ## Phase 0 sign-off on `sprint7/phase0-decisions`
 

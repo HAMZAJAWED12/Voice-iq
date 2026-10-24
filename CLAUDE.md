@@ -285,12 +285,12 @@ CI runs the same command on every push to `main` via `.github/workflows/test.yml
 
 | Where | Command | Count |
 |---|---|---|
-| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **1794** |
-| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **1790 + 2 skips** |
+| Local (heavy deps installed) | `pytest app/insights/tests/ app/agent_brain/tests/` | **1797** |
+| CI `test` job (light, 3.10 + 3.11) | same command, no `--ignore` | **1793 + 2 skips** |
 
-1790 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip` of torch, transformers, soundfile, huggingface_hub and pyannote.audio, reported as a single skip) + `test_the_allowlisted_names_are_the_real_classes` in `test_diarization_service.py` (a function-level `pytest.importorskip`, the second skip) = 1794. Nothing is lost in CI.
+1793 + the 3-test `test_model_load_concurrency.py` module (module-level `pytest.importorskip` of torch, transformers, soundfile, huggingface_hub and pyannote.audio, reported as a single skip) + `test_the_allowlisted_names_are_the_real_classes` in `test_diarization_service.py` (a function-level `pytest.importorskip`, the second skip) = 1797. Nothing is lost in CI.
 
-Both figures were measured on 2026-10-24 at `9887e0b`. The local `.venv` now also holds heavy packages (torch 2.8.0, pyannote.audio 3.3.2), so the full command there gives the heavy figure, 1794 passed. The light figure, 1790 passed and 2 skipped, comes from the same `.venv` with the heavy packages blocked from import; that run gives 1781 passed and 1 skipped at `6e92898`, the earlier light measurement. CI confirms the light figure on the next pull request. Reproduce the CI figure locally on a light-only venv (1790 passed, 1 skipped):
+Both figures were measured on 2026-10-24 at `670b4de`. The local `.venv` now also holds heavy packages (torch 2.8.0, pyannote.audio 3.3.2), so the full command there gives the heavy figure, 1797 passed. The light figure, 1793 passed and 2 skipped, comes from the same `.venv` with the heavy packages blocked from import; that run gave 1790 passed and 2 skipped at `9887e0b`, the previous measurement. CI confirms the light figure on the next pull request. Reproduce the CI figure locally on a light-only venv (1793 passed, 1 skipped):
 
 ```bash
 .venv\Scripts\python.exe -m pytest app/insights/tests/ app/agent_brain/tests/ --ignore=app/insights/tests/test_model_load_concurrency.py -q

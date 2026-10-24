@@ -4,7 +4,8 @@ Status: current as of wave S-D (S3); model-download, legacy fact-check and
 callback-content facts re-verified against the code 2026-10-11; currency
 provider changed to open.er-api.com 2026-10-17; fact-check default and
 reply encoding made precise 2026-10-19; diarization model changed to
-pyannote 3.1 2026-10-24. Companion to
+pyannote 3.1 2026-10-24, and its Hugging Face login removed the same
+day. Companion to
 [SECURITY-HARDENING-PLAN.md](SECURITY-HARDENING-PLAN.md).
 
 This document enumerates every point where VoiceIQ transmits data to a
@@ -122,12 +123,17 @@ fetching.
 |---|---|---|
 | Whisper (`openai-whisper`) | `openaipublic.azureedge.net` | Downloaded once to `~/.cache/whisper`, then verified locally by SHA-256; no network while the cached file is intact. |
 | Sentiment, topic, summary (Transformers), keywords (sentence-transformers) | `huggingface.co` | Weights cached after the first download, but the Hugging Face client still makes a metadata request on each process's first load unless `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1` is set (nothing in this repo sets them). |
-| pyannote diarization | `huggingface.co` | Downloads `pyannote/speaker-diarization-3.1`, `pyannote/segmentation-3.0` and `pyannote/wespeaker-voxceleb-resnet34-LM` into pyannote's own cache (`~/.cache/torch/pyannote`). Needs `PYANNOTE_AUTH_TOKEN` (fallback `HUGGINGFACE_TOKEN`) from an account that has accepted the conditions of the two gated pyannote models. Every cold load calls `huggingface_hub.login()`, a network call that sends the token and writes it to the local Hugging Face cache. If that call fails (offline, or offline mode set) diarization falls back to a single-speaker mock, and the response carries the `DIARIZATION_UNAVAILABLE` and `MOCK_DIARIZATION_USED` warnings. |
+| pyannote diarization | `huggingface.co` | Downloads `pyannote/speaker-diarization-3.1`, `pyannote/segmentation-3.0` and `pyannote/wespeaker-voxceleb-resnet34-LM` into pyannote's own cache (`~/.cache/torch/pyannote`). Needs `PYANNOTE_AUTH_TOKEN` (fallback `HUGGINGFACE_TOKEN`) from an account that has accepted the conditions of the two gated pyannote models. The token goes to huggingface.co only with these model requests: the service passes it to pyannote with each load and does not log in, so it never writes the token to disk (`670b4de`; before that, every cold load called `huggingface_hub.login()`). As with the Transformers row, each cold load still makes metadata requests, which carry the token, unless `HF_HUB_OFFLINE=1` is set. If the pipeline cannot load, diarization falls back to a single-speaker mock, and the response carries the `DIARIZATION_UNAVAILABLE` and `MOCK_DIARIZATION_USED` warnings. |
 | spaCy `en_core_web_sm` | — | Never fetched at runtime; it must be installed separately (`python -m spacy download en_core_web_sm`). Without it the keyword stage fails (`KEYWORDS_FAILED`), and so does sentiment (`SENTIMENT_FAILED`), because `SentimentService.analyze_speaker_segments` runs keyword extraction on every segment. |
 
-Air-gapped deployments: pre-populating the caches covers Whisper and the
-Transformers models (with the offline variables set), but **not** pyannote
-diarization as written, because of the unconditional `login()` call.
+Air-gapped deployments: pre-populating the caches covers Whisper, the
+Transformers models and pyannote diarization, with the offline variables
+set. Diarization still needs `PYANNOTE_AUTH_TOKEN` or `HUGGINGFACE_TOKEN`
+set, because the service does not try to load the pipeline without one
+(`app/services/diarization_service.py:120-123`). Checked on 2026-10-24
+with `HF_HUB_OFFLINE=1`: the pipeline loaded from the cache and a
+two-person call gave two speakers (`670b4de`, commit message). Before that
+commit, the `login()` call failed offline and every job got the mock.
 
 ---
 
