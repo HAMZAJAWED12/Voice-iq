@@ -1,6 +1,7 @@
 # app/services/diarization_service.py
 from __future__ import annotations
 
+import importlib
 import os
 import threading
 from collections import defaultdict
@@ -29,6 +30,36 @@ _DIARIZATION_PIPELINE = None
 # on shared hardware). Hot calls bypass the lock via double-check.
 _DIARIZATION_LOAD_LOCK = threading.Lock()
 
+# Classes the pyannote 3.1 checkpoints store besides tensors. PyTorch 2.6+
+# loads checkpoints with weights_only=True and refuses any other class;
+# naming these keeps that safe loader on instead of turning it off.
+_CHECKPOINT_GLOBALS: tuple[tuple[str, str], ...] = (
+    ("omegaconf.listconfig", "ListConfig"),
+    ("omegaconf.dictconfig", "DictConfig"),
+    ("torch.torch_version", "TorchVersion"),
+    ("pyannote.audio.core.task", "Specifications"),
+    ("pyannote.audio.core.task", "Problem"),
+    ("pyannote.audio.core.task", "Resolution"),
+)
+
+
+def _allow_checkpoint_globals() -> None:
+    """Allowlist `_CHECKPOINT_GLOBALS` for torch's weights-only loader.
+
+    A class that cannot be imported is skipped with a warning; a checkpoint
+    that needs it then fails to load with torch's own error.
+    """
+    add_safe_globals = getattr(torch.serialization, "add_safe_globals", None)
+    if add_safe_globals is None:  # torch before 2.4: no weights-only default to satisfy
+        return
+    allowed = []
+    for module_name, name in _CHECKPOINT_GLOBALS:
+        try:
+            allowed.append(getattr(importlib.import_module(module_name), name))
+        except (ImportError, AttributeError):
+            logger.warning("Checkpoint allowlist: %s.%s is not importable; skipped.", module_name, name)
+    add_safe_globals(allowed)
+
 
 class DiarizationService:
     """
@@ -44,7 +75,7 @@ class DiarizationService:
 
     def __init__(
         self,
-        model_id: str = "pyannote/speaker-diarization",
+        model_id: str = "pyannote/speaker-diarization-3.1",
         clustering_threshold: float = 0.65,
         force_conversation_mode: bool = True,
         min_speakers: int = 2,
@@ -98,15 +129,7 @@ class DiarizationService:
                 # Login to HF for gated models
                 login(token=token)
 
-                # --- PyTorch 2.6+ safe-loading allowlist (fixes OmegaConf errors) ---
-                try:
-                    import torch.serialization
-                    from omegaconf.dictconfig import DictConfig
-                    from omegaconf.listconfig import ListConfig
-
-                    torch.serialization.add_safe_globals([ListConfig, DictConfig])
-                except Exception:
-                    pass
+                _allow_checkpoint_globals()
 
                 _DIARIZATION_PIPELINE = Pipeline.from_pretrained(self.model_id, use_auth_token=token).to(DEVICE)
 
@@ -131,8 +154,9 @@ class DiarizationService:
     # Mock fallback diarization
     # ------------------------------------------------------------
     def _mock_diarization(self, wav_path: str) -> list[dict]:
-        data, sr = sf.read(wav_path)
-        duration = len(data) / sr if sr else 0.0
+        # The file header holds the duration; reading the samples would load
+        # the whole call into memory (about 920 MB of float64 for two hours).
+        duration = float(sf.info(wav_path).duration)
         logger.info(f"Mock diarization for {duration:.1f}s audio.")
         return [
             {
@@ -261,6 +285,10 @@ class DiarizationService:
         logger.info(f"Running diarization for: {wav_path}")
 
         if self.pipeline is None:
+            # No pipeline loaded (pyannote missing, no token, or the load
+            # failed; the log says which): the mock puts the whole call under
+            # one speaker.
+            warnings.append("DIARIZATION_UNAVAILABLE")
             return self._mock_diarization(wav_path), warnings
 
         try:

@@ -467,7 +467,9 @@ class TestDiarizeStage:
         assert "LOW_SNR_DIARIZATION_UNRELIABLE" in res["warnings"]
 
     @pytest.mark.parametrize(
-        "service_warnings", [[], ["DIARIZATION_FAILED_FALLBACK"]], ids=["no-model", "model-failed"]
+        "service_warnings",
+        [[], ["DIARIZATION_UNAVAILABLE"], ["DIARIZATION_FAILED_FALLBACK"]],
+        ids=["no-model", "no-pipeline", "model-failed"],
     )
     def test_mock_diarization_is_flagged(
         self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace, service_warnings: list[str]
@@ -480,6 +482,7 @@ class TestDiarizeStage:
 
         assert "MOCK_DIARIZATION_USED" in res["warnings"]
         assert "SINGLE_SPEAKER_MODE" in res["warnings"]
+        assert all(w in res["warnings"] for w in service_warnings)  # the service's own codes reach the response
         assert res["pipeline_meta"]["status"] == "ok"
 
     def test_real_diarization_is_not_flagged(self, orch: VoiceIQOrchestrator, io: JobIO, mx: SimpleNamespace) -> None:
