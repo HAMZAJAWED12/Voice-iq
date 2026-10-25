@@ -20,6 +20,7 @@ Files 01–10 below are the frozen Sprint 1–4 handoff. These are kept current:
 | [`FACT-CHECK-AGENT-STATUS.md`](FACT-CHECK-AGENT-STATUS.md) | Live status of the Sprint 7 fact-check agent: phase, progress, blockers, next milestone. |
 | [`FACTCHECK-AGENT-PHASE-0.md`](FACTCHECK-AGENT-PHASE-0.md) | Sprint 7 Phase 0 contract and the decision register (§1) — the only place decision status is recorded. |
 | [`D3-GOLD-SET-BRIEF.md`](D3-GOLD-SET-BRIEF.md) | Scoping brief for decision D3 (gold-set owner and resourcing). |
+| [`GOLD-SET-LABELLING-GUIDE.md`](GOLD-SET-LABELLING-GUIDE.md) | Labelling guide for the Phase 1 gold set (Layers A and B, synthetic, English); the data is in `app/evaluation/gold/`. |
 | [`DATA-FLOW.md`](DATA-FLOW.md) | Every point where data leaves the host. |
 | [`SECURITY-HARDENING-PLAN.md`](SECURITY-HARDENING-PLAN.md) | Tier S security hardening record. |
 | [`TIER-N-PLAN.md`](TIER-N-PLAN.md) | Tier N plan (N1–N4b). |
