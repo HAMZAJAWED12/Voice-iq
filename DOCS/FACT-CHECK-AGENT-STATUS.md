@@ -1,6 +1,6 @@
 # Fact-Check Agent — Live Status
 
-Owner: engineering · Status: **Phase 0 complete; Phase 1 may start** · Created: 2026-10-11 · Updated: 2026-10-24
+Owner: engineering · Status: **Phase 0 complete; Phase 1 may start** · Created: 2026-10-11 · Updated: 2026-10-28
 
 The one place that says where Sprint 7 stands. Update it with every
 milestone. Decision status is **not** kept here — it lives only in the
@@ -274,14 +274,13 @@ holds every role ([DECISIONS #50](DECISIONS.md#50-one-owner-holds-every-phase-0-
 
 ## Blockers
 
-Real blockers only. None blocks the start of Phase 1; the D5 run deadline
-is needed before the first bake-off run. Each open value below is listed in
+Real blockers only. None blocks the start of Phase 1 or the first bake-off
+run. Each open value below is listed in
 [PHASE-0 §8](FACTCHECK-AGENT-PHASE-0.md#8-exit-checklist) and must be set
 before the phase that uses it:
 
-- the agent's provisional run deadline (D5) — before the D6 criteria note
-  is signed (first bake-off run), then the Phase 2 runner and admission
-  defaults that follow it;
+- the Phase 2 runner and admission defaults that follow from D5's run
+  deadline (set 2026-10-28) — Phase 2;
 - the maximum evidence age per claim type, the remaining provider and
   Wikipedia terms, and the maximum excerpt length (PHASE-0 §6.3–§6.5) —
   Phases 4 and 5;
@@ -297,11 +296,14 @@ before the phase that uses it:
 
 **Phase 1 — model bake-off** (plan v1.1, Phase 1). It starts with the gold
 set, which may begin now: labelling is data preparation and needs no code.
-Before the first bake-off run: D5's open run deadline is set, the D6
-criteria note (who may win, the thresholds and the licence check), whose
-per-claim latency gate uses that figure, is signed, and the local model server of
-record is set up (U3: llama.cpp with model files pinned by revision and
-SHA-256). Fetching model files needs the project owner's go.
+D5's run deadline was set and the D6 criteria note
+([D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md): who may win, the gates,
+the margin and the licence check) was signed on 2026-10-28. Before the
+first bake-off run: the gold set is frozen as v1.0 after the owner's blind
+re-label, and the local model server of record is set up (U3: llama.cpp
+with model files pinned by revision and SHA-256). The note's section 11
+lists every precondition. Fetching model files needs the project owner's
+go.
 
 ## Acceptance evidence
 
@@ -316,5 +318,5 @@ deliverables):
   machine);
 - a model and its serving runtime are pinned;
 - the operating limits move from provisional to binding where Phase 1
-  measured them, including D5's open run deadline;
+  measured them, including D5's provisional run deadline;
 - this document moves Phase 1 to *Completed*.

@@ -56,8 +56,8 @@ record outside the repository.
 | D3 | Who owns and resources the gold set? | Eng manager | +2 days | — (must be named) | ✅ **signed 2026-10-19 — Option A**: Layers A+B, English, synthetic-first; labelling (data preparation, no code) may start before the Phase 1 gate. Gold-set owner: project owner (sole maintainer); drafts are machine-assisted and the owner checks every item; consistency check: the owner re-labels 40 items blind after one week (intra-rater agreement), in place of a second annotator; verdict labels move to D3b |
 | D3b | Verdict labels for the gold set (evidence-relative), split from D3 | Project owner (sole maintainer) | with Phase 4, after D4 | Evidence-relative labels after Phase 4 and D4 | ✅ **owner and approach signed 2026-10-19** with D3; labelling waits for Phase 4 and excludes out-of-scope rows |
 | D4 | Does "open-source" cover web search too, or only the LLM? | Senior sponsor | +3 days | Self-host search (SearXNG) | ✅ **signed 2026-10-19 — Option B**: covers the LLM and the search software; self-hosted SearXNG, whose upstream engines are third-party destinations governed by U4b |
-| D5 | Production GPU/RAM, and max acceptable fact-check latency? | Infrastructure | +5 days | — (must be measured) | ✅ **signed 2026-10-19** — model server on the VoiceIQ host's single NVIDIA laptop GPU (8 GB VRAM; 16 GB-class system RAM), shared with the audio pipeline, in its own process, never a third-party hosted API; Phase 1 measures on this host; p95 ≤ 5 min from run submission (end of audio processing; acceptance for /v2) to the final result (end of the D10 final pass for process-audio runs, terminal status for /v2 runs) at the claim cap, queueing included. **open:** the provisional run deadline — value not yet set (rule: the 5-minute budget minus the queue allowance and the D10 re-run time) |
-| D6 | Is Qwen3 mandatory, or may Qwen3.5 win the bake-off? | Senior sponsor | before Phase 1 ends | Let the measurement decide | ✅ **signed 2026-10-19 — Option 2**: Qwen3.5-4B may win under a criteria note signed before the first bake-off run; Qwen3-4B stays the default; the Phase 1 pin stays provisional on verdict quality until D3b labels exist |
+| D5 | Production GPU/RAM, and max acceptable fact-check latency? | Infrastructure | +5 days | — (must be measured) | ✅ **signed 2026-10-19** — model server on the VoiceIQ host's single NVIDIA laptop GPU (8 GB VRAM; 16 GB-class system RAM), shared with the audio pipeline, in its own process, never a third-party hosted API; Phase 1 measures on this host; p95 ≤ 5 min from run submission (end of audio processing; acceptance for /v2) to the final result (end of the D10 final pass for process-audio runs, terminal status for /v2 runs) at the claim cap, queueing included. **provisional run deadline set 2026-10-28** (project owner (sole maintainer), in the Infrastructure role, latency co-signed in the Product role): 125 s (`FACTCHECK_AGENT_RUN_DEADLINE_SEC`, §7), with a D10 re-run allowance of 25 s recorded beside it (§7); one run may wait, since (1 + 1) × (125 s + 25 s) = 300 s; re-checked once Phase 1 has measured latency |
+| D6 | Is Qwen3 mandatory, or may Qwen3.5 win the bake-off? | Senior sponsor | before Phase 1 ends | Let the measurement decide | ✅ **signed 2026-10-19 — Option 2**: Qwen3.5-4B may win under a criteria note signed before the first bake-off run; Qwen3-4B stays the default; the Phase 1 pin stays provisional on verdict quality until D3b labels exist. Criteria note signed 2026-10-28, before any bake-off run: [D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md) (literal margin reading) |
 | D7 | Which fact domains ship first? | Product | +5 days | General knowledge + finance; **exclude** healthcare/legal | ✅ **signed 2026-10-19 — Option B**: general knowledge, market data and weather; weather and stock prices only once their API keys are confirmed in the target deployment or D4's web fallback exists; healthcare, legal, personal-financial advice, current news and own-company claims are out of scope, get no verdict and create no review recommendation |
 | D8 | How long must v1 + legacy process-audio fields survive? | Product + consumers | before Phase 6 | Indefinitely within this project | ✅ **signed 2026-10-19 — Option B**, in the product role: v1 routes and fields unchanged through this project (Phase 3 detector improvements may change v1 results); removal later needs its own ticket, v2 meeting its accuracy gates, staged-rollout sign-off, written API-consumer sign-off and 1 month's notice |
 | D9 | Source-authority rules for high-stakes claims? | Product + legal | before Phase 5 | Tier 1 only — see §6.3 | ✅ **signed 2026-10-19 — Option A**: Tier 1 only, with four clauses — high-stakes defined (health, legal, personal financial); tiers from a reviewed domain table, never the model; classification fails closed; non-enabled domains stopped before retrieval |
@@ -174,8 +174,8 @@ and stays supported.
   are closed as `failed` at startup or by U8c's stale-run close, and D10-T
   governs their callback. The lease outlasts the run deadline plus the longest
   model call with its retry plus the D10 re-run time, or is renewed while
-  the worker lives. **Open:** D5's provisional run deadline — value not yet
-  set.
+  the worker lives. D5's provisional run deadline is 125 s and the D10
+  re-run allowance 25 s (2026-10-28, §7).
 - **Only the worker that still holds the claim may finish a run**, through a
   conditional update on run, worker and attempt, and only that worker runs
   the D10 final pass. A retried attempt never duplicates claim, evidence or
@@ -451,8 +451,9 @@ may read any run until #33 is revisited. A direct `POST /v2/fact-check`
 counts as consent (A6).
 **Numbers are provisional:** confirmed after D5, with the waiting depth
 derived from D5's p95 target (which includes queueing), and re-checked once
-Phase 1 has measured latency. **Open:** the provisional run deadline that
-derivation needs is not yet set (D5).
+Phase 1 has measured latency. With D5's provisional run deadline of 125 s
+and the 25 s re-run allowance (2026-10-28), the waiting depth is one run
+(§7).
 
 Verdict set — four members, deliberately renamed away from v1's truth
 language because the agent reports *what the evidence supports*, not what is
@@ -824,6 +825,8 @@ rows used in the Phase 1 bake-off, may go to that model server and nowhere
 else. No third-party-hosted inference service may be configured: the §7
 model-server address must point at an operator endpoint.
 
+**Gold-set drafting (guide Q15; owner sign-off 2026-10-28).** Synthetic rows drafted and revised with the drafting assistant are outside W6a (D3, U10); bake-off runs and any scoring or matching step use only the host's model server, never a hosted model.
+
 ### 6.1 What may leave the host
 
 Only these, and only when the feature is explicitly requested — through the
@@ -1050,7 +1053,7 @@ every new name against `app/insights/config/settings.py`.
 | `FACTCHECK_LLM_MODEL` | str | `""` | pinned model id (D6) |
 | `FACTCHECK_LLM_REVISION` | str | `""` | pinned revision, recorded in every result (U3: source revision and file SHA-256) |
 | `FACTCHECK_LLM_TIMEOUT_SEC` | float | `30.0` | per model call |
-| `FACTCHECK_AGENT_RUN_DEADLINE_SEC` | float | **open** | whole run; renamed from the draft's `FACTCHECK_RUN_DEADLINE_SEC` (A3 amendment (i)). **Open:** value not set at D5 (the drafted `120.0` is not signed). D5's rule: the 5-minute p95 budget minus the queue allowance and the D10 re-run time; re-checked once Phase 1 has measured latency |
+| `FACTCHECK_AGENT_RUN_DEADLINE_SEC` | float | `125.0` | whole run; renamed from the draft's `FACTCHECK_RUN_DEADLINE_SEC` (A3 amendment (i)). Set at D5 on 2026-10-28, provisional. D5's rule: the 5-minute p95 budget minus the queue allowance and the D10 re-run time (25 s, below); re-checked once Phase 1 has measured latency |
 | `FACTCHECK_AGENT_MAX_CLAIMS` | int | `20` | per session; renamed from the draft's `FACTCHECK_MAX_CLAIMS` (A3 amendment (i)) |
 | `FACTCHECK_MAX_SOURCES_PER_CLAIM` | int | `5` | |
 | `FACTCHECK_MAX_PAGES_PER_CLAIM` | int | `3` | bounds page fetching |
@@ -1077,8 +1080,14 @@ names them `FACTCHECK_AGENT_*` under the rule above, safe by default:
   derived from D5: with one job at a time, at most
   (300 s / (run deadline + D10 re-run time)) - 1 runs wait.
 
-**Open:** every default here except job concurrency; the lease length and
-the waiting depth follow the open run deadline.
+**D10 re-run allowance** (2026-10-28, Infrastructure role, recorded beside
+D5): 25 s. With the 125 s run deadline, (300 s / 150 s) - 1 = 1 run waits.
+Both are provisional and re-checked once Phase 1 has measured latency.
+
+**Open:** every default here except job concurrency. The waiting depth
+follows from the run deadline and the re-run allowance above; the lease
+length also needs the longest model call with its retry, which Phase 1
+measures.
 
 No model-server credential key is reserved: D5 puts the model server on the
 VoiceIQ host, never reachable from outside it (U3). W7 reserves one under the
@@ -1102,8 +1111,8 @@ leaves out the §6.3 high-stakes rule, which D9 settles; both were signed on
 - [x] **D2 signed** — job-based execution *(2026-09-04)*
 - [x] **D3 signed** — Option A, owned by the project owner (sole maintainer): Layers A+B, English, synthetic-first, about 3–4 person-days; labelling may start before the Phase 1 gate *(2026-10-19)*
 - [x] **D4 signed** — Option B: open-source covers the LLM and the search software (self-hosted SearXNG) *(2026-10-19)*
-- [x] **D5 signed** — model server on the VoiceIQ host's 8 GB GPU, shared with the audio pipeline; p95 ≤ 5 min, queueing included; provisional run deadline **open** *(2026-10-19)*
-- [x] **D6 signed** — Option 2: Qwen3.5-4B may win under a criteria note signed before the first bake-off run; Qwen3-4B stays the default *(2026-10-19)*
+- [x] **D5 signed** — model server on the VoiceIQ host's 8 GB GPU, shared with the audio pipeline; p95 ≤ 5 min, queueing included; provisional run deadline 125 s with a 25 s D10 re-run allowance, set 2026-10-28 *(2026-10-19)*
+- [x] **D6 signed** — Option 2: Qwen3.5-4B may win under a criteria note signed before the first bake-off run; Qwen3-4B stays the default; criteria note signed 2026-10-28 ([D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md)) *(2026-10-19)*
 - [x] **D7 signed** — Option B: general knowledge, market data and weather *(2026-10-19)*
 - [x] **D8 signed** — Option B: v1 unchanged through this project; removal later only under the exit criteria in §1 *(2026-10-19)*
 - [x] **D9 signed** — Option A: Tier 1 only for high-stakes claims *(2026-10-19)*
@@ -1118,10 +1127,6 @@ leaves out the §6.3 high-stakes rule, which D9 settles; both were signed on
 **Open items** (owner decision 2026-10-19 left these unset; none is filled
 in until the owner sets it):
 
-- **open:** D5 — the agent's provisional run deadline, in seconds. Rule:
-  the 5-minute budget minus the queue allowance and the D10 re-run time.
-  Needed before the first bake-off run, because the D6 criteria note's
-  per-claim latency gate uses the same figure.
 - **open:** U7 — whether `fact_check_report` shows `disabled` or `skipped`
   when the agent is enabled but its tables are missing.
 - **open:** U9 — whether `app.main` shares its `data/` volume with

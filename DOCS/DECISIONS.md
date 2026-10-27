@@ -74,6 +74,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 | 51 | Phase 0 is complete; Phase 1 may start | 2026-10-19 | — (owner) |
 | 52 | Gold-set labelling may start before the Phase 1 gate | 2026-10-19 | — (owner) |
 | 53 | Diarization uses pyannote 3.1 under the weights-only loader | 2026-10-24 | `9887e0b` |
+| 54 | D5 run deadline set; D6 criteria note signed | 2026-10-28 | — (owner) |
 
 ---
 
@@ -1010,6 +1011,29 @@ not repeat it.
 
 ---
 
+## Phase 1 bake-off inputs (2026-10-28)
+
+### 54. D5 run deadline set; D6 criteria note signed
+
+- **Context:** The Phase 0 sign-off left D5's provisional run deadline
+  open. The signed D6 line lets Qwen3.5-4B win the Phase 1 bake-off only
+  under a criteria note signed before the first run, and that note's
+  latency gate uses the deadline.
+- **Decision:** The project owner set the run deadline on 2026-10-28 at
+  125 s, with a D10 re-run allowance of 25 s, and signed the D6 criteria
+  note, [D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md), in the senior
+  sponsor role. The note fixes the three candidates, the run conditions,
+  the scoring, the gates, the margin (literal reading) and the decision
+  rule before any result exists. The gold-set guide's Q15 note was added
+  to PHASE-0 §6.
+- **Consequence:** With one job at a time, one run may wait:
+  (1 + 1) × (125 s + 25 s) = 300 s, D5's p95 budget. The note's latency
+  gate gives the model 62.5 s per session at the 20-claim cap. Both are
+  provisional and are re-checked once Phase 1 has measured latency.
+- **Date:** 2026-10-28 · **Commit:** — (owner)
+
+---
+
 ## Open decisions
 
 These are not settled yet. None is in force. Details are in
@@ -1019,8 +1043,8 @@ These are not settled yet. None is in force. Details are in
 
 **Values left open at the Phase 0 sign-off (2026-10-19)**
 
-- The agent's provisional run deadline (D5), and the runner and admission
-  defaults that follow from it.
+- The runner and admission defaults that follow from D5's run deadline,
+  set on 2026-10-28 ([#54](#54-d5-run-deadline-set-d6-criteria-note-signed)).
 - Whether `fact_check_report` shows `disabled` or `skipped` when the agent is
   enabled but its tables are missing (U7).
 - Whether `app.main` shares its `data/` volume with `app.insight_main`, and
