@@ -1,6 +1,6 @@
 # Fact-Check Agent — Live Status
 
-Owner: engineering · Status: **Phase 0 complete; Phase 1 may start** · Created: 2026-10-11 · Updated: 2026-10-28
+Owner: engineering · Status: **Phase 0 complete; Phase 1 may start** · Created: 2026-10-11 · Updated: 2026-10-30
 
 The one place that says where Sprint 7 stands. Update it with every
 milestone. Decision status is **not** kept here — it lives only in the
@@ -298,7 +298,8 @@ before the phase that uses it:
 set, which may begin now: labelling is data preparation and needs no code.
 D5's run deadline was set and the D6 criteria note
 ([D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md): who may win, the gates,
-the margin and the licence check) was signed on 2026-10-28. Before the
+the margin and the licence check) was signed on 2026-10-28; its launch line
+was revised in S2 ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md)) on 2026-10-30. Before the
 first bake-off run: the gold set is frozen as v1.0 after the owner's blind
 re-label, and the local model server of record is set up (U3: llama.cpp
 with model files pinned by revision and SHA-256). The note's section 11

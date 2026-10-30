@@ -75,6 +75,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 | 52 | Gold-set labelling may start before the Phase 1 gate | 2026-10-19 | — (owner) |
 | 53 | Diarization uses pyannote 3.1 under the weights-only loader | 2026-10-24 | `9887e0b` |
 | 54 | D5 run deadline set; D6 criteria note signed | 2026-10-28 | — (owner) |
+| 55 | D6 criteria note S2: launch line | 2026-10-30 | — (owner) |
 
 ---
 
@@ -1031,6 +1032,22 @@ not repeat it.
   gate gives the model 62.5 s per session at the 20-claim cap. Both are
   provisional and are re-checked once Phase 1 has measured latency.
 - **Date:** 2026-10-28 · **Commit:** — (owner)
+
+### 55. D6 criteria note S2: launch line
+
+- **Context:** The pinned llama.cpp build (`b11936`) does three things by default that S1's
+  frozen launch line left on. It fits layers and context automatically, although S1 says fitting
+  is off. It keeps a host-RAM prompt cache that also does work for requests that send
+  `cache_prompt: false`. And it makes context checkpoints for models whose memory cannot be rolled
+  back, which among the candidates means Qwen3.5-4B only.
+- **Decision:** The project owner signed S2, [D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md), on 2026-10-30
+  in the senior sponsor role, before any bake-off run. It adds `-fit off --cache-ram 0 -ctxcp 0`
+  to the launch line, and a check that the running server's command line equals that line.
+  Nothing else changes.
+- **Consequence:** Timed calls carry no cache or checkpoint work, and gate M's RAM figure leaves
+  out the prompt cache, so all three candidates run under the same conditions. S1 stays as the
+  record of the first signature.
+- **Date:** 2026-10-30 · **Commit:** — (owner)
 
 ---
 
