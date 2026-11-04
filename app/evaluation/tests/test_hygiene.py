@@ -1,8 +1,8 @@
-"""Hygiene of the harness package: H1 spec T1, T2, T4 and G8.
+"""Hygiene of the harness package: H1 spec T1, T2, T4 and G8, and H2 spec R48.
 
 S2 §3.12: "Gold rows go only to the host's model server, never to a hosted model, and that includes any scoring or
 matching step." The scoring core therefore imports only the standard library and pydantic, and runs with the network
-switched off.
+switched off. Only `client` may import httpx, and it talks only to http://127.0.0.1:<port> (S2 §3.2).
 
 T2: these tests run on the 3.12 `.venv`, so 3.11+ syntax, 3.11+ names and PEP 701 f-strings are checked here. What an
 AST cannot see, such as a 3.11+ attribute reached through a variable, is left to
@@ -27,7 +27,8 @@ from app.evaluation.tests._fixtures import fixture_x, output_json, run_xm, run_x
 
 PACKAGE = "app.evaluation.bakeoff"
 BAKEOFF = Path(__file__).resolve().parents[1] / "bakeoff"
-MODULES = ("__init__", "gold", "extraction", "scoring", "stats")
+H2_MODULES = ("schemas", "probe", "client")
+MODULES = ("__init__", "gold", "extraction", "scoring", "stats", *H2_MODULES)
 ALLOWED = frozenset(
     {
         "__future__",
@@ -51,6 +52,7 @@ ALLOWED = frozenset(
         "pydantic",
     }
 )
+EXTRA_ALLOWED = {"client": frozenset({"httpx", "time"})}
 
 
 def _source(module: str) -> str:
@@ -78,9 +80,13 @@ def _disallowed(source: str) -> set[str]:
     return {name for name in _imports(source) if name not in ALLOWED and not _own(name)}
 
 
+def _disallowed_for(module: str, source: str) -> set[str]:
+    return _disallowed(source) - EXTRA_ALLOWED.get(module, frozenset())
+
+
 @pytest.mark.parametrize("module", MODULES)
 def test_imports_are_on_the_allowlist(module: str) -> None:
-    assert _disallowed(_source(module)) == set()
+    assert _disallowed_for(module, _source(module)) == set()
 
 
 def test_the_check_catches_a_network_client() -> None:
@@ -92,6 +98,37 @@ def test_the_check_catches_a_network_client() -> None:
     assert _disallowed("from . import scoring\nfrom .gold import GoldSet\n") == set()
 
 
+@pytest.mark.parametrize("module", [module for module in MODULES if module != "client"])
+def test_only_the_client_may_import_httpx(module: str) -> None:
+    assert _disallowed_for(module, _source(module) + "\nimport httpx\n") == {"httpx"}
+
+
+def test_the_client_source_passes_with_httpx_and_time() -> None:
+    source = _source("client")
+    assert {"httpx", "time"} <= _imports(source)
+    assert _disallowed_for("client", source) == set()
+
+
+@pytest.mark.parametrize(
+    ("line", "name"),
+    [
+        ("import requests", "requests"),
+        ("import socket", "socket"),
+        ("from urllib import request", "urllib"),
+        ("import subprocess", "subprocess"),
+    ],
+)
+def test_the_client_may_import_no_other_way_out(line: str, name: str) -> None:
+    assert _disallowed_for("client", _source("client") + f"\n{line}\n") == {name}
+
+
+@pytest.mark.parametrize("module", H2_MODULES)
+def test_h2_modules_touch_no_files_and_print_nothing(module: str) -> None:
+    source = _source(module)
+    assert not _imports(source) & {"os", "pathlib", "io", "logging"}
+    assert "print" not in {node.id for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Name)}
+
+
 def test_import_direction() -> None:
     for module in ("gold", "extraction", "stats"):
         assert {name for name in _imports(_source(module)) if _own(name)} == set(), module
@@ -101,6 +138,13 @@ def test_import_direction() -> None:
         f"{PACKAGE}.stats",
     }
     assert {name for name in _imports(_source("__init__")) if _own(name)} == set()
+    assert {name for name in _imports(_source("schemas")) if _own(name)} == set()
+    assert {name for name in _imports(_source("probe")) if _own(name)} == {f"{PACKAGE}.extraction"}
+    assert {name for name in _imports(_source("client")) if _own(name)} == {
+        f"{PACKAGE}.extraction",
+        f"{PACKAGE}.probe",
+        f"{PACKAGE}.schemas",
+    }
 
 
 @pytest.mark.parametrize("module", MODULES)
@@ -128,7 +172,7 @@ def test_the_core_runs_with_the_network_switched_off(monkeypatch: pytest.MonkeyP
 
 def test_owner_markers_are_in_the_sources() -> None:
     sources = "\n".join(_source(module) for module in MODULES)
-    for number in range(1, 5):
+    for number in (*range(1, 5), *range(26, 31), 52):
         assert f"NEEDS-OWNER(AMB-{number})" in sources
 
 
@@ -139,6 +183,9 @@ def test_owner_markers_are_in_the_sources() -> None:
         ("extraction", ("§3.8", "§3.10", "PHASE-0 §2.2", "§5.3")),
         ("scoring", ("§5.1", "§5.2", "§5.3", "§6")),
         ("stats", ("§8", "§3.13")),
+        ("schemas", ("§3.8", "§3.10", "§4", "PHASE-0 §2.2")),
+        ("probe", ("§3.8", "§4", "§6", "PHASE-0 §2.2")),
+        ("client", ("§3.2", "§3.3", "§3.5", "§3.6", "§3.7", "§3.8", "§3.9", "PHASE-0 §6.6", "PHASE-0 §7")),
     ],
 )
 def test_module_docstrings_cite_their_sections(module: str, citations: tuple[str, ...]) -> None:
