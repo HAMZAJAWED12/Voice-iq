@@ -8,7 +8,6 @@ from collections import defaultdict
 
 import soundfile as sf
 import torch
-from huggingface_hub import login
 
 from app.utils.logger import logger
 
@@ -126,11 +125,10 @@ class DiarizationService:
             logger.info("Loading Pyannote speaker-diarization pipeline...")
 
             try:
-                # Login to HF for gated models
-                login(token=token)
-
                 _allow_checkpoint_globals()
 
+                # The gated models get the token here, per call. No login(): it
+                # made a network call and wrote the token to the HF cache on disk.
                 _DIARIZATION_PIPELINE = Pipeline.from_pretrained(self.model_id, use_auth_token=token).to(DEVICE)
 
                 # Optional: adjust clustering threshold
