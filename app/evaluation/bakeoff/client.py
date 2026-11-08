@@ -381,6 +381,24 @@ class ContextCheck:
 
 
 @dataclass(frozen=True, slots=True)
+class Modalities:
+    """The `/props` `modalities` block. All false means no projector is loaded (S2 §3.3; plan row H3: "no mmproj")."""
+
+    vision: bool
+    video: bool
+    audio: bool
+
+    def __post_init__(self) -> None:
+        if not all(isinstance(value, bool) for value in (self.vision, self.video, self.audio)):
+            raise ValueError("Modalities fields must be bools")
+
+    @property
+    def on(self) -> tuple[str, ...]:
+        """The names set true, in field order."""
+        return tuple(name for name in ("vision", "video", "audio") if getattr(self, name))
+
+
+@dataclass(frozen=True, slots=True)
 class ServerProps:
     """What `GET /props` reports, for H3's pre-run record. H2 never takes a limit from it."""
 
@@ -390,6 +408,7 @@ class ServerProps:
     model_path: str
     build_info: str
     chat_template: str
+    modalities: Modalities
 
     def __post_init__(self) -> None:
         for name in ("n_ctx", "total_slots"):
@@ -399,6 +418,8 @@ class ServerProps:
         for name in ("model_alias", "model_path", "build_info", "chat_template"):
             if not isinstance(getattr(self, name), str):
                 raise ValueError(f"ServerProps.{name} must be a string")
+        if not isinstance(self.modalities, Modalities):
+            raise ValueError("ServerProps.modalities must be a Modalities")
 
 
 @dataclass(frozen=True, slots=True)
@@ -707,6 +728,16 @@ class _SettingsOut(_Resp):
     n_ctx: int
 
 
+class _ModalitiesOut(BaseModel):
+    """The pinned server sends exactly these keys, and "all false" cannot be claimed of a key that was dropped."""
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    vision: bool
+    video: bool
+    audio: bool
+
+
 class _PropsOut(_Resp):
     default_generation_settings: _SettingsOut
     total_slots: int
@@ -714,6 +745,7 @@ class _PropsOut(_Resp):
     model_path: str
     build_info: str
     chat_template: str
+    modalities: _ModalitiesOut
 
 
 _Model = TypeVar("_Model", bound=BaseModel)
@@ -1000,6 +1032,7 @@ class ModelServerClient:
             model_path=props.model_path,
             build_info=props.build_info,
             chat_template=props.chat_template,
+            modalities=Modalities(props.modalities.vision, props.modalities.video, props.modalities.audio),
         )
 
     def _exchange(self, method: str, path: str, content: bytes | None, timeout_sec: float) -> _Exchange:
@@ -1091,7 +1124,7 @@ class ModelServerClient:
         error_text = ""
         output: Extraction | ProbeOutput | None = None
         try:
-            # NEEDS-OWNER(AMB-52): an escaped lone surrogate passes R13 and H1's parse, but canonical_json refuses it
+            # AMB-52: an escaped lone surrogate passes R13 and H1's parse; records.record_json stores it as its escape
             output = validate(content, choice.finish_reason)
         except ExtractionInvalid as exc:  # only this: both it and ValidationError subclass ValueError
             failure_kind, error_text = exc.kind, exc.error_text

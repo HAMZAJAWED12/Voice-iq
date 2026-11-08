@@ -59,7 +59,7 @@ def chat_response(
         "choices": [{"finish_reason": finish_reason, "index": 0, "message": message}],
         "created": 1,
         "model": "qwen3-4b",
-        "system_fingerprint": "b11936-27b7a8a0",
+        "system_fingerprint": "b1-27b7a8a",
         "object": "chat.completion",
         "usage": {
             "completion_tokens": completion_tokens,

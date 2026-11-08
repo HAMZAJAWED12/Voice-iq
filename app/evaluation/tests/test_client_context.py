@@ -26,6 +26,7 @@ from app.evaluation.bakeoff.client import (
     ClientFault,
     ContextBudgetExceeded,
     ContextCheck,
+    Modalities,
     ModelServerClient,
     ServerCheckError,
     ServerProps,
@@ -64,9 +65,11 @@ PROPS: dict[str, Any] = {
     "total_slots": 1,
     "model_alias": "qwen3-4b",
     "model_path": "/m/q.gguf",
-    "build_info": "b11936-27b7a8a0",
+    "build_info": "b1-27b7a8a",
     "chat_template": "...<think>...",
+    "modalities": {"vision": False, "video": False, "audio": False},
 }
+NO_MODALITIES = Modalities(False, False, False)
 
 
 @pytest.fixture(autouse=True)
@@ -675,7 +678,7 @@ def test_r10_the_fault_s_defaults() -> None:
 def test_r29_the_spec_s_example() -> None:
     client, server = make_client(props_response(), clock=FakeClock(0, 1))
     props = client.fetch_props()
-    assert props == ServerProps(12288, 1, "qwen3-4b", "/m/q.gguf", "b11936-27b7a8a0", "...<think>...")
+    assert props == ServerProps(12288, 1, "qwen3-4b", "/m/q.gguf", "b1-27b7a8a", "...<think>...", NO_MODALITIES)
     assert json.loads(canonical_json(dataclasses.asdict(props)))["n_ctx"] == 12288
     assert len(canonical_sha256(props.chat_template)) == 64
     assert server.requests[0].method == "GET"
@@ -697,7 +700,21 @@ def test_r29_field_order() -> None:
         "model_path",
         "build_info",
         "chat_template",
+        "modalities",
     ]
+
+
+@pytest.mark.parametrize(
+    ("block", "expected"),
+    [
+        pytest.param({"vision": False, "video": False, "audio": False}, NO_MODALITIES, id="all-false"),
+        pytest.param({"vision": True, "video": False, "audio": False}, Modalities(True, False, False), id="vision"),
+        pytest.param({"audio": True, "video": True, "vision": True}, Modalities(True, True, True), id="any-key-order"),
+    ],
+)
+def test_t1_the_modalities_are_copied_field_by_field(block: dict[str, bool], expected: Modalities) -> None:
+    client, _server = make_client(props_response(modalities=block))
+    assert client.fetch_props().modalities == expected
 
 
 def surrogate_props() -> list[Any]:
@@ -737,9 +754,47 @@ def surrogate_props() -> list[Any]:
             lambda: httpx.Response(200, content=b"{}"),
             "props: malformed response: default_generation_settings: Field required; total_slots: Field required; "
             "model_alias: Field required; model_path: Field required; build_info: Field required; "
-            "chat_template: Field required",
+            "chat_template: Field required; modalities: Field required",
             200,
             id="empty-object",
+        ),
+        pytest.param(
+            lambda: httpx.Response(
+                200, content=json.dumps({k: v for k, v in PROPS.items() if k != "modalities"}).encode("utf-8")
+            ),
+            "props: malformed response: modalities: Field required",
+            200,
+            id="t1-no-modalities",
+        ),
+        pytest.param(
+            lambda: props_response(modalities={"vision": "false", "video": False, "audio": False}),
+            "props: malformed response: modalities.vision: Input should be a valid boolean",
+            200,
+            id="t1-vision-a-str",
+        ),
+        pytest.param(
+            lambda: props_response(modalities={"vision": 0, "video": False, "audio": False}),
+            "props: malformed response: modalities.vision: Input should be a valid boolean",
+            200,
+            id="t1-vision-int-0",
+        ),
+        pytest.param(
+            lambda: props_response(modalities={"vision": 1, "video": False, "audio": False}),
+            "props: malformed response: modalities.vision: Input should be a valid boolean",
+            200,
+            id="t1-vision-int-1",
+        ),
+        pytest.param(
+            lambda: props_response(modalities={"vision": False}),
+            "props: malformed response: modalities.video: Field required; modalities.audio: Field required",
+            200,
+            id="t1-two-keys-missing",
+        ),
+        pytest.param(
+            lambda: props_response(modalities={"vision": False, "video": False, "audio": False, "text": True}),
+            "props: malformed response: modalities.text: Extra inputs are not permitted",
+            200,
+            id="t1-a-fourth-key",
         ),
         pytest.param(
             lambda: httpx.Response(200, content=b"oops"), f"props: malformed response: {FIRST_CHAR}", 200, id="not-json"
@@ -776,13 +831,16 @@ def test_r29_any_failure_is_a_check_error(step: Any, text: str, status: int | No
 @pytest.mark.parametrize(
     "fields",
     [
-        ("12288", 1, "a", "p", "b", "t"),
-        (True, 1, "a", "p", "b", "t"),
-        (12288, 1.0, "a", "p", "b", "t"),
-        (12288, 1, None, "p", "b", "t"),
-        (12288, 1, "a", 3, "b", "t"),
-        (12288, 1, "a", "p", b"b", "t"),
-        (12288, 1, "a", "p", "b", None),
+        ("12288", 1, "a", "p", "b", "t", NO_MODALITIES),
+        (True, 1, "a", "p", "b", "t", NO_MODALITIES),
+        (12288, 1.0, "a", "p", "b", "t", NO_MODALITIES),
+        (12288, 1, None, "p", "b", "t", NO_MODALITIES),
+        (12288, 1, "a", 3, "b", "t", NO_MODALITIES),
+        (12288, 1, "a", "p", b"b", "t", NO_MODALITIES),
+        (12288, 1, "a", "p", "b", None, NO_MODALITIES),
+        (12288, 1, "a", "p", "b", "t", None),
+        (12288, 1, "a", "p", "b", "t", {"vision": False, "video": False, "audio": False}),
+        (12288, 1, "a", "p", "b", "t", (False, False, False)),
     ],
 )
 def test_r29_server_props_refuse_wrong_types(fields: tuple[Any, ...]) -> None:
@@ -790,8 +848,13 @@ def test_r29_server_props_refuse_wrong_types(fields: tuple[Any, ...]) -> None:
         ServerProps(*fields)
 
 
+def test_t1_modalities_are_required() -> None:
+    with pytest.raises(TypeError):
+        ServerProps(12288, 1, "a", "p", "b", "t")  # type: ignore[call-arg]
+
+
 def test_r29_server_props_are_frozen() -> None:
-    props = ServerProps(12288, 1, "a", "p", "b", "t")
+    props = ServerProps(12288, 1, "a", "p", "b", "t", NO_MODALITIES)
     with pytest.raises(dataclasses.FrozenInstanceError):
         props.n_ctx = 1  # type: ignore[misc]
     assert not hasattr(props, "__dict__")

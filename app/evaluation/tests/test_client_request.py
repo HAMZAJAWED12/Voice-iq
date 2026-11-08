@@ -1150,7 +1150,7 @@ def test_r46_chat_response_is_in_the_pinned_shape() -> None:
     assert set(body) == {"choices", "created", "model", "system_fingerprint", "object", "usage", "id", "timings"}
     assert body["object"] == "chat.completion"
     assert body["model"] == "qwen3-4b"
-    assert body["system_fingerprint"] == "b11936-27b7a8a0"
+    assert body["system_fingerprint"] == "b1-27b7a8a"
     assert body["choices"] == [
         {
             "finish_reason": "stop",

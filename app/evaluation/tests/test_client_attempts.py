@@ -47,6 +47,7 @@ from app.evaluation.bakeoff.extraction import (
     parse_extraction,
 )
 from app.evaluation.bakeoff.probe import ProbeOutput
+from app.evaluation.bakeoff.records import call_from_dict, call_to_dict, record_json, record_loads
 from app.evaluation.bakeoff.schemas import canonical_json
 from app.evaluation.tests._client_fixtures import (
     BUNDLE,
@@ -177,7 +178,7 @@ def test_r11_a_well_formed_200_fills_the_record() -> None:
     assert attempt.usage == Usage(100, 10, 0)
     assert attempt.timings == TIMINGS
     assert attempt.server_model == "qwen3-4b"
-    assert attempt.system_fingerprint == "b11936-27b7a8a0"
+    assert attempt.system_fingerprint == "b1-27b7a8a"
     assert attempt.content == EMPTY
     assert attempt.reasoning_content is None
     assert attempt.failure_kind is None
@@ -913,7 +914,7 @@ def test_r11_r12_row_6_a_failed_validation_keeps_its_whole_response(finish_reaso
         assert (attempt.failure_kind, attempt.error_text) == (kind, text)
         assert attempt.usage == Usage(100, 10, 2)
         assert attempt.timings == dataclasses.replace(TIMINGS, cache_n=2)
-        assert (attempt.server_model, attempt.system_fingerprint) == ("qwen3-4b", "b11936-27b7a8a0")
+        assert (attempt.server_model, attempt.system_fingerprint) == ("qwen3-4b", "b1-27b7a8a")
         assert attempt.reasoning_content == "r"
     assert second_body(server) == repair_bytes(SINGLE, "not json", text)
 
@@ -2128,9 +2129,8 @@ def test_r36_a_failed_probe_stays_failed(steps: Callable[[], tuple[Any, ...]], o
     assert second_body(server) == expected
 
 
-# ---------------------------------------------------------------- R23, proposed AMB-52: an escape the model wrote
+# ---------------------------------------------------------------- R23, AMB-52 option (a): an escape the model wrote
 
-AMB_52 = "proposed AMB-52: the owner rules on this before H3 stores a record, and that ruling replaces these pins"
 OUTSIDE_SURROGATE = f"citations.0.sourceId: '{chr(92)}ud800' is not a source id of this bundle"
 
 
@@ -2145,7 +2145,16 @@ def non_checkable_output(**fields: Any) -> str:
     return json.dumps({"claims": [], "nonCheckable": [entry]})
 
 
-@pytest.mark.xfail(strict=True, raises=UnicodeEncodeError, reason=AMB_52)
+def assert_stored_as_its_escape(call: CallRecord) -> None:
+    """H3 spec T2. `canonical_json` still refuses the value; `record_json` stores it and reads it back unchanged."""
+    with pytest.raises(UnicodeEncodeError):
+        canonical_json(dataclasses.asdict(call))
+    raw = record_json(call_to_dict(call))
+    assert raw.isascii()
+    assert call_from_dict(record_loads(raw)) == call
+    assert f"{chr(92)}ud800".encode("ascii") in raw
+
+
 @pytest.mark.parametrize(
     "content",
     [
@@ -2158,21 +2167,19 @@ def non_checkable_output(**fields: Any) -> str:
         pytest.param(non_checkable_output(speakerId=SURROGATE), id="non-checkable-speaker-id"),
     ],
 )
-def test_r23_amb_52_a_valid_extraction_holding_an_escaped_surrogate_cannot_be_stored(content: str) -> None:
+def test_r23_amb_52_a_valid_extraction_holding_an_escaped_surrogate_is_stored_as_its_escape(content: str) -> None:
     assert content.isascii()
     call, server = run_extract(chat_response(content))
     assert (call.outcome, paths(server)) == ("valid", [CHAT_PATH])
-    canonical_json(dataclasses.asdict(call))
+    assert_stored_as_its_escape(call)
 
 
-@pytest.mark.xfail(strict=True, raises=UnicodeEncodeError, reason=AMB_52)
-def test_r23_amb_52_a_valid_probe_holding_an_escaped_surrogate_cannot_be_stored() -> None:
+def test_r23_amb_52_a_valid_probe_holding_an_escaped_surrogate_is_stored_as_its_escape() -> None:
     call, server = run_probe(chat_response(probe_text("src_1", reason=SURROGATE)))
     assert (call.outcome, paths(server)) == ("valid", [CHAT_PATH])
-    canonical_json(dataclasses.asdict(call))
+    assert_stored_as_its_escape(call)
 
 
-@pytest.mark.xfail(strict=True, raises=UnicodeEncodeError, reason=AMB_52)
 @pytest.mark.parametrize(
     ("raw", "error", "last", "outcome"),
     [
@@ -2185,7 +2192,7 @@ def test_r23_amb_52_a_valid_probe_holding_an_escaped_surrogate_cannot_be_stored(
         ),
     ],
 )
-def test_r23_amb_52_a_cited_id_holding_an_escaped_surrogate_cannot_be_stored(
+def test_r23_amb_52_a_cited_id_holding_an_escaped_surrogate_is_stored_as_its_escape(
     raw: str, error: str, last: str, outcome: str
 ) -> None:
     call, server = run_probe(chat_response(raw), input_tokens_response(900), chat_response(last))
@@ -2194,7 +2201,7 @@ def test_r23_amb_52_a_cited_id_holding_an_escaped_surrogate_cannot_be_stored(
     assert (first.cited_source_ids, first.unknown_source_ids) == ((SURROGATE,), (SURROGATE,))
     assert second_body(server) == repair_bytes(PROBE, raw, error)
     assert call.outcome == outcome
-    canonical_json(dataclasses.asdict(call))
+    assert_stored_as_its_escape(call)
 
 
 @pytest.mark.parametrize(
@@ -2228,7 +2235,7 @@ VALID_FIELDS: dict[str, Any] = {
     "usage": Usage(100, 10, 0),
     "timings": TIMINGS,
     "server_model": "qwen3-4b",
-    "system_fingerprint": "b11936-27b7a8a0",
+    "system_fingerprint": "b1-27b7a8a",
     "content": EMPTY,
     "reasoning_content": None,
     "thinking": ThinkingCheck(False, False),
@@ -2783,6 +2790,7 @@ def test_section_3_the_response_models_config() -> None:
         "allow_inf_nan": False,
     }
     assert client_module._MessageOut.model_config == {"strict": True, "extra": "forbid", "frozen": True}
+    assert client_module._ModalitiesOut.model_config == {"strict": True, "extra": "forbid", "frozen": True}
     for name in (
         "_ChoiceOut",
         "_PromptDetailsOut",
