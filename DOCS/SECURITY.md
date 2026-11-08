@@ -1,4 +1,4 @@
-Last verified: 2026-10-24, 9887e0b
+Last verified: 2026-10-24, 670b4de
 # Security
 
 This page covers the security controls in the VoiceIQ service at the commit
@@ -401,7 +401,7 @@ The pyannote checkpoints load through PyTorch's weights-only loader, the
 default since PyTorch 2.6, which restores tensors and a short list of
 allowed classes instead of running arbitrary unpickling. The service
 allows the six classes the pyannote 3.1 checkpoints store, by name, and
-nothing else (`app/services/diarization_service.py:33-61`, `9887e0b`).
+nothing else (`app/services/diarization_service.py:32-60`, `9887e0b`).
 The allowance applies to the whole process from the first load attempt,
 whether or not the model then loads. The
 service never sets `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD`; setting it turns
@@ -429,7 +429,7 @@ revision; no revision is pinned.
 | Alpha Vantage key | `VOICEIQ_ALPHAVANTAGE_API_KEY` | `settings.py:278-281` |
 | Callback HMAC secret | `VOICEIQ_AGENT_CALLBACK_SECRET` | `app/agent_brain/config/settings.py:17` |
 | Callback URL (a secret if it embeds a token) | `VOICEIQ_AGENT_CALLBACK_URL` | `app/agent_brain/config/settings.py:16` |
-| Hugging Face token (full pipeline only) | `PYANNOTE_AUTH_TOKEN`, then `HUGGINGFACE_TOKEN` | `app/services/diarization_service.py:121` |
+| Hugging Face token (full pipeline only) | `PYANNOTE_AUTH_TOKEN`, then `HUGGINGFACE_TOKEN` | `app/services/diarization_service.py:120` |
 | Database credentials, if the URL has any | `VOICEIQ_DATABASE_URL` | `settings.py:65-71` |
 
 This table lists only the settings that hold secrets. Every setting, with
@@ -447,7 +447,7 @@ its default, is in [SYSTEM.md §3](SYSTEM.md#3-configuration).
   provider key turns that client off. An empty callback URL or secret turns
   the callback off (`settings.py:223-231`, `:271-281`,
   `app/agent_brain/config/settings.py:16-17`, `:26-28`,
-  `diarization_service.py:121-124`).
+  `diarization_service.py:120-123`).
 - The service's own code does not write key values to its logs (control 10).
   Do not add log lines that print settings objects, source-client request
   URLs or httpx exception text.
@@ -456,10 +456,15 @@ its default, is in [SYSTEM.md §3](SYSTEM.md#3-configuration).
 - Settings are cached once per process (`settings.py:313-321`,
   `app/agent_brain/config/settings.py:31-33`). A rotated key takes effect
   only after a restart.
-- Each cold load of the diarization model calls `huggingface_hub.login()`
-  (`diarization_service.py:130`). Per [DATA-FLOW.md](DATA-FLOW.md) §3, that
-  call sends the token to huggingface.co and writes it to the local Hugging
-  Face cache. Protect that directory as you would the `.env` file.
+- The diarization service passes the Hugging Face token to pyannote with
+  each model load and does not log in, so it never writes the token to
+  disk (`diarization_service.py:130-132`, `670b4de`). The token still goes to
+  huggingface.co with the model requests ([DATA-FLOW.md](DATA-FLOW.md) §3).
+  Before `670b4de`, each cold load called `huggingface_hub.login()`, which
+  saved the token in the local Hugging Face cache (by default
+  `~/.cache/huggingface/token`). A host that ran an earlier version may
+  still hold it there: protect that file as you would the `.env` file, and
+  delete it when the token is rotated or the host is retired.
 
 **Rotation after an exposure**
 

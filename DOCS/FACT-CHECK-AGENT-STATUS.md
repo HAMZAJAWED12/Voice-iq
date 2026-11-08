@@ -1,6 +1,6 @@
 # Fact-Check Agent — Live Status
 
-Owner: engineering · Status: **Phase 0 complete; Phase 1 may start** · Created: 2026-10-11 · Updated: 2026-10-24
+Owner: engineering · Status: **Phase 0 complete; Phase 1 may start** · Created: 2026-10-11 · Updated: 2026-10-30
 
 The one place that says where Sprint 7 stands. Update it with every
 milestone. Decision status is **not** kept here — it lives only in the
@@ -15,7 +15,7 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 | | |
 |---|---|
 | Date | 2026-10-24 |
-| Branch | `main` @ `6e92898` (pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix is on `sprint7/diarization-fix` (`9887e0b`), not merged |
+| Branch | `main` @ `4025199` (pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix (`9887e0b`) was merged by pull request #3 (`4025199`); the removal of diarization's Hugging Face login is on `sprint7/diarization-no-login` (`670b4de`), not merged |
 | Current phase | **Phase 0 — Contract and scope lock: complete** (signed 2026-10-19). **Phase 1 may start**; gold-set labelling may start at once (D3). Phases 1–7 not started; no Sprint 7 application code exists. |
 | Overall progress | **4.17 %** |
 
@@ -42,7 +42,7 @@ as M1) are not plan deliverables and do not move the percentage.
 
 ## Completed
 
-Verified against the repository on 2026-10-24 (`9887e0b`).
+Verified against the repository on 2026-10-24 (`670b4de`).
 
 - **Phase 0 complete (2026-10-19).** The project owner (sole maintainer),
   who holds every role in the register, signed the remaining register
@@ -211,7 +211,7 @@ Verified against the repository on 2026-10-24 (`9887e0b`).
 
     Light suite 1781 passed, 1 skipped; ruff and mypy clean.
   - **Diarization fix** (2026-10-24), approved by the owner; on
-    `sprint7/diarization-fix`, not merged:
+    `sprint7/diarization-fix`, merged by pull request #3 (`4025199`):
     - `9887e0b` — diarization loads `pyannote/speaker-diarization-3.1`
       with PyTorch's weights-only loader on (six checkpoint classes
       allowed by name); `requirements.txt` declares matplotlib; a run
@@ -222,6 +222,19 @@ Verified against the repository on 2026-10-24 (`9887e0b`).
       code), plus a check on the real models.
 
     Suite 1794 passed locally; light stack 1790 passed, 2 skipped; ruff
+    clean; mypy clean with `--no-site-packages`.
+  - **Diarization without a Hugging Face login** (2026-10-24), a
+    follow-up from the review of the diarization fix; on
+    `sprint7/diarization-no-login`, not merged:
+    - `670b4de` — the diarization service no longer calls
+      `huggingface_hub.login()` on each cold load; the token still goes
+      to pyannote with the load. No login network call, no token written
+      to disk, and with the models cached diarization now loads under
+      `HF_HUB_OFFLINE=1` ([DATA-FLOW.md](DATA-FLOW.md) §3). 3 new tests,
+      red-checked (2 failed on the previous code; the token control
+      passed), plus an offline check on the real models.
+
+    Suite 1797 passed locally; light stack 1793 passed, 2 skipped; ruff
     clean; mypy clean with `--no-site-packages`.
 - **2026-10-11 audit and documentation sync** (this branch): stale
   operational docs corrected, PHASE-0 wording made consistent with its own
@@ -274,14 +287,13 @@ holds every role ([DECISIONS #50](DECISIONS.md#50-one-owner-holds-every-phase-0-
 
 ## Blockers
 
-Real blockers only. None blocks the start of Phase 1; the D5 run deadline
-is needed before the first bake-off run. Each open value below is listed in
+Real blockers only. None blocks the start of Phase 1 or the first bake-off
+run. Each open value below is listed in
 [PHASE-0 §8](FACTCHECK-AGENT-PHASE-0.md#8-exit-checklist) and must be set
 before the phase that uses it:
 
-- the agent's provisional run deadline (D5) — before the D6 criteria note
-  is signed (first bake-off run), then the Phase 2 runner and admission
-  defaults that follow it;
+- the Phase 2 runner and admission defaults that follow from D5's run
+  deadline (set 2026-10-28) — Phase 2;
 - the maximum evidence age per claim type, the remaining provider and
   Wikipedia terms, and the maximum excerpt length (PHASE-0 §6.3–§6.5) —
   Phases 4 and 5;
@@ -297,11 +309,15 @@ before the phase that uses it:
 
 **Phase 1 — model bake-off** (plan v1.1, Phase 1). It starts with the gold
 set, which may begin now: labelling is data preparation and needs no code.
-Before the first bake-off run: D5's open run deadline is set, the D6
-criteria note (who may win, the thresholds and the licence check), whose
-per-claim latency gate uses that figure, is signed, and the local model server of
-record is set up (U3: llama.cpp with model files pinned by revision and
-SHA-256). Fetching model files needs the project owner's go.
+D5's run deadline was set and the D6 criteria note
+([D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md): who may win, the gates,
+the margin and the licence check) was signed on 2026-10-28; its launch line
+was revised in S2 ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md)) on 2026-10-30. Before the
+first bake-off run: the gold set is frozen as v1.0 after the owner's blind
+re-label, and the local model server of record is set up (U3: llama.cpp
+with model files pinned by revision and SHA-256). The note's section 11
+lists every precondition. Fetching model files needs the project owner's
+go.
 
 ## Acceptance evidence
 
@@ -316,5 +332,5 @@ deliverables):
   machine);
 - a model and its serving runtime are pinned;
 - the operating limits move from provisional to binding where Phase 1
-  measured them, including D5's open run deadline;
+  measured them, including D5's provisional run deadline;
 - this document moves Phase 1 to *Completed*.
