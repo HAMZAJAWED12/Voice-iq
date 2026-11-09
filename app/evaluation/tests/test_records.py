@@ -8,16 +8,20 @@ Paths under `tmp_path` are real; the OneDrive rows use an injected `realpath` ov
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import inspect
 import json
+import os
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, get_args
 
 import httpx
 import pytest
 
+from app.evaluation.bakeoff import records as records_module
 from app.evaluation.bakeoff.client import (
     CAP_SESSION_TIMEOUT_SEC,
     MAX_TOKENS,
@@ -38,12 +42,14 @@ from app.evaluation.bakeoff.records import (
     CALL_ROLES,
     CANDIDATE_IDS,
     CANDIDATE_SLUGS,
+    CARD_SETTINGS_FIELDS,
     FAULT_KINDS,
     MAX_FAULT_DETAIL,
     OPERATOR_FIELDS,
     PHASES,
     RUNS,
     SCHEMA_VERSION,
+    SECTION2_FIELDS,
     CallRole,
     FaultKind,
     FaultRecord,
@@ -64,10 +70,14 @@ from app.evaluation.bakeoff.records import (
     call_to_dict,
     load_run,
     log_name,
+    machine_log_name,
+    parse_unit_name,
     read_log,
     record_json,
     record_loads,
     refuse_onedrive,
+    report_numbers,
+    write_report,
 )
 from app.evaluation.bakeoff.schemas import EXTRACTION_SCHEMA_SHA256, PROBE_SCHEMA_SHA256, canonical_json
 from app.evaluation.tests._client_fixtures import (
@@ -255,7 +265,7 @@ def test_the_constants() -> None:
     assert PHASES == get_args(Phase) == ("pre_run", "timed_run", "unconstrained", "contended")
     assert CALL_ROLES == get_args(CallRole) == ("warmup", "single", "cap_session", "probe")
     assert FAULT_KINDS == get_args(FaultKind)
-    assert len(OPERATOR_FIELDS) == len(set(OPERATOR_FIELDS)) == 20
+    assert len(OPERATOR_FIELDS) == len(set(OPERATOR_FIELDS)) == 30
     assert CANDIDATE_IDS == ("Qwen/Qwen3-4B", "Qwen/Qwen3.5-4B", "Qwen/Qwen3-8B")
     assert dict(CANDIDATE_SLUGS) == {Q4B: "qwen3-4b", Q35: "qwen3.5-4b", Q8B: "qwen3-8b"}
     assert issubclass(StoreError, RuntimeError)
@@ -1147,6 +1157,16 @@ def test_d9_the_operator_fields_are_the_spec_s() -> None:
         "run_deadline_sec",
         "rerun_allowance_sec",
         "bootstrap_seed",
+        "section2_qwen3_4b",
+        "section2_qwen3_5_4b",
+        "section2_qwen3_8b",
+        "cuda_process_check",
+        "card_settings_qwen3_4b",
+        "card_settings_qwen3_5_4b",
+        "card_settings_qwen3_8b",
+        "prompt_development_models",
+        "audio_vram_samples",
+        "audio_vram_min_per_sec",
     )
 
 
@@ -1900,3 +1920,391 @@ def test_load_run_gives_back_every_record(tmp_path: Path) -> None:
     assert [void.fault_id for void in view.voids] == [1]
     assert view.scored == frozenset({KEY})
     assert view.truncated == ()
+
+
+# ---------------------------------------------------------------- H4 hooks (H4 spec section 2 item 1)
+
+
+def test_h4_the_section_2_and_card_settings_fields_follow_the_candidates() -> None:
+    assert tuple(SECTION2_FIELDS) == tuple(CARD_SETTINGS_FIELDS) == CANDIDATE_IDS
+    values = (*SECTION2_FIELDS.values(), *CARD_SETTINGS_FIELDS.values())
+    assert len(set(values)) == len(values) == 6
+    assert set(values) <= set(OPERATOR_FIELDS)
+    assert len(OPERATOR_FIELDS) == 30
+    assert all(name.isidentifier() and "." not in name and "-" not in name for name in values)
+    for fields in (SECTION2_FIELDS, CARD_SETTINGS_FIELDS):
+        assert isinstance(fields, MappingProxyType)
+        with pytest.raises(TypeError):
+            fields["Qwen/Qwen3-4B"] = "x"  # type: ignore[index]
+
+
+def test_h4_a_manifest_needs_the_ten_new_operator_fields(tmp_path: Path) -> None:
+    for name in ("section2_qwen3_5_4b", "cuda_process_check", "card_settings_qwen3_8b", "audio_vram_min_per_sec"):
+        with pytest.raises(StoreError, match="missing keys"):
+            manifest(operator=operator_without(name))
+    with pytest.raises(StoreError, match="unexpected keys"):
+        manifest(operator={**dict.fromkeys(OPERATOR_FIELDS, "recorded"), "section2_qwen3.5-4b": "passed"})
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize(
+    ("key", "names"),
+    [
+        (
+            KEY,
+            (
+                "logs/qwen3-4b.run1.a1.gpu.csv",
+                "logs/qwen3-4b.run1.a1.apps.txt",
+                "logs/qwen3-4b.run1.a1.proc.csv",
+                "logs/qwen3-4b.run1.a1.host.json",
+            ),
+        ),
+        (
+            RunKey(Q35, "contended", None, 2),
+            (
+                "logs/qwen3.5-4b.contended.a2.gpu.csv",
+                "logs/qwen3.5-4b.contended.a2.apps.txt",
+                "logs/qwen3.5-4b.contended.a2.proc.csv",
+                "logs/qwen3.5-4b.contended.a2.host.json",
+            ),
+        ),
+    ],
+)
+def test_h4_machine_log_names_sit_beside_the_server_log(key: RunKey, names: tuple[str, ...]) -> None:
+    kinds = get_args(records_module.MachineLogKind)
+    assert kinds == ("gpu", "apps", "proc", "host")
+    assert tuple(machine_log_name(key, kind) for kind in kinds) == names
+    stem = log_name(key).removesuffix(".log")
+    assert all(name.startswith(f"{stem}.") for name in names)
+
+
+def test_h4_an_unknown_machine_log_kind_is_refused() -> None:
+    with pytest.raises(ValueError, match="kind must be one of"):
+        machine_log_name(KEY, "log")  # type: ignore[arg-type]
+
+
+def every_key() -> list[RunKey]:
+    keys: list[RunKey] = []
+    for candidate in CANDIDATE_IDS:
+        keys.append(RunKey(candidate, "pre_run", None, 1))
+        for attempt in (1, 2, 3, 12):
+            keys += [RunKey(candidate, "timed_run", run, attempt) for run in RUNS]
+            keys += [RunKey(candidate, phase, None, attempt) for phase in ("unconstrained", "contended")]
+    return keys
+
+
+def test_h4_parse_unit_name_inverts_the_unit_name_exactly() -> None:
+    keys = every_key()
+    assert len(keys) == 3 * (1 + 4 * 5)
+    names = [records_module._unit_name(key) for key in keys]
+    assert len(set(names)) == len(names)
+    for key, name in zip(keys, names, strict=True):
+        assert parse_unit_name(name) == key
+    assert parse_unit_name("qwen3.5-4b.run2.a3") == RunKey(Q35, "timed_run", 2, 3)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "qwen3-4b",
+        "qwen3-4b.run1",
+        "qwen3-4b.run1.a",
+        "qwen3-4b.run1.a0",
+        "qwen3-4b.run1.a01",
+        "qwen3-4b.run01.a1",
+        "qwen3-4b.run0.a1",
+        "qwen3-4b.run4.a1",
+        "qwen3-4b.timed_run.a1",
+        "qwen3-4b.pre_run.a2",
+        "qwen3-4b.run1.a1.marker",
+        "qwen3-4b.run1.a1.log",
+        "qwen3-4b.run1.a1 ",
+        " qwen3-4b.run1.a1",
+        "Qwen3-4B.run1.a1",
+        "qwen3-9b.run1.a1",
+        "qwen3.5-4b..run1.a1",
+        "qwen3-4b.run1.a" + chr(0x0661),
+        "logs/qwen3-4b.run1.a1",
+        "qwen3-4b.run1.a1/../x",
+    ],
+)
+def test_h4_parse_unit_name_refuses_anything_else(text: str) -> None:
+    with pytest.raises(StoreError, match="is not a unit name"):
+        parse_unit_name(text)
+
+
+def test_h4_parse_unit_name_refuses_a_non_string() -> None:
+    with pytest.raises(StoreError):
+        parse_unit_name(None)  # type: ignore[arg-type]
+
+
+def test_h4_marked_is_true_for_a_scored_key_only(tmp_path: Path) -> None:
+    store = new_store(tmp_path)
+    other = RunKey(Q4B, "timed_run", 2, 1)
+    finish(store)
+    finish(store, other)
+    assert not load_run(store.path).marked(KEY)
+    store.mark_scored(KEY)
+    view = load_run(store.path)
+    assert view.marked(KEY)
+    assert not view.marked(other)
+    assert not view.marked(RunKey(Q4B, "timed_run", 1, 2))
+
+
+@pytest.mark.parametrize("raw", [b'{"sch', b""], ids=["cut", "empty"])
+def test_h4_a_marker_cut_short_still_counts_as_marked(tmp_path: Path, raw: bytes) -> None:
+    store = new_store(tmp_path)
+    finish(store)
+    Path(store.path, "scored", "qwen3-4b.run1.a1.marker").write_bytes(raw)
+    view = load_run(store.path)
+    assert view.scored == frozenset()
+    assert view.marked(KEY)
+    assert not view.marked(RunKey(Q4B, "timed_run", 2, 1))
+
+
+def test_h4_another_file_s_truncated_tail_marks_nothing(tmp_path: Path) -> None:
+    store = new_store(tmp_path)
+    finish(store)
+    with Path(store.path, "runs.jsonl").open("ab") as file:
+        file.write(b'{"cut')
+    view = load_run(store.path)
+    assert [line.file_name for line in view.truncated] == ["runs.jsonl"]
+    assert not view.marked(KEY)
+
+
+def test_h4_the_h3_store_rules_hold_beside_marked(tmp_path: Path) -> None:
+    store = new_store(tmp_path)
+    finish(store)
+    fault = store.log_fault(KEY, "operator", item_id=None, detail="x")
+    store.mark_scored(KEY)
+    operator = attached(store)
+    with pytest.raises(StoreError, match="S2 §3.13"):
+        operator.void_run(KEY, fault.fault_id)
+    with pytest.raises(StoreError, match="an attached store"):
+        append_warmup(operator)
+    assert (size_of(store, "voids.jsonl"), size_of(store, "calls.jsonl")) == (0, 0)
+    assert load_run(store.path).marked(KEY)
+
+
+# ---------------------------------------------------------------- H4 write_report and report_numbers
+
+MD = b"# Report\n\nsynthetic\n"
+
+
+def report_body(**changes: Any) -> dict[str, Any]:
+    body: dict[str, Any] = {name: None for name in records_module._REPORT_KEYS if name != "markdown_sha256"}
+    body.update({"schema": 1, "record": "report", "run_name": "run_1", "caveats": ["c"]})
+    body.update(changes)
+    return body
+
+
+def report_dir(tmp_path: Path) -> Path:
+    run = tmp_path / "run_1"
+    run.mkdir(exist_ok=True)
+    return run
+
+
+def read_disk(path: str) -> bytes:
+    return Path(path).read_bytes()
+
+
+def numbers(run: Path) -> tuple[tuple[int, bool], ...]:
+    return report_numbers(str(run), read_disk)
+
+
+def snapshot(run: Path) -> dict[str, bytes]:
+    return {path.name: path.read_bytes() for path in sorted((run / "reports").iterdir())}
+
+
+def test_h4_report_keys_are_the_spec_s_top_level_keys() -> None:
+    keys = records_module._REPORT_KEYS
+    assert len(keys) == len(set(keys)) == 18
+    assert keys[:5] == ("schema", "record", "run_name", "manifest_sha256", "markdown_sha256")
+    assert {"recorded", "budgets", "candidates", "decision", "reopening", "caveats", "open_rulings"} <= set(keys)
+
+
+def test_h4_reports_number_from_one_and_each_file_is_new(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    run = report_dir(tmp_path)
+    opened: list[tuple[str, str]] = []
+    original = Path.open
+
+    def spy(self: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        opened.append((self.name, mode))
+        return original(self, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", spy)
+    synced: list[int] = []
+    for number in (1, 2, 3):
+        paths = write_report(str(run), MD, report_body(), fsync=synced.append, realpath=as_given)
+        assert paths == (str(run / "reports" / f"report-{number}.md"), str(run / "reports" / f"report-{number}.json"))
+    monkeypatch.undo()
+    assert opened == [(f"report-{n}.{ext}", "xb") for n in (1, 2, 3) for ext in ("md", "json")]
+    assert len(synced) == 6
+    assert numbers(run) == ((1, True), (2, True), (3, True))
+    digest = hashlib.sha256(MD).hexdigest()
+    assert read_disk(str(run / "reports" / "report-2.md")) == MD
+    raw = read_disk(str(run / "reports" / "report-2.json"))
+    assert raw == record_json({**report_body(), "markdown_sha256": digest}) + b"\n"
+    assert raw.isascii() and raw.count(b"\n") == 1
+
+
+def test_h4_the_markdown_is_written_and_synced_before_the_json(tmp_path: Path) -> None:
+    run = report_dir(tmp_path)
+    seen: list[tuple[str, ...]] = []
+
+    def fsync(_descriptor: int) -> None:
+        seen.append(tuple(path.name for path in sorted((run / "reports").iterdir())))
+
+    write_report(str(run), MD, report_body(), fsync=fsync, realpath=as_given)
+    assert seen == [("report-1.md",), ("report-1.json", "report-1.md")]
+
+
+class HalfWrite:
+    """A file whose write stores half the bytes, then fails, as a full disk does."""
+
+    def __init__(self, file: Any) -> None:
+        self.file = file
+
+    def __enter__(self) -> HalfWrite:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.file.close()
+
+    def write(self, data: bytes) -> int:
+        self.file.write(data[: len(data) // 2])
+        raise OSError("no space left")
+
+
+@pytest.mark.parametrize("failing", ["report-1.md", "report-1.json"])
+@pytest.mark.parametrize("how", ["write", "fsync"])
+def test_h4_a_failure_part_way_leaves_its_files_and_the_next_report_is_n_plus_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failing: str, how: str
+) -> None:
+    run = report_dir(tmp_path)
+    original = Path.open
+
+    def open_failing(self: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        file = original(self, mode, *args, **kwargs)
+        return HalfWrite(file) if how == "write" and self.name == failing else file
+
+    synced: list[int] = []
+
+    def fsync(descriptor: int) -> None:
+        synced.append(descriptor)
+        if how == "fsync" and len(synced) == (1 if failing.endswith(".md") else 2):
+            raise OSError("sync failed")
+
+    monkeypatch.setattr(Path, "open", open_failing)
+    with pytest.raises(OSError):
+        write_report(str(run), MD, report_body(), fsync=fsync, realpath=as_given)
+    monkeypatch.undo()
+    left = snapshot(run)
+    assert set(left) == ({"report-1.md"} if failing.endswith(".md") else {"report-1.md", "report-1.json"})
+    # A failed sync of the whole JSON leaves bytes that read as complete: only the raise tells the caller.
+    complete = how == "fsync" and failing.endswith(".json")
+    assert numbers(run) == ((1, complete),)
+    assert write_report(str(run), MD, report_body(), fsync=no_fsync, realpath=as_given)[0].endswith("report-2.md")
+    assert {name: raw for name, raw in snapshot(run).items() if name.startswith("report-1.")} == left
+    assert numbers(run) == ((1, complete), (2, True))
+
+
+@pytest.mark.parametrize("lone", ["report-1.md", "report-1.json"])
+def test_h4_a_lone_file_uses_up_its_number(tmp_path: Path, lone: str) -> None:
+    run = report_dir(tmp_path)
+    (run / "reports").mkdir()
+    (run / "reports" / lone).write_bytes(b"left over")
+    md_path, json_path = write_report(str(run), MD, report_body(), fsync=no_fsync, realpath=as_given)
+    assert (Path(md_path).name, Path(json_path).name) == ("report-2.md", "report-2.json")
+    assert (run / "reports" / lone).read_bytes() == b"left over"
+    assert numbers(run) == ((1, False), (2, True))
+
+
+def hand_written(run: Path, raw: bytes, md: bytes = MD) -> tuple[tuple[int, bool], ...]:
+    (run / "reports").mkdir()
+    (run / "reports" / "report-1.md").write_bytes(md)
+    (run / "reports" / "report-1.json").write_bytes(raw)
+    return numbers(run)
+
+
+def line_of(body: dict[str, Any]) -> bytes:
+    return record_json(body) + b"\n"
+
+
+DIGEST = hashlib.sha256(MD).hexdigest()
+
+
+@pytest.mark.parametrize(
+    ("raw", "complete"),
+    [
+        pytest.param(line_of({**report_body(), "markdown_sha256": DIGEST}), True, id="complete"),
+        pytest.param(line_of({**report_body(), "markdown_sha256": "0" * 64}), False, id="sha-mismatch"),
+        pytest.param(
+            line_of({k: v for k, v in {**report_body(), "markdown_sha256": DIGEST}.items() if k != "pending"}),
+            False,
+            id="missing-key",
+        ),
+        pytest.param(line_of({**report_body(record="run"), "markdown_sha256": DIGEST}), False, id="not-a-report"),
+        pytest.param(line_of({**report_body(schema=2), "markdown_sha256": DIGEST}), False, id="schema-2"),
+        pytest.param(line_of({**report_body(schema=True), "markdown_sha256": DIGEST}), False, id="schema-true"),
+        pytest.param(line_of({**report_body(), "markdown_sha256": DIGEST})[:-1], False, id="no-line-feed"),
+        pytest.param(line_of({**report_body(), "markdown_sha256": DIGEST})[:40], False, id="cut"),
+        pytest.param(line_of({**report_body(), "markdown_sha256": DIGEST}) * 2, False, id="two-lines"),
+        pytest.param(b"[]\n", False, id="not-an-object"),
+        pytest.param(b"", False, id="empty"),
+    ],
+)
+def test_h4_report_numbers_says_which_reports_are_complete(tmp_path: Path, raw: bytes, complete: bool) -> None:
+    assert hand_written(report_dir(tmp_path), raw) == ((1, complete),)
+
+
+def test_h4_a_changed_markdown_makes_its_report_incomplete(tmp_path: Path) -> None:
+    raw = line_of({**report_body(), "markdown_sha256": DIGEST})
+    assert hand_written(report_dir(tmp_path), raw, md=MD + b" ") == ((1, False),)
+
+
+def test_h4_a_body_missing_a_key_is_written_and_reads_as_incomplete(tmp_path: Path) -> None:
+    run = report_dir(tmp_path)
+    body = {k: v for k, v in report_body().items() if k != "budgets"}
+    write_report(str(run), MD, body, fsync=no_fsync, realpath=as_given)
+    assert numbers(run) == ((1, False),)
+
+
+def test_h4_no_reports_means_no_numbers(tmp_path: Path) -> None:
+    assert numbers(report_dir(tmp_path)) == ()
+
+
+def test_h4_a_body_already_holding_the_markdown_hash_is_refused_and_writes_nothing(tmp_path: Path) -> None:
+    run = report_dir(tmp_path)
+    with pytest.raises(StoreError, match="markdown_sha256"):
+        write_report(str(run), MD, {**report_body(), "markdown_sha256": DIGEST}, fsync=no_fsync, realpath=as_given)
+    assert list(run.iterdir()) == []
+
+
+def test_h4_a_body_that_cannot_be_stored_writes_nothing(tmp_path: Path) -> None:
+    run = report_dir(tmp_path)
+    with pytest.raises(ValueError):
+        write_report(str(run), MD, report_body(pending=float("nan")), fsync=no_fsync, realpath=as_given)
+    assert list(run.iterdir()) == []
+
+
+def test_h4_a_report_under_onedrive_is_refused(tmp_path: Path) -> None:
+    run = report_dir(tmp_path)
+    with pytest.raises(StoreError, match="S2 §3.12"):
+        write_report(str(run), MD, report_body(), fsync=no_fsync, realpath=lambda _path: "/mnt/c/data/OneDrive/run_1")
+    assert list(run.iterdir()) == []
+
+
+def test_h4_write_report_resolves_the_run_directory(tmp_path: Path) -> None:
+    run = report_dir(tmp_path)
+    md_path, _json_path = write_report(
+        "relative/run_1", MD, report_body(), fsync=no_fsync, realpath=lambda _p: str(run)
+    )
+    assert Path(md_path) == run / "reports" / "report-1.md"
+
+
+def test_h4_write_report_s_defaults_are_the_real_calls() -> None:
+    defaults = inspect.signature(write_report).parameters
+    assert defaults["fsync"].default is os.fsync
+    assert defaults["realpath"].default is os.path.realpath

@@ -27,6 +27,7 @@ import pytest
 from app.evaluation.bakeoff import launch as launch_module
 from app.evaluation.bakeoff import records as records_module
 from app.evaluation.bakeoff.client import CONTEXT_TOKENS, THINK_TAGS, Modalities, ModelServerClient
+from app.evaluation.bakeoff.inputs import FrozenInputs
 from app.evaluation.bakeoff.launch import (
     BINARY_NAME,
     BIND_FAILED_TEXT,
@@ -79,7 +80,7 @@ from app.evaluation.bakeoff.launch import (
     verify_launch,
     wait_ready,
 )
-from app.evaluation.bakeoff.records import record_json, record_loads
+from app.evaluation.bakeoff.records import OPERATOR_FIELDS, RunKey, record_json, record_loads
 from app.evaluation.tests._client_fixtures import block_sockets, error_response, make_client
 from app.evaluation.tests._runner_fixtures import (
     BINARY_PATH,
@@ -94,17 +95,25 @@ from app.evaluation.tests._runner_fixtures import (
     NET_ETH0,
     NET_HEADER,
     NET_LO,
+    OPERATOR,
     PORT,
     SERVER_HOME,
+    VALID_OPERATOR,
+    Enough,
     FakeFiles,
+    FakeHost,
     FakePopen,
     FakeProcess,
     FakeTime,
+    RecordingHooks,
     block_processes,
+    frozen_inputs,
     launch_tools,
     loading_response,
     props_response,
+    schedule_rig,
     server_props,
+    small_inputs,
 )
 
 ARGV = frozen_argv(CONDITIONS, CANDIDATE)
@@ -1719,3 +1728,220 @@ def test_t6_the_props_fixture_is_the_pinned_shape() -> None:
 def test_t6_the_log_fixtures_end_their_last_line_and_hold_no_cr(fixture: str) -> None:
     assert fixture.endswith("\n")
     assert "\r" not in fixture
+
+
+# ---------------------------------------------------------------- H4 hooks: a server with no log (H4 spec section 2)
+
+
+class RecordingPopen:
+    """A popen that records its arguments and writes nothing, whatever stdout is."""
+
+    def __init__(self, step: FakeProcess | BaseException) -> None:
+        self.step = step
+        self.calls: list[tuple[list[str], dict[str, Any]]] = []
+
+    def __call__(self, args: list[str], **kwargs: Any) -> FakeProcess:
+        self.calls.append((args, kwargs))
+        if isinstance(self.step, BaseException):
+            raise self.step
+        return self.step
+
+
+def refuse_open_log(path: str) -> Any:
+    raise AssertionError(f"a server with no log must not open {path}")
+
+
+def logless(
+    process: FakeProcess | BaseException, files: FakeFiles | None = None
+) -> tuple[ServerProcess, RecordingPopen, LaunchTools]:
+    popen = RecordingPopen(process)
+    tools = dataclasses.replace(launch_tools(files=files), popen=popen, open_log=refuse_open_log)
+    return ServerProcess(ARGV, server_environment(CONDITIONS, "timed"), None, tools), popen, tools
+
+
+def test_h4_a_server_with_no_log_sends_both_streams_to_devnull(tmp_path: Path) -> None:
+    server, popen, _tools = logless(FakeProcess(pid=77))
+    ((args, kwargs),) = popen.calls
+    assert args == list(ARGV)
+    assert kwargs["stdin"] is subprocess.DEVNULL
+    assert kwargs["stdout"] is subprocess.DEVNULL
+    assert kwargs["stderr"] is subprocess.DEVNULL
+    assert (kwargs["shell"], kwargs["close_fds"]) == (False, True)
+    assert kwargs["env"] == {"HOME": SERVER_HOME, "PATH": "/usr/bin:/bin"}
+    assert (server.pid, server.log_path, server.poll()) == (77, None, None)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_h4_a_server_with_no_log_still_stops_as_before() -> None:
+    process = FakeProcess()
+    server, _popen, _tools = logless(process)
+    assert server.stop() == StopResult(0, "terminated")
+    assert process.signals == ["terminate"]
+
+
+def test_h4_a_failed_spawn_with_no_log_is_still_a_spawn_failure() -> None:
+    with pytest.raises(SpawnFailed) as caught:
+        logless(PermissionError("denied"))
+    assert caught.value.error_class == "PermissionError"
+
+
+def test_h4_the_server_log_is_read_through_the_tools(tmp_path: Path) -> None:
+    run = rig(tmp_path)
+    assert launch_module._server_log(run.server, run.tools) == LOG_DEFAULT.encode("utf-8")
+    assert run.files.reads == [str(tmp_path / "server.log")]
+
+
+def test_h4_a_server_with_no_log_has_no_log_to_read() -> None:
+    files = FakeFiles()
+    server, _popen, tools = logless(FakeProcess(), files)
+    with pytest.raises(RuntimeError, match="^server started without a log$") as caught:
+        launch_module._server_log(server, tools)
+    assert type(caught.value) is RuntimeError
+    assert not isinstance(caught.value, LaunchError)
+    assert files.reads == []
+
+
+def read_log_of(server: ServerProcess, tools: LaunchTools) -> object:
+    return read_settled_log(server, tools)
+
+
+def ready_of(server: ServerProcess, tools: LaunchTools) -> object:
+    return wait_ready(server, make_client()[0], CONDITIONS, tools)
+
+
+@pytest.mark.parametrize(
+    ("read", "exit_code"),
+    [
+        pytest.param(read_log_of, None, id="read-settled-log-alive"),
+        pytest.param(read_log_of, 1, id="read-settled-log-exited"),
+        pytest.param(ready_of, 1, id="wait-ready-exited"),
+    ],
+)
+def test_h4_reading_a_missing_log_is_a_harness_bug_never_a_launch_fault(read: Any, exit_code: int | None) -> None:
+    """The runner records a `LaunchError` as a `launch_failed` fault; a plain `RuntimeError` escapes it instead."""
+    files = FakeFiles()
+    server, _popen, tools = logless(FakeProcess(exit_code=exit_code), files)
+    with pytest.raises(RuntimeError, match="server started without a log") as caught:
+        read(server, tools)
+    assert not isinstance(caught.value, LaunchError)
+    assert files.reads == []
+
+
+def test_h4_the_exit_path_reads_the_log_only_through_the_helper() -> None:
+    source = inspect.getsource(launch_module)
+    assert source.count("tools.read_bytes(process.log_path)") == 1
+    assert "tools.read_bytes(process.log_path)" in inspect.getsource(launch_module._server_log)
+
+
+# ---------------------------------------------------------------- H4 fixture self-tests (AMB-142)
+
+
+@pytest.fixture(scope="module")
+def tiny(tmp_path_factory: pytest.TempPathFactory) -> FrozenInputs:
+    return small_inputs(frozen_inputs(tmp_path_factory.mktemp("gold")), singles=1, sessions=1, probes=1)
+
+
+def test_t6_a_devnull_spawn_through_the_fake_popen_writes_nothing(tmp_path: Path) -> None:
+    popen = FakePopen(FakeProcess())
+    tools = dataclasses.replace(launch_tools(popen), open_log=refuse_open_log)
+    server = ServerProcess(ARGV, {}, None, tools)
+    assert popen.calls[0][1]["stdout"] is subprocess.DEVNULL
+    assert server.log_path is None
+    assert list(tmp_path.iterdir()) == []
+
+
+def host_launch(host: FakeHost, root: Path, unit: str = "qwen3-4b.run1.a1") -> ServerProcess:
+    return ServerProcess(ARGV, server_environment(CONDITIONS, "timed"), str(root / f"{unit}.log"), host.tools())
+
+
+def test_t6_a_host_with_proc_status_registers_it_and_a_stop_removes_both_entries(
+    tiny: FrozenInputs, tmp_path: Path
+) -> None:
+    status = b"Name:\tllama-server\nRssAnon:\t  1024 kB\n"
+    host = FakeHost(tiny, proc_status=status)
+    server = host_launch(host, tmp_path)
+    pid = server.pid
+    assert host.list_pids() == (pid,)
+    assert host.files(f"/proc/{pid}/status") == status
+    assert host.files(f"/proc/{pid}/cmdline") == cmdline_bytes(ARGV)
+    server.stop()
+    for entry in ("cmdline", "status"):
+        with pytest.raises(FileNotFoundError):
+            host.files(f"/proc/{pid}/{entry}")
+    assert host.list_pids() == ()
+    assert host.events == [("popen", "qwen3-4b.run1.a1"), ("terminate", "qwen3-4b.run1.a1")]
+
+
+def test_t6_a_host_lists_each_launch_s_pid_in_order(tiny: FrozenInputs, tmp_path: Path) -> None:
+    host = FakeHost(tiny, proc_status=b"RssAnon:\t1 kB\n")
+    first = host_launch(host, tmp_path, "qwen3-4b.run1.a1")
+    second = host_launch(host, tmp_path, "qwen3-4b.run2.a1")
+    assert host.list_pids() == (first.pid, second.pid)
+    first.stop()
+    assert host.list_pids() == (second.pid,)
+
+
+def test_t6_a_host_without_proc_status_behaves_as_in_h3(tiny: FrozenInputs, tmp_path: Path) -> None:
+    host = FakeHost(tiny)
+    server = host_launch(host, tmp_path)
+    pid = server.pid
+    assert set(host.files.table) == {"/proc/net/dev", f"/proc/{pid}/cmdline"}
+    server.stop()
+    assert host.files(f"/proc/{pid}/cmdline") == cmdline_bytes(ARGV)
+    assert host.list_pids() == (pid,)
+    assert host.events == [("popen", "qwen3-4b.run1.a1"), ("terminate", "qwen3-4b.run1.a1")]
+
+
+class StopAtTheFirstTimedRun(RecordingHooks):
+    """Hooks of the test's own, which say what host they were built for."""
+
+    def __init__(self, host: FakeHost) -> None:
+        super().__init__([], stop_at_the_first_timed_run)
+        self.host = host
+
+
+def test_t6_schedule_rig_uses_the_hooks_it_is_given(tiny: FrozenInputs, tmp_path: Path) -> None:
+    built: list[StopAtTheFirstTimedRun] = []
+
+    def hooks(host: FakeHost) -> StopAtTheFirstTimedRun:
+        built.append(StopAtTheFirstTimedRun(host))
+        return built[-1]
+
+    rig = schedule_rig(tiny, tmp_path, hooks=hooks)
+    rig.run_to_the_stop()
+    (made,) = built
+    assert rig.hooks is made and rig.deps.hooks is made and made.host is rig.host
+    assert made.events == [("before_timed_run", "qwen3-4b.run1.a1")]
+    assert ("before_timed_run", "qwen3-4b.run1.a1") not in rig.host.events
+
+
+def test_t6_schedule_rig_keeps_recording_hooks_by_default(tiny: FrozenInputs, tmp_path: Path) -> None:
+    rig = schedule_rig(tiny, tmp_path, fail=stop_at_the_first_timed_run)
+    view = rig.run_to_the_stop()
+    assert isinstance(rig.hooks, RecordingHooks)
+    assert ("before_timed_run", "qwen3-4b.run1.a1") in rig.host.events
+    assert view.manifest["operator"] == OPERATOR
+
+
+def stop_at_the_first_timed_run(name: str, _key: RunKey) -> BaseException | None:
+    return Enough() if name == "before_timed_run" else None
+
+
+def test_t6_schedule_rig_puts_the_operator_it_is_given_in_the_manifest(tiny: FrozenInputs, tmp_path: Path) -> None:
+    view = schedule_rig(tiny, tmp_path, fail=stop_at_the_first_timed_run, operator=VALID_OPERATOR).run_to_the_stop()
+    assert view.manifest["operator"] == VALID_OPERATOR
+
+
+def test_t6_the_valid_operator_holds_every_field_with_a_parseable_value() -> None:
+    assert tuple(VALID_OPERATOR) == OPERATOR_FIELDS
+    assert all(value.isascii() and value.strip() == value != "" for value in VALID_OPERATOR.values())
+    assert set(OPERATOR.values()) == {"recorded"} and tuple(OPERATOR) == OPERATOR_FIELDS
+    numbers = ("idle_free_vram_mib", "audio_pipeline_vram_mib", "audio_vram_samples", "audio_vram_min_per_sec")
+    assert all(VALID_OPERATOR[name].isdigit() for name in (*numbers, "bootstrap_seed"))
+    assert int(VALID_OPERATOR["idle_free_vram_mib"]) - int(VALID_OPERATOR["audio_pipeline_vram_mib"]) - 512 == 6387
+    assert int(VALID_OPERATOR["audio_vram_min_per_sec"]) >= 10
+    assert (VALID_OPERATOR["run_deadline_sec"], VALID_OPERATOR["rerun_allowance_sec"]) == ("125", "25")
+    checks = ("cuda_process_check", "namespace_outbound_check", "namespace_eth0_check", "namespace_lan_check")
+    sections = ("section2_qwen3_4b", "section2_qwen3_5_4b", "section2_qwen3_8b")
+    assert {VALID_OPERATOR[name] for name in (*checks, *sections)} == {"passed"}
+    assert VALID_OPERATOR["sysmem_fallback"] == "Prefer No Sysmem Fallback"

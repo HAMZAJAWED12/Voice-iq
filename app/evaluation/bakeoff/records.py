@@ -18,6 +18,11 @@ Implements, from the signed D6 criteria note S2:
   fault and void logs hold none at all (AMB-71), and `calls.jsonl` keeps model outputs and request hashes, not requests.
 - S2 §10, re-opening: "Gate T is recomputed from the stored measurements, with no new runs", so a stored call reloads
   into the same typed `CallRecord`, exactly, or the record is not written.
+- S2 §6, gate M: an attempt's machine logs (the GPU sampler, the compute-apps check, the server's /proc readings and
+  the host record) sit beside its server log in `logs/`, named by `machine_log_name`. H4 writes and reads them; this
+  module only names them.
+- S2 §9, report: each report is a new Markdown and JSON pair under `reports/`, written by `write_report` and never
+  overwritten, so a re-opening adds a pair, and `report_numbers` says which pairs are complete.
 
 AMB-52 takes option (a): records are ASCII-escaped JSON, so a lone surrogate that an escape put into a valid output is
 stored as its escape and reads back unchanged. `canonical_json` stays as it is for hashes and wire bytes, and validity
@@ -27,6 +32,7 @@ and the gates do not change.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import os
 import re
@@ -34,7 +40,8 @@ from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, BinaryIO, Literal, TypeGuard, TypeVar
+from types import MappingProxyType
+from typing import Any, BinaryIO, Literal, TypeGuard, TypeVar, cast
 
 from .client import (
     REQUEST_KINDS,
@@ -83,6 +90,22 @@ FAULT_KINDS = (
     "server_not_stopped",
     "operator",
 )
+# S2 §2: the operator's section 2 result per candidate. Slugs hold "-" and ".", so they cannot be field-name stems.
+SECTION2_FIELDS: Mapping[str, str] = MappingProxyType(
+    {
+        "Qwen/Qwen3-4B": "section2_qwen3_4b",
+        "Qwen/Qwen3.5-4B": "section2_qwen3_5_4b",
+        "Qwen/Qwen3-8B": "section2_qwen3_8b",
+    }
+)
+# S2 §3.7: each model card's recommended settings, recorded per candidate and never used in a request.
+CARD_SETTINGS_FIELDS: Mapping[str, str] = MappingProxyType(
+    {
+        "Qwen/Qwen3-4B": "card_settings_qwen3_4b",
+        "Qwen/Qwen3.5-4B": "card_settings_qwen3_5_4b",
+        "Qwen/Qwen3-8B": "card_settings_qwen3_8b",
+    }
+)
 OPERATOR_FIELDS = (
     "machine",
     "wsl_kernel",
@@ -104,7 +127,14 @@ OPERATOR_FIELDS = (
     "run_deadline_sec",
     "rerun_allowance_sec",
     "bootstrap_seed",
+    *SECTION2_FIELDS.values(),
+    "cuda_process_check",
+    *CARD_SETTINGS_FIELDS.values(),
+    "prompt_development_models",
+    "audio_vram_samples",
+    "audio_vram_min_per_sec",
 )
+MachineLogKind = Literal["gpu", "apps", "proc", "host"]
 
 _MANIFEST = "manifest.json"
 _PRE_RUN = "pre_run.jsonl"
@@ -116,6 +146,32 @@ _VOIDS = "voids.jsonl"
 _RECORD_FILES = (_PRE_RUN, _LAUNCHES, _CALLS, _RUNS, _FAULTS, _VOIDS)
 _LOGS = "logs"
 _SCORED = "scored"
+_REPORTS = "reports"
+_MACHINE_LOG_SUFFIXES = MappingProxyType(
+    {"gpu": "gpu.csv", "apps": "apps.txt", "proc": "proc.csv", "host": "host.json"}
+)
+_UNIT_PARTS = re.compile(r"(pre_run|unconstrained|contended|run([0-9]+))\.a([0-9]+)")  # fullmatch only
+# The top-level keys every complete report holds (S2 §9). report.REPORT_KEYS is kept equal to this by a test.
+_REPORT_KEYS = (
+    "schema",
+    "record",
+    "run_name",
+    "manifest_sha256",
+    "markdown_sha256",
+    "schedule_end",
+    "stop_reason",
+    "run_conditions_met",
+    "gold_manifest_checked",
+    "recorded",
+    "budgets",
+    "candidates",
+    "decision",
+    "reopening",
+    "binding_value_inputs",
+    "caveats",
+    "open_rulings",
+    "pending",
+)
 _RUN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")  # fullmatch only
 _PATH_PARTS = re.compile(r"[/\\]")
 _ONEDRIVE_PREFIXES = ("onedrive", "onedri~")  # the second is the folder's 8.3 short name
@@ -228,9 +284,38 @@ def _unit_name(key: RunKey) -> str:
     return f"{CANDIDATE_SLUGS[key.candidate]}.{unit}.a{key.run_attempt}"
 
 
+def parse_unit_name(text: str) -> RunKey:
+    """The key whose `_unit_name` is `text`, exactly, or `StoreError`. It sits beside `_unit_name` so the two cannot
+    drift, and its result is checked by turning it back into the name."""
+    for candidate, slug in CANDIDATE_SLUGS.items():
+        if not isinstance(text, str) or not text.startswith(f"{slug}."):
+            continue
+        parts = _UNIT_PARTS.fullmatch(text[len(slug) + 1 :])
+        if parts is None:
+            continue
+        unit, run, attempt = parts.groups()
+        try:
+            if run is None:
+                key = RunKey(candidate, cast(Phase, unit), None, int(attempt))
+            else:
+                key = RunKey(candidate, "timed_run", int(run), int(attempt))
+        except ValueError:
+            continue
+        if _unit_name(key) == text:
+            return key
+    raise StoreError(f"{text!r} is not a unit name <slug>.<unit>.a<n>")
+
+
 def log_name(key: RunKey) -> str:
     """The server log of a launch, relative to the run directory."""
     return f"{_LOGS}/{_unit_name(key)}.log"
+
+
+def machine_log_name(key: RunKey, kind: MachineLogKind) -> str:
+    """One of an attempt's machine logs (S2 §6, gate M), relative to the run directory, beside its server log."""
+    if kind not in _MACHINE_LOG_SUFFIXES:
+        raise ValueError(f"kind must be one of {tuple(_MACHINE_LOG_SUFFIXES)}, not {kind!r}")
+    return f"{_LOGS}/{_unit_name(key)}.{_MACHINE_LOG_SUFFIXES[kind]}"
 
 
 def _check_place(name: str, value: object, last: float) -> None:
@@ -833,6 +918,12 @@ class RunView:
         key = RunKey(candidate, "timed_run", run, self.counted_attempt(candidate, run))
         return tuple(stored for stored in self.calls if stored.key == key and stored.role != "warmup")
 
+    def marked(self, key: RunKey) -> bool:
+        """Whether the unit's scored marker exists: a whole one, or one a crash cut short, which still blocks a void
+        (AMB-91)."""
+        marker = f"{_unit_name(key)}.marker"
+        return key in self.scored or any(line.file_name == marker for line in self.truncated)
+
 
 def _read_markers(root: Path) -> tuple[frozenset[RunKey], tuple[TruncatedLine, ...]]:
     """The scored keys. A marker cut short by a crash is reported, and still blocks a void through its file."""
@@ -885,3 +976,82 @@ def load_run(path: str) -> RunView:
         scored=scored,
         truncated=(*truncated, *cut_markers),
     )
+
+
+def _report_paths(reports: Path, number: int) -> tuple[Path, Path]:
+    return reports / f"report-{number}.md", reports / f"report-{number}.json"
+
+
+def write_report(
+    run_dir: str,
+    md: bytes,
+    json_body: Mapping[str, Any],
+    *,
+    fsync: Callable[[int], None] = os.fsync,
+    realpath: Callable[[str], str] = os.path.realpath,
+) -> tuple[str, str]:
+    """Write report n, the smallest n >= 1 that neither `reports/report-<n>.md` nor `reports/report-<n>.json` uses, and
+    return both paths, Markdown first (S2 §9). Each file is opened `'xb'`, so a name made after the check is refused,
+    never overwritten. The Markdown is written and synced first and the JSON last, carrying the Markdown's SHA-256, so
+    the JSON is the commit record.
+
+    True all-or-nothing is impossible here, because nothing is ever renamed or deleted. A failure part-way leaves an
+    empty or partial Markdown file, or a whole one with no JSON or a cut JSON. None of these is a complete report
+    (`report_numbers`), its number stays used, and the next call writes n+1. A failed sync of a whole JSON file leaves
+    bytes that read as complete, so the raise alone tells the caller."""
+    reports = Path(refuse_onedrive(run_dir, realpath=realpath), _REPORTS)
+    if "markdown_sha256" in json_body:
+        raise StoreError("the report body must not hold markdown_sha256: write_report adds it")
+    line = record_json({**json_body, "markdown_sha256": hashlib.sha256(md).hexdigest()}) + b"\n"
+    reports.mkdir(exist_ok=True)
+    number = 1
+    while any(path.exists() for path in _report_paths(reports, number)):
+        number += 1
+    md_path, json_path = _report_paths(reports, number)
+    for path, data in ((md_path, md), (json_path, line)):
+        with path.open("xb") as file:
+            file.write(data)
+            file.flush()
+            fsync(file.fileno())
+    return str(md_path), str(json_path)
+
+
+def _report_complete(md: bytes | None, raw: bytes | None) -> bool:
+    """Report n is complete when its JSON is one whole record line holding every report key, with `record` "report",
+    `schema` 1 and the SHA-256 of the Markdown file beside it."""
+    if md is None or raw is None or not raw.endswith(b"\n") or b"\n" in raw[:-1]:
+        return False
+    try:
+        body = record_loads(raw[:-1])
+    except StoreError:
+        return False
+    return (
+        isinstance(body, dict)
+        and all(name in body for name in _REPORT_KEYS)
+        and body["record"] == "report"
+        and type(body["schema"]) is int
+        and body["schema"] == SCHEMA_VERSION
+        and body["markdown_sha256"] == hashlib.sha256(md).hexdigest()
+    )
+
+
+def report_numbers(run_dir: str, read_bytes: Callable[[str], bytes]) -> tuple[tuple[int, bool], ...]:
+    """Every report number in use, from 1, with whether that report is complete. `write_report` always takes the
+    smallest free number and nothing is deleted, so the numbers end at the first one that neither name uses. Readers
+    take the highest complete number and list the others."""
+
+    def read(path: str) -> bytes | None:
+        try:
+            return read_bytes(path)
+        except FileNotFoundError:
+            return None
+
+    found: list[tuple[int, bool]] = []
+    number = 1
+    while True:
+        md = read(f"{run_dir}/{_REPORTS}/report-{number}.md")
+        raw = read(f"{run_dir}/{_REPORTS}/report-{number}.json")
+        if md is None and raw is None:
+            return tuple(found)
+        found.append((number, _report_complete(md, raw)))
+        number += 1
