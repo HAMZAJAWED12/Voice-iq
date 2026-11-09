@@ -1,4 +1,4 @@
-Last verified: 2026-11-09, 911ddb1
+Last verified: 2026-11-09, 6534094
 # Project Context
 
 Background for people joining, reviewing or sponsoring VoiceIQ: what the
@@ -91,8 +91,8 @@ Jun 41, Jul 49, Sep 22, Oct 74. There are no commits in March or August 2026.
 
 ### Timeline
 
-The work ran in **sprints** (the planned blocks of work in the sprint table in
-[CLAUDE.md](../CLAUDE.md)) and **tiers** (hardening, test-coverage, clean-up
+The work ran in **sprints** (the planned blocks of work, which the sprint table
+in CLAUDE.md listed until `0ea4ddd`) and **tiers** (hardening, test-coverage, clean-up
 and deferred-work passes run alongside and between the sprints). Date ranges
 are commit dates; some ranges overlap.
 
@@ -109,10 +109,10 @@ are commit dates; some ranges overlap.
 | 2026-07-25 | Tier S: eight security-hardening items, all committed the same day. | `58f81f2` to `ec8dc1e` |
 | 2026-07-25 to 09-20 | Tier N: callback v2 spec (N1), lazy ML imports (N2), alignment tests and speed-up (N3), deadline phrases (N4a), language wiring for Urdu and Arabic (N4b-1 Phase 1), and the Agent Brain wired into the pipeline (L5). | `36697fd` to `17606d6` |
 | 2026-09-04 to 10-19 | Sprint 7, Phase 0: contract and decision register, gold-set scoping brief, documentation sync, prerequisite fixes M1-M6, security and reliability fixes, the fixes the owner decided on 2026-10-17, the tech-debt milestone M7, the pull-request review fix round, the merge into `main` (pull request #1) and the Phase 0 sign-off. | `c6284b6`, `8fd3972`, `ace45e4` to `e4398b1` |
-| 2026-10-20 to 11-09 | Sprint 7 after the Phase 0 sign-off: its merge into `main` (pull request #2); the diarization fix and the removal of its Hugging Face login (#3, #7); and Phase 1 so far: the gold set v0.1 to v0.4 with its labelling guide (#4), D5's run deadline and the signed D6 criteria note S1 and S2 (#5), the record of the bake-off model-weight downloads (#6), and the scoring, model-server client and runner of the bake-off harness (on `sprint7/phase1-harness`, not merged). | `415dd88` to `911ddb1` |
+| 2026-10-20 to 11-09 | Sprint 7 after the Phase 0 sign-off: its merge into `main` (pull request #2); the diarization fix and the removal of its Hugging Face login (#3, #7); and Phase 1 so far: the gold set v0.1 to v0.4 with its labelling guide (#4), D5's run deadline and the signed D6 criteria note S1 and S2 (#5), the record of the bake-off model-weight downloads (#6), and the scoring, model-server client and runner of the bake-off harness (#8). | `415dd88` to `6534094` |
 
-Sprint and tier labels come from commit subjects and from the sprint table in
-[CLAUDE.md](../CLAUDE.md). The historical Sprint 1-4 view is
+Sprint and tier labels come from commit subjects and from the sprint table
+that CLAUDE.md held until `0ea4ddd`. The historical Sprint 1-4 view is
 [00-index.md](00-index.md) and [10-current-status.md](10-current-status.md).
 Per-change detail is in [CHANGES.md](CHANGES.md).
 
@@ -122,10 +122,11 @@ Per-change detail is in [CHANGES.md](CHANGES.md).
 
 **Sprint 7 is the Fact-Check Agent**: claim extraction with an open-source
 language model, evidence retrieval, and verdicts that cite their evidence
-(`CLAUDE.md` line 90). It is planned, not built. The plan has eight phases,
+(the Sprint 7 row of the sprint table that CLAUDE.md held until `0ea4ddd`,
+line 90 at `c86f0fc`). It is planned, not built. The plan has eight phases,
 0 to 7 (source plan v1.1, 2026-09-04, named in
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) lines 8-9; "Phases
-0–7" in `CLAUDE.md` line 90).
+0–7" in the same row).
 
 - **Phase 0, contract and scope lock**, is complete (signed 2026-10-19).
   It shipped no application code. Its outputs are written policies and a signed decision
@@ -206,7 +207,7 @@ Security controls and known limitations, in general terms, are in
 
 | Term | Meaning here |
 |---|---|
-| Sprint | A planned block of work in the sprint table in [CLAUDE.md](../CLAUDE.md) (Sprints 1-7). |
+| Sprint | A planned block of work; the sprint table that CLAUDE.md held until `0ea4ddd` listed Sprints 1-7. |
 | Tier | A hardening, test-coverage, clean-up or deferred-work pass outside the sprint plan (Tiers 1, 2, 3, S and N). |
 | N4b | The Tier N item for Urdu and Arabic (multilingual) support ([TIER-N-PLAN.md](TIER-N-PLAN.md) line 15). |
 | Phase | One of the eight steps, 0 to 7, of the Sprint 7 plan. |

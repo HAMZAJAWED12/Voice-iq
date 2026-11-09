@@ -1,4 +1,4 @@
-Last verified: 2026-11-09, 911ddb1
+Last verified: 2026-11-09, 6534094
 # Changelog
 
 What changed in VoiceIQ, backfilled from git history. Newest first, grouped
@@ -22,10 +22,10 @@ Taken from git at write time.
 
 | Measure | Value | Command |
 |---|---|---|
-| Commits reachable from HEAD (`911ddb1`) | 238 | `git rev-list --count HEAD` |
-| Non-merge commits | 229 | `git rev-list --count --no-merges HEAD` |
-| Merge commits | 9 (`032d822`, `49063bb`, `6e92898`, `4025199`, `c021e03`, `3a22ed2`, `a16f72c`, `c86f0fc`, `cbc3e2f`) | `git rev-list --count --merges HEAD` |
-| Commits on `origin/main` (`c86f0fc`) | 233 | `git rev-list --count origin/main` |
+| Commits reachable from HEAD (`6534094`) | 244 | `git rev-list --count HEAD` |
+| Non-merge commits | 234 | `git rev-list --count --no-merges HEAD` |
+| Merge commits | 10 (`032d822`, `49063bb`, `6e92898`, `4025199`, `c021e03`, `3a22ed2`, `a16f72c`, `c86f0fc`, `cbc3e2f`, `6534094`) | `git rev-list --count --merges HEAD` |
+| Commits on `origin/main` (`6534094`) | 244 | `git rev-list --count origin/main` |
 | Commits merged from `sprint7/doc-sync` by pull request #1 | 72 | `git rev-list --count 8fd3972..aa453f0` |
 | Commits merged from `sprint7/phase0-decisions` by pull request #2 | 2 | `git rev-list --count 49063bb..415dd88` |
 | Commits merged from `sprint7/diarization-fix` by pull request #3 | 2 | `git rev-list --count 6e92898..378d748` |
@@ -33,16 +33,17 @@ Taken from git at write time.
 | Commits merged from `sprint7/phase1-d5-deadline` by pull request #5 | 2 | `git rev-list --count c021e03..ed6792c` |
 | Commits merged from `sprint7/phase1-bakeoff-weights` by pull request #6 | 1 | `git rev-list --count c021e03..be42d0d` |
 | Commits merged from `sprint7/diarization-no-login` by pull request #7 | 2 | `git rev-list --count 4025199..551fc85` |
+| Commits merged from `sprint7/phase1-harness` by pull request #8 | 10 | `git rev-list --count c86f0fc..247d8a1` |
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse --format="%h %ad" --date=short` |
 
-Each of the 238 commits is listed in exactly one row below; a few hashes
+Each of the 244 commits is listed in exactly one row below; a few hashes
 also appear elsewhere as cross-references. Small commits of the same kind
 (wave-completion notes, a batch of stage extractions) share a row. Sections
 are ordered by their most recent commit. Dates are author dates.
 
 | Section | Dates | Commits |
 |---|---|---|
-| [D6 bake-off harness on `sprint7/phase1-harness`](#d6-bake-off-harness-on-sprint7phase1-harness) | 2026-11-04 to 2026-11-09 | 5 |
+| [D6 bake-off harness on `sprint7/phase1-harness`](#d6-bake-off-harness-on-sprint7phase1-harness) | 2026-11-04 to 2026-11-09 | 11 |
 | [Diarization login removal on `sprint7/diarization-no-login`](#diarization-login-removal-on-sprint7diarization-no-login) | 2026-10-24 to 2026-11-09 | 3 |
 | [Bake-off model-weight record on `sprint7/phase1-bakeoff-weights`](#bake-off-model-weight-record-on-sprint7phase1-bakeoff-weights) | 2026-10-30 to 2026-11-09 | 2 |
 | [D5 run deadline and D6 criteria note on `sprint7/phase1-d5-deadline`](#d5-run-deadline-and-d6-criteria-note-on-sprint7phase1-d5-deadline) | 2026-10-28 to 2026-11-09 | 3 |
@@ -65,9 +66,11 @@ are ordered by their most recent commit. Dates are author dates.
 
 ## D6 bake-off harness on `sprint7/phase1-harness`
 
-5 commits, 2026-11-04 to 2026-11-09, on a branch cut from `main` at
-`c021e03`: three harness milestones, a merge of `main` into the branch and
-one docs commit; not merged. The harness is Phase 1 evaluation tooling in
+11 commits, 2026-11-04 to 2026-11-09: 10 from a branch cut from `main`
+at `c021e03` (three harness milestones, a merge of `main` into the
+branch, three docs commits and three commits that correct stale notes),
+plus the merge commit of pull request #8 (`6534094`), which merged them
+into `main` on 2026-11-09. The harness is Phase 1 evaluation tooling in
 `app/evaluation/bakeoff/`, with its tests in `app/evaluation/tests/`,
 outside CI's pytest and mypy paths and linted by CI's ruff
 ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9).
@@ -79,6 +82,12 @@ outside CI's pytest and mypy paths and linted by CI's ruff
 | 2026-11-08 | Harness H3, the runner and its records. `inputs.py` builds the frozen requests and their hashes, only from gold v1.0. `launch.py` holds the frozen launch line and the server's start-up checks. `records.py` keeps an append-only run directory outside OneDrive. `runner.py` runs the pre-run checks and three interleaved runs, each starting with a discarded warm-up, with fault handling and voids. Records are stored as ASCII-escaped JSON (AMB-52, option (a)), so H2's 11 strict xfails now pass and the NEEDS-OWNER(AMB-52) marker is gone. The tests use fake processes and `httpx.MockTransport`, with sockets and process starts refused: 1329 new passing tests, plus 3 that skip on a host without symlinks or trailing-space names; 3449 pass in all. NEEDS-OWNER: AMB-66 and AMB-69. Before the commit, one local end-to-end pass on synthetic inputs, in a loopback-only network namespace, drove the pinned server through the runner. | `cf874ee` |
 | 2026-11-09 | `main` at `c86f0fc` is merged into the branch, bringing in pull requests #5 to #7. No conflicts. | `cbc3e2f` |
 | 2026-11-09 | The status doc's branch row lists pull requests #4 to #7 with their merge commits, and WORKFLOW.md names `sprint7/phase1-harness` as the current branch and in the push rule. Docs only. | `911ddb1` |
+| 2026-11-09 | The status doc records Phase 1 as in progress: the gold set up to v0.4, D5's run deadline and the D6 criteria note S1 and S2, the model-weight record and harness H1 to H3. This file gains sections for the gold set, the D5 deadline and D6 notes, the weight record and the harness, with merge rows for pull requests #4 to #7 and counts at `911ddb1`. ARCHITECTURE.md describes the harness and the gold-set data, and CONTEXT, EXPLANATION, SYSTEM, WORKFLOW and README no longer say Phase 1 has not started. Docs only. | `86fd358` |
+| 2026-11-09 | CLAUDE.md drops 79 lines that the repository already records (the layout tree, the sprint table and the resolved known issues) and says Phase 1 is in progress. No rule is removed. Docs only. | `0ea4ddd` |
+| 2026-11-09 | `stats.py` gives the "passes every gate" part and decision rules 1 to 5 to H4, not H3, and the message that `scoring.py`'s two claim-fidelity stubs raise names open point AMB-4 instead of a bake-off spec outside the repository. Docstrings and one error message. | `3059a59` |
+| 2026-11-09 | Five more stale notes in `scoring.py`, `stats.py`, `extraction.py`, `gold.py` and `test_extraction.py` now name the right milestone or open point. Docstrings and comments only. | `962e0da` |
+| 2026-11-09 | `client.py`'s notes on `/props` now say what H3 uses it for: the ready wait, the launch checks and the launch records, not the pre-run record. Docstrings only. | `247d8a1` |
+| 2026-11-09 | Pull request #8 merges `sprint7/phase1-harness` into `main` (merge commit; the tree equals `247d8a1`). | `6534094` |
 
 ## Diarization login removal on `sprint7/diarization-no-login`
 
@@ -192,8 +201,8 @@ pull request. Each code fix is its own commit with its own tests.
 | M2 | 2026-10-11 | Bad provider replies (non-finite numbers, JSON that is not an object or cannot be decoded, wrong nested types, over-deep metadata) end that one claim as `SOURCE_UNAVAILABLE`, never a verdict or a 500. The engine isolates each claim. No v1 model change. Tests in `app/insights/tests/test_factcheck_source_replies.py`. | `9aff207` |
 | M1 | 2026-10-11 | Outbound request URLs kept out of the logs: `setup_logging()` pins the `httpx` and `httpcore` loggers to WARNING (`app/utils/logger.py`). Follow-up: a failed Java callback logs the exception class and HTTP status only. Tests in `app/insights/tests/test_logging_hygiene.py`. | `c1b35d9`, `cedfe96` |
 
-Next: Phase 0 is complete (signed 2026-10-19) and Phase 1 may start.
-See [Next milestone](FACT-CHECK-AGENT-STATUS.md#next-milestone).
+Phase 0 was signed on 2026-10-19, and Phase 1 followed. Where it stands
+now: [Next milestone](FACT-CHECK-AGENT-STATUS.md#next-milestone).
 
 ### Status-document updates
 
@@ -520,8 +529,8 @@ gate. Labels in parentheses are the Tier 3 item ids from the commit subjects.
 
 ## Initial code and Sprints 1 to 4
 
-9 commits, 2026-02-10 to 2026-04-25. Sprint scopes, from the
-[CLAUDE.md](../CLAUDE.md) sprint table (lines 79 to 82): 1, foundation engines; 2, escalation
+9 commits, 2026-02-10 to 2026-04-25. Sprint scopes, from the sprint table
+that CLAUDE.md held until `0ea4ddd` (lines 79 to 82 at `c86f0fc`): 1, foundation engines; 2, escalation
 and inconsistency engines; 3, SQLite persistence and the Dockerfile; 4,
 handoff documentation. DOCS/00 to 10 (index:
 [00-index.md](00-index.md)) are the Sprint 1 to 4 snapshot.
