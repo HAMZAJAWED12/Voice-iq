@@ -1,4 +1,4 @@
-Last verified: 2026-10-24, 670b4de
+Last verified: 2026-11-09, 911ddb1
 # System: Runtime View
 
 This page covers how VoiceIQ runs: the two entrypoints, the Docker image, configuration, where data is stored, which outside services it calls, logging and CI. It does not cover:
@@ -60,7 +60,7 @@ The module docstring in `app/insight_main.py:11-15` still says port 8000, includ
 | Python packages | `requirements-insight.txt` plus `uvicorn[standard]==0.32.1` and `python-dotenv>=1.0.0` | `:45-49, :69-74` |
 | User | Non-root system user and group `app`, home `/app` | `:63, :82` |
 | Environment | `PYTHONDONTWRITEBYTECODE=1`, `PYTHONUNBUFFERED=1`, `PIP_NO_CACHE_DIR=1`, `PIP_DISABLE_PIP_VERSION_CHECK=1`, `VOICEIQ_ENVIRONMENT=production`, `VOICEIQ_DATABASE_URL=sqlite:////app/data/insights.db` | `:56-61` |
-| Contents | `requirements-insight.txt` (for the install step), `app/` and `.env.example`. `.dockerignore` keeps out `.env`, `data/`, tests, `DOCS/`, media and PDFs | `:69, :76-77`; `.dockerignore` |
+| Contents | `requirements-insight.txt` (for the install step), `app/` and `.env.example`. `.dockerignore` keeps out `.env`, `data/`, tests, `DOCS/`, media and PDFs. Its patterns do not exclude `app/evaluation/`, so the image also carries the D6 bake-off harness (`app/evaluation/bakeoff/`) and the gold-set versions in `app/evaluation/gold/`, which the service never imports. This was not checked with a Docker build | `:69, :76-77`; `.dockerignore` |
 | Volume | `/app/data`, owned by `app` | `:79-80` |
 | Healthcheck | Python `urllib` GET of `http://127.0.0.1:8888/healthz`, expects 200. Runs every 30 s, timeout 5 s, start period 10 s, 3 retries | `:85-87` |
 | Command | `uvicorn app.insight_main:app --host 0.0.0.0 --port 8888` | `:89` |
@@ -221,7 +221,7 @@ CI is defined in `.github/workflows/test.yml` and runs on pushes to `main` and o
 | `test` ("Run Insight Service unit tests") | 3.10 and 3.11 (matrix) | Installs `requirements-insight.txt` only, then runs `pytest -v app/insights/tests/ app/agent_brain/tests/` with `PYTHONPATH=.`. On failure, the end of the output is posted as an `::error::` annotation (`:56-100`) |
 
 - **Expected test result:** 1793 passed and 2 skipped on the light stack, measured 2026-10-24 at `670b4de`. The skips are `app/insights/tests/test_model_load_concurrency.py`, a 3-test module that needs the ML libraries, and `test_the_allowlisted_names_are_the_real_classes` in `app/insights/tests/test_diarization_service.py` ([CLAUDE.md](../CLAUDE.md), "One test lane").
-- **Not in CI:** a Docker build, the heavy ML stack, and the legacy top-level `tests/` folder.
+- **Not in CI:** a Docker build, the heavy ML stack, the legacy top-level `tests/` folder, and the tests and a mypy run of the D6 bake-off harness in `app/evaluation/` (checked 2026-11-09 at `911ddb1`), which CI's `ruff check .` does lint ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9; local commands in [WORKFLOW.md](WORKFLOW.md#the-bake-off-harness-tests)).
 - **Tool settings:** ruff and mypy are configured in `pyproject.toml`: line length 120, target `py310`, and the pydantic mypy plugin.
 - **Python versions in use:** Docker 3.11, CI 3.10 and 3.11, README "Python 3.10+" (`README.md:66`).
 - **Before a commit:** pre-commit hooks run locally: ruff, ruff-format, three hygiene hooks run through `python -m` (`7b25b3f`), and gitleaks (`.pre-commit-config.yaml`). How to use them is in [WORKFLOW.md](WORKFLOW.md).
