@@ -110,7 +110,7 @@ SCORED_FAULT_NOTE = "fault on a scored unit: no void possible (H3 refuses void_r
 BASELINE_LABEL = "baseline reported beside the idle figure; nothing voids on it (S2 §3.1; AMB-110)"
 ALLOWANCE_NOTE = (
     "the re-run allowance does not enter gate T's budget (deadline x 1/2), so an allowance-only re-opening gives the "
-    "same gate T and S2 §8 outcome (G4-14)"
+    "same gate T and S2 §8 outcome (S2 §6 gate T, §10)"
 )
 BINDING_NOTE = "measured inputs only; the report proposes no binding value (S2 §9; AMB-120)"
 LLAMA_SERVER = "llama-server"
@@ -249,7 +249,7 @@ def _refuse_paths(body: Mapping[str, Any], needles: tuple[str, ...]) -> None:
     for text in _strings(body):
         lowered = text.casefold()
         if any(needle in lowered for needle in folded) or _HOME_FORMS.search(lowered):
-            raise ValueError("a path reached the report body; nothing is written (S2 §9; G4-38)")
+            raise ValueError("a path reached the report body; nothing is written (S2 §9)")
 
 
 def refuse_paths(text: str, needles: tuple[str, ...]) -> None:

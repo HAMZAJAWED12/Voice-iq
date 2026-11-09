@@ -184,14 +184,14 @@ def _filled(operator: Mapping[str, str], name: str) -> str:
 def _count(operator: Mapping[str, str], name: str) -> int:
     value = _text(operator, name)
     if _COUNT.fullmatch(value) is None:
-        raise ReportError(f"operator.{name} must be digits only, not {value!r} (G4-6)")
+        raise ReportError(f"operator.{name} must be digits only, not {value!r}")
     return int(value)
 
 
 def _seconds(operator: Mapping[str, str], name: str) -> Fraction:
     value = _text(operator, name)
     if _DECIMAL.fullmatch(value) is None or Fraction(value) <= 0:
-        raise ReportError(f"operator.{name} must be a plain decimal above 0, not {value!r} (G4-6)")
+        raise ReportError(f"operator.{name} must be a plain decimal above 0, not {value!r}")
     return Fraction(value)
 
 
@@ -229,7 +229,7 @@ class OperatorValues:
         idle = _count(operator, "idle_free_vram_mib")
         audio = _count(operator, "audio_pipeline_vram_mib")
         if idle - audio - HEADROOM_MIB <= 0:
-            raise ReportError(f"the gate M budget {idle} - {audio} - {HEADROOM_MIB} MiB must be above 0 (G4-16)")
+            raise ReportError(f"the gate M budget {idle} - {audio} - {HEADROOM_MIB} MiB must be above 0 (S2 §6 gate M)")
         min_per_sec = _count(operator, "audio_vram_min_per_sec")
         if min_per_sec < MIN_SAMPLES_PER_SEC:
             raise ReportError(f"operator.audio_vram_min_per_sec must be at least {MIN_SAMPLES_PER_SEC} (S2 §6)")
@@ -337,7 +337,7 @@ def shared_memory_entries(pairs: Iterable[tuple[str, str]]) -> Mapping[str, Shar
     entries: dict[str, SharedMemory] = {}
     for slug, value in pairs:
         if slug in entries:
-            raise ReportError(f"--shared-memory names {slug} twice (G4-21)")
+            raise ReportError(f"--shared-memory names {slug} twice (S2 §6 gate M)")
         if value not in SHARED_MEMORY_VALUES:
             raise ReportError(f"--shared-memory {slug}={value} is not one of {SHARED_MEMORY_VALUES}")
         entries[slug] = cast(SharedMemory, value)
@@ -355,9 +355,9 @@ def check_report_inputs(view: RunView, operator: OperatorValues, inputs: ReportI
     ready = {CANDIDATE_SLUGS[candidate] for candidate in _ready(view)}
     for slug, value in inputs.shared_memory.items():
         if slug not in CANDIDATE_SLUGS.values():
-            raise ReportError(f"--shared-memory names {slug!r}, which is no candidate slug (G4-21)")
+            raise ReportError(f"--shared-memory names {slug!r}, which is no candidate slug (S2 §6 gate M)")
         if slug not in ready:
-            raise ReportError(f"--shared-memory names {slug}, whose pre-run was not ready (G4-21)")
+            raise ReportError(f"--shared-memory names {slug}, whose pre-run was not ready (S2 §6 gate M)")
         if value not in SHARED_MEMORY_VALUES:
             raise ReportError(f"--shared-memory {slug}={value!r} is not one of {SHARED_MEMORY_VALUES}")
     digest = inputs.shared_memory_evidence_sha256
@@ -374,14 +374,14 @@ def check_report_inputs(view: RunView, operator: OperatorValues, inputs: ReportI
     reason = inputs.reopening_reason
     if not supplied:
         if reason is not None:
-            raise ReportError("--reopening-reason needs --deadline-sec or --rerun-allowance-sec (G4-14)")
+            raise ReportError("--reopening-reason needs --deadline-sec or --rerun-allowance-sec (S2 §10)")
         return
     if not all(isinstance(value, Fraction) and value > 0 for value, _ in supplied):
-        raise ReportError("a re-opening value must be an exact number above 0 (G4-14)")
+        raise ReportError("a re-opening value must be an exact number above 0 (S2 §10)")
     if reason is None or not reason.strip():
-        raise ReportError("a re-opening value needs --reopening-reason (G4-14)")
+        raise ReportError("a re-opening value needs --reopening-reason (S2 §10)")
     if all(value == recorded for value, recorded in supplied):
-        raise ReportError("no supplied value differs from the manifest: S2 §10 re-opens only on a change (G4-14)")
+        raise ReportError("no supplied value differs from the manifest: S2 §10 re-opens only on a change")
 
 
 # ---------------------------------------------------------------- schedule end and integrity

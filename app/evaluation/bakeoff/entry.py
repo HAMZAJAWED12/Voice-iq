@@ -262,7 +262,7 @@ def _void_unit(
     try:
         report.refuse_paths(detail, _path_needles(view, run_dir))
     except ValueError:
-        raise StoreError("--detail must not hold a path (S2 §9; G4-38)") from None
+        raise StoreError("--detail must not hold a path (S2 §9)") from None
     store = RunStore.attach(run_dir, now=now, fsync=fsync, realpath=tools.realpath)
     try:
         fault = store.log_fault(key, "operator", item_id=None, detail=detail)

@@ -1293,3 +1293,58 @@ def test_the_pep_701_check_catches_3_12_only_f_strings(snippet: str) -> None:
 def test_the_pep_701_check_passes_310_f_strings(snippet: str) -> None:
     ast.parse(snippet)
     assert _pep701_uses(snippet) == []
+
+
+# Operator messages and the report body cite the signed note (S2) or an open point (AMB-n), never an H4 spec rule id
+# (Gn-m); `3059a59` made the same kind of change, to AMB-4. Comments and docstrings are outside this check.
+_SPEC_RULE_ID = re.compile(r"\bG[0-9]-[0-9]+\b")
+
+
+def _runtime_strings(source: str) -> list[tuple[int, str]]:
+    """Every string constant that is not a docstring (module, class, function or attribute), with its line."""
+    tree = ast.parse(source)
+    docstrings: set[int] = set()
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(body, list):
+            continue
+        first = body[0] if body else None
+        if (
+            isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
+            and isinstance(first, ast.Expr)
+            and isinstance(first.value, ast.Constant)
+        ):
+            docstrings.add(id(first.value))
+        for previous, current in zip(body, body[1:], strict=False):
+            if (
+                isinstance(previous, ast.Assign | ast.AnnAssign)
+                and isinstance(current, ast.Expr)
+                and isinstance(current.value, ast.Constant)
+            ):
+                docstrings.add(id(current.value))
+    return [
+        (node.lineno, node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstrings
+    ]
+
+
+@pytest.mark.parametrize("module", MODULES)
+def test_runtime_strings_cite_no_private_spec_rule_id(module: str) -> None:
+    assert [(line, text) for line, text in _runtime_strings(_source(module)) if _SPEC_RULE_ID.search(text)] == []
+
+
+@pytest.mark.parametrize(
+    ("snippet", "found"),
+    [
+        ('raise ValueError("bad value (G4-6)")\n', True),
+        ('x = f"{y} needs a reason (G4-14)"\n', True),
+        ('X = "a note (G4-14)"\n', True),
+        ('def f():\n    """A docstring may cite G4-6."""\n', False),
+        ('X = 1\n"""An attribute docstring may cite G4-6."""\n', False),
+        ("# a comment may cite G4-6\nx = 1\n", False),
+        ('raise ValueError("bad value (S2 §10)")\n', False),
+    ],
+)
+def test_the_runtime_string_check_catches_a_spec_rule_id(snippet: str, found: bool) -> None:
+    assert any(_SPEC_RULE_ID.search(text) for _line, text in _runtime_strings(snippet)) is found
