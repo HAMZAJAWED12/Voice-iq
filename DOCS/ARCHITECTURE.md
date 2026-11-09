@@ -1,11 +1,9 @@
-Last verified: 2026-11-09, ad6b79e
+Last verified: 2026-11-10, 0bd99d0
 # Architecture
 
-This document describes the code structure of VoiceIQ at commit `ad6b79e`
-(branch `sprint7/phase1-harness`, which adds milestone H4a of the D6
-bake-off harness under `app/evaluation/`; it is not yet merged into `main`,
-which is `b2f32d1` after pull request #9). Outside `app/evaluation/` the
-code is the same as on `main`. It shows how the packages
+This document describes the code structure of VoiceIQ at commit `0bd99d0`
+(`main` after pull request #10, which merged milestone H4a of the D6
+bake-off harness under `app/evaluation/`). It shows how the packages
 fit together, how data moves between them, where faults are contained, what
 is stored, and how to extend the system without breaking it.
 
@@ -91,7 +89,7 @@ Three parts sit outside the request path:
   with its inputs, launch checks and records (`inputs`, `launch`,
   `records`, `runner`; H3), and the scoring of a stored run directory
   with its report (`evidence`, `gates`, `decision`, `report`, `entry`;
-  H4a, on `sprint7/phase1-harness` and not yet on `main`). The package
+  H4a, merged by pull request #10). The package
   docstring (`app/evaluation/bakeoff/__init__.py`) lists the modules and
   gives the import direction and the I/O boundaries: only `client` talks
   to the network, and only to `http://127.0.0.1:<port>`; only `launch`
@@ -600,7 +598,7 @@ silent, and missing tables are created.
 ## 9. Sprint 7 fact-check agent — planned, not built
 
 **Everything in this section is planned, not built.** No code of the
-fact-check agent exists at `ad6b79e`. A search of `app/` at that commit finds
+fact-check agent exists at `0bd99d0`. A search of `app/` at that commit finds
 no `/v2` route, no `fact_check_report` key and no `factcheck_agent_*` table.
 The Phase 1 bake-off harness (section 2) is evaluation tooling, and the
 Sprint 7 diarization fixes (`9887e0b`, `670b4de`) change an existing

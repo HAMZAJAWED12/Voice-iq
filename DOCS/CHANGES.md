@@ -1,4 +1,4 @@
-Last verified: 2026-11-09, ad6b79e
+Last verified: 2026-11-10, 0bd99d0
 # Changelog
 
 What changed in VoiceIQ, backfilled from git history. Newest first, grouped
@@ -22,11 +22,10 @@ Taken from git at write time.
 
 | Measure | Value | Command |
 |---|---|---|
-| Commits reachable from HEAD (`ad6b79e`) | 246 | `git rev-list --count HEAD` |
-| Non-merge commits | 236 | `git rev-list --count --no-merges HEAD` |
-| Merge commits | 10 (`032d822`, `49063bb`, `6e92898`, `4025199`, `c021e03`, `3a22ed2`, `a16f72c`, `c86f0fc`, `cbc3e2f`, `6534094`) | `git rev-list --count --merges HEAD` |
-| Commits on `origin/main` (`b2f32d1`) | 246 | `git rev-list --count origin/main` |
-| Merge commits on `origin/main` | 11 (the 10 above plus `b2f32d1`, which is not reachable from HEAD) | `git rev-list --count --merges origin/main` |
+| Commits reachable from HEAD (`0bd99d0`) | 250 | `git rev-list --count HEAD` |
+| Non-merge commits | 238 | `git rev-list --count --no-merges HEAD` |
+| Merge commits | 12 (`032d822`, `49063bb`, `6e92898`, `4025199`, `c021e03`, `3a22ed2`, `a16f72c`, `c86f0fc`, `cbc3e2f`, `6534094`, `b2f32d1`, `0bd99d0`) | `git rev-list --count --merges HEAD` |
+| Commits on `origin/main` (`0bd99d0`) | 250 | `git rev-list --count origin/main` |
 | Commits merged from `sprint7/doc-sync` by pull request #1 | 72 | `git rev-list --count 8fd3972..aa453f0` |
 | Commits merged from `sprint7/phase0-decisions` by pull request #2 | 2 | `git rev-list --count 49063bb..415dd88` |
 | Commits merged from `sprint7/diarization-fix` by pull request #3 | 2 | `git rev-list --count 6e92898..378d748` |
@@ -36,18 +35,18 @@ Taken from git at write time.
 | Commits merged from `sprint7/diarization-no-login` by pull request #7 | 2 | `git rev-list --count 4025199..551fc85` |
 | Commits merged from `sprint7/phase1-harness` by pull request #8 | 10 | `git rev-list --count c86f0fc..247d8a1` |
 | Commits merged from `sprint7/phase1-harness` by pull request #9 | 1 | `git rev-list --count 6534094..8a62a37` |
+| Commits merged from `sprint7/phase1-harness` by pull request #10 | 3 | `git rev-list --count b2f32d1..a97679c` |
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse --format="%h %ad" --date=short` |
 
-Each of the 246 commits reachable from HEAD is listed in exactly one row
-below; a few hashes also appear elsewhere as cross-references. `b2f32d1`,
-the merge commit of pull request #9, is on `main` only, so it has no row
-and appears only as a cross-reference. Small commits of the same kind
-(wave-completion notes, a batch of stage extractions) share a row. Sections
-are ordered by their most recent commit. Dates are author dates.
+Each of the 250 commits reachable from HEAD is listed in exactly one row
+below; a few hashes also appear elsewhere as cross-references. Small
+commits of the same kind (wave-completion notes, a batch of stage
+extractions) share a row. Sections are ordered by their most recent
+commit. Dates are author dates.
 
 | Section | Dates | Commits |
 |---|---|---|
-| [D6 bake-off harness on `sprint7/phase1-harness`](#d6-bake-off-harness-on-sprint7phase1-harness) | 2026-11-04 to 2026-11-09 | 13 |
+| [D6 bake-off harness on `sprint7/phase1-harness`](#d6-bake-off-harness-on-sprint7phase1-harness) | 2026-11-04 to 2026-11-10 | 17 |
 | [Diarization login removal on `sprint7/diarization-no-login`](#diarization-login-removal-on-sprint7diarization-no-login) | 2026-10-24 to 2026-11-09 | 3 |
 | [Bake-off model-weight record on `sprint7/phase1-bakeoff-weights`](#bake-off-model-weight-record-on-sprint7phase1-bakeoff-weights) | 2026-10-30 to 2026-11-09 | 2 |
 | [D5 run deadline and D6 criteria note on `sprint7/phase1-d5-deadline`](#d5-run-deadline-and-d6-criteria-note-on-sprint7phase1-d5-deadline) | 2026-10-28 to 2026-11-09 | 3 |
@@ -70,14 +69,16 @@ are ordered by their most recent commit. Dates are author dates.
 
 ## D6 bake-off harness on `sprint7/phase1-harness`
 
-13 commits, 2026-11-04 to 2026-11-09: 10 from a branch cut from `main`
+17 commits, 2026-11-04 to 2026-11-10: 10 from a branch cut from `main`
 at `c021e03` (three harness milestones, a merge of `main` into the
 branch, three docs commits and three commits that correct stale notes),
 the merge commit of pull request #8 (`6534094`), which merged them
-into `main` on 2026-11-09, and 2 later commits on the branch. The first,
-a docs commit, was merged into `main` by pull request #9 on 2026-11-09;
-its merge commit, `b2f32d1`, is on `main` only. The second is harness
-milestone H4a, not yet merged into `main`. The harness is Phase 1
+into `main` on 2026-11-09, and 6 later commits: 4 from the branch and
+the merge commits of pull requests #9 (`b2f32d1`) and #10 (`0bd99d0`).
+Pull request #9 merged the first, a docs commit, into `main` on
+2026-11-09. Pull request #10 merged the other 3 on 2026-11-10: harness
+milestone H4a, a docs commit and a commit that makes the harness
+messages cite the signed D6 note. The harness is Phase 1
 evaluation tooling in `app/evaluation/bakeoff/`, with its tests in
 `app/evaluation/tests/`, outside CI's pytest and mypy paths and linted
 by CI's ruff ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section
@@ -96,8 +97,12 @@ by CI's ruff ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section
 | 2026-11-09 | Five more stale notes in `scoring.py`, `stats.py`, `extraction.py`, `gold.py` and `test_extraction.py` now name the right milestone or open point. Docstrings and comments only. | `962e0da` |
 | 2026-11-09 | `client.py`'s notes on `/props` now say what H3 uses it for: the ready wait, the launch checks and the launch records, not the pre-run record. Docstrings only. | `247d8a1` |
 | 2026-11-09 | Pull request #8 merges `sprint7/phase1-harness` into `main` (merge commit; the tree equals `247d8a1`). | `6534094` |
-| 2026-11-09 | The docs record pull request #8 and the harness on `main` at `6534094`: the status doc's branch row, Completed and In progress, the merge history and timeline in WORKFLOW.md and CONTEXT.md, and ARCHITECTURE.md, which also corrects two older statements. This file takes its counts at `6534094` and gains rows for `86fd358` to `247d8a1` and the merge. References to the sprint table that `0ea4ddd` removed from CLAUDE.md now say so (CONTEXT.md, CHANGES.md and SECURITY-HARDENING-PLAN.md). Pull request #9 merged this commit into `main` as `b2f32d1` (merge commit; the tree equals `8a62a37`), which is on `main` only. Docs only. | `8a62a37` |
-| 2026-11-09 | Harness H4a, scoring a stored run directory and writing its report. `evidence.py` holds the machine-evidence values that gate M reads, with no file access. `gates.py` holds the integrity checks on the stored records, the schedule end, the units to mark, gates L, J, C, T and M beside H1's A and S, and the reported-only blocks. `decision.py` applies the note's section 8 case-1 margin on the literal reading, with the section 3.13 three-run variant, then pin rules 1 to 5 with each step recorded, and gives the `FACTCHECK_LLM_MODEL` and `FACTCHECK_LLM_REVISION` values of a pin. `report.py` writes the body of `report-<n>.json`, the report of record, as one ASCII JSON line with exact fractions. It also holds the section 9 caveats and a fixed Markdown placeholder until H5 renders the Markdown, and refuses any configured path or home-directory form in the body. `entry.py` holds the report and void commands as the Python function `entry.main(argv)`; there is no command-line wiring yet. `records.py` and `launch.py` gain the hooks H4 needs; `runner.py` changes a docstring only. H4a loads no machine evidence, so gate M never passes, no candidate is pinnable and a scored report pins nothing (rule 5); a run to be scored that holds an attempt's host record is refused. No model or server has run through this code. The tests use synthetic data, with sockets and process starts refused: 983 new passing tests, plus the same 3 skips; 4432 pass in all. NEEDS-OWNER: AMB-106, AMB-116, AMB-129, AMB-130, AMB-134 to AMB-137 and AMB-139. Not yet merged into `main`. | `ad6b79e` |
+| 2026-11-09 | The docs record pull request #8 and the harness on `main` at `6534094`: the status doc's branch row, Completed and In progress, the merge history and timeline in WORKFLOW.md and CONTEXT.md, and ARCHITECTURE.md, which also corrects two older statements. This file takes its counts at `6534094` and gains rows for `86fd358` to `247d8a1` and the merge. References to the sprint table that `0ea4ddd` removed from CLAUDE.md now say so (CONTEXT.md, CHANGES.md and SECURITY-HARDENING-PLAN.md). Docs only. | `8a62a37` |
+| 2026-11-09 | Pull request #9 merges `sprint7/phase1-harness` into `main` (merge commit; the tree equals `8a62a37`). | `b2f32d1` |
+| 2026-11-09 | Harness H4a, scoring a stored run directory and writing its report. `evidence.py` holds the machine-evidence values that gate M reads, with no file access. `gates.py` holds the integrity checks on the stored records, the schedule end, the units to mark, gates L, J, C, T and M beside H1's A and S, and the reported-only blocks. `decision.py` applies the note's section 8 case-1 margin on the literal reading, with the section 3.13 three-run variant, then pin rules 1 to 5 with each step recorded, and gives the `FACTCHECK_LLM_MODEL` and `FACTCHECK_LLM_REVISION` values of a pin. `report.py` writes the body of `report-<n>.json`, the report of record, as one ASCII JSON line with exact fractions. It also holds the section 9 caveats and a fixed Markdown placeholder until H5 renders the Markdown, and refuses any configured path or home-directory form in the body. `entry.py` holds the report and void commands as the Python function `entry.main(argv)`; there is no command-line wiring yet. `records.py` and `launch.py` gain the hooks H4 needs; `runner.py` changes a docstring only. H4a loads no machine evidence, so gate M never passes, no candidate is pinnable and a scored report pins nothing (rule 5); a run to be scored that holds an attempt's host record is refused. No model or server has run through this code. The tests use synthetic data, with sockets and process starts refused: 983 new passing tests, plus the same 3 skips; 4432 pass in all. NEEDS-OWNER: AMB-106, AMB-116, AMB-129, AMB-130, AMB-134 to AMB-137 and AMB-139. | `ad6b79e` |
+| 2026-11-10 | The docs record harness H4a and pull request #9. The status doc's branch row names `main` at `b2f32d1` and pull request #9; the doc gains H4a under Completed with its test evidence and H4a's NEEDS-OWNER markers, and records the split of H4 into H4a and H4b in In progress, Remaining and Next milestone, with H4b next. This file takes its counts at `ad6b79e` and gains a counts row for pull request #9 and rows for `8a62a37` and `ad6b79e`. ARCHITECTURE.md lists the H4a modules and their I/O rules; WORKFLOW.md, CONTEXT.md, EXPLANATION.md, SYSTEM.md and CLAUDE.md are brought up to date. Docs only. | `39e51d3` |
+| 2026-11-10 | Twelve operator messages of the H4a report and void commands, and one note in every scored report body, cited rule ids of a milestone spec outside the repository. Eleven now cite sections of [D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md): in `gates.py` the gate M messages cite section 6 and the re-opening messages section 10; in `report.py` the re-run allowance note cites sections 6 (gate T) and 10 and the path refusal section 9; in `entry.py` the void detail refusal cites section 9. The two operator-value pattern messages drop the citation. A new check in `test_hygiene.py` fails when a string a harness module uses at run time holds such an id. Only string text changes in the three modules. 24 new passing tests, plus the same 3 skips; 4456 pass in all. | `a97679c` |
+| 2026-11-10 | Pull request #10 merges `sprint7/phase1-harness` into `main` (merge commit; the tree equals `a97679c`). | `0bd99d0` |
 
 ## Diarization login removal on `sprint7/diarization-no-login`
 

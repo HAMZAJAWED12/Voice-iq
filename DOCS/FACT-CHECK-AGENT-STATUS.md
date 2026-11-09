@@ -1,6 +1,6 @@
 # Fact-Check Agent — Live Status
 
-Owner: engineering · Status: **Phase 0 complete; Phase 1 in progress** · Created: 2026-10-11 · Updated: 2026-11-09
+Owner: engineering · Status: **Phase 0 complete; Phase 1 in progress** · Created: 2026-10-11 · Updated: 2026-11-10
 
 The one place that says where Sprint 7 stands. Update it with every
 milestone. Decision status is **not** kept here — it lives only in the
@@ -14,9 +14,9 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 
 | | |
 |---|---|
-| Date | 2026-11-09 |
-| Branch | `main` @ `b2f32d1` (as of 2026-11-09; pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix (`9887e0b`) was merged by pull request #3 (`4025199`); the gold set v0.4 (`d7071b2`) by pull request #4 (`c021e03`); the D5 run deadline and the signed D6 criteria note S1 and S2 (`420f659`, `ed6792c`) by pull request #5 (`3a22ed2`); the bake-off model-weight record (`be42d0d`) by pull request #6 (`a16f72c`); the removal of diarization's Hugging Face login (`670b4de`, `551fc85`) by pull request #7 (`c86f0fc`); the D6 bake-off harness H1 to H3 (`fb4a5d8`, `91d8289`, `cf874ee`), with three docs commits (`911ddb1`, `86fd358`, `0ea4ddd`) and three commits that correct stale notes (`3059a59`, `962e0da`, `247d8a1`), by pull request #8 (`6534094`), from `sprint7/phase1-harness`, cut from `main` at `c021e03` with `main` at `c86f0fc` merged in (`cbc3e2f`); and the docs commit that records pull request #8 (`8a62a37`) by pull request #9 (`b2f32d1`), from the same branch. Harness milestone H4a (`ad6b79e`) is on `sprint7/phase1-harness` and not yet merged into `main` |
-| Current phase | **Phase 0 — Contract and scope lock: complete** (signed 2026-10-19). **Phase 1 — model bake-off: in progress.** The gold set is at v0.4 (200 items, not yet frozen as v1.0), and the bake-off harness has milestones H1 to H3 on `main` and H4a (`ad6b79e`) on `sprint7/phase1-harness`, not yet merged; no bake-off has run. Phases 2–7 not started. No Sprint 7 application code exists: the harness is evaluation tooling under `app/evaluation/`, not application code ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9). |
+| Date | 2026-11-10 |
+| Branch | `main` @ `0bd99d0` (as of 2026-11-10; pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix (`9887e0b`) was merged by pull request #3 (`4025199`); the gold set v0.4 (`d7071b2`) by pull request #4 (`c021e03`); the D5 run deadline and the signed D6 criteria note S1 and S2 (`420f659`, `ed6792c`) by pull request #5 (`3a22ed2`); the bake-off model-weight record (`be42d0d`) by pull request #6 (`a16f72c`); the removal of diarization's Hugging Face login (`670b4de`, `551fc85`) by pull request #7 (`c86f0fc`); the D6 bake-off harness H1 to H3 (`fb4a5d8`, `91d8289`, `cf874ee`), with three docs commits (`911ddb1`, `86fd358`, `0ea4ddd`) and three commits that correct stale notes (`3059a59`, `962e0da`, `247d8a1`), by pull request #8 (`6534094`), from `sprint7/phase1-harness`, cut from `main` at `c021e03` with `main` at `c86f0fc` merged in (`cbc3e2f`); the docs commit that records pull request #8 (`8a62a37`) by pull request #9 (`b2f32d1`), from the same branch; and harness milestone H4a (`ad6b79e`), the docs commit that records H4a and pull request #9 (`39e51d3`), and the commit that makes the harness messages cite the signed D6 criteria note (`a97679c`), by pull request #10 (`0bd99d0`), from the same branch |
+| Current phase | **Phase 0 — Contract and scope lock: complete** (signed 2026-10-19). **Phase 1 — model bake-off: in progress.** The gold set is at v0.4 (200 items, not yet frozen as v1.0), and the bake-off harness has milestones H1 to H4a on `main` (H4a merged by pull request #10, `0bd99d0`); no bake-off has run. Phases 2–7 not started. No Sprint 7 application code exists: the harness is evaluation tooling under `app/evaluation/`, not application code ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9). |
 | Overall progress | **4.17 %** |
 
 **How the percentage is computed** — countable plan deliverables only. Each
@@ -46,7 +46,7 @@ v1.0, the harness still lacks H4b and H5, and no exit deliverable in
 
 ## Completed
 
-Verified against the repository on 2026-11-09 (`ad6b79e`).
+Verified against the repository on 2026-11-10 (`0bd99d0`).
 
 - **Phase 1 work so far** (no Phase 1 bullet is done yet; see *How the
   percentage is computed*):
@@ -66,9 +66,9 @@ Verified against the repository on 2026-11-09 (`ad6b79e`).
   - **Bake-off model-weight record** (2026-10-30), on
     `sprint7/phase1-bakeoff-weights`, merged by pull request #6
     (`a16f72c`): [DATA-FLOW.md](DATA-FLOW.md) §4 (`be42d0d`).
-  - **Bake-off harness H1 to H4a** (2026-11-04 to 2026-11-09), on
+  - **Bake-off harness H1 to H4a** (2026-11-04 to 2026-11-10), on
     `sprint7/phase1-harness`; H1 to H3 merged by pull request #8
-    (`6534094`), H4a (`ad6b79e`) not yet merged into `main`:
+    (`6534094`), H4a (`ad6b79e`) by pull request #10 (`0bd99d0`):
     evaluation tooling in `app/evaluation/bakeoff/`, outside CI's pytest
     and mypy paths and linted by CI's ruff (S2 section 11 item 9).
     - `fb4a5d8` — **H1, the scoring core:** gold-set loading with the
@@ -89,8 +89,8 @@ Verified against the repository on 2026-11-09 (`ad6b79e`).
       loopback-only network namespace, drove the pinned server through
       the runner.
     - `ad6b79e` — **H4a, the gates, decision and report:** scoring a
-      stored run directory and writing its report; not yet merged into
-      `main`. New modules: `evidence` (the machine-evidence values gate
+      stored run directory and writing its report; merged by pull request
+      #10. New modules: `evidence` (the machine-evidence values gate
       M reads, with no file access), `gates` (the integrity checks on
       the stored records, the schedule end, the units to mark, and gates
       L, J, C, T and M beside H1's A and S, plus the reported-only
@@ -110,13 +110,22 @@ Verified against the repository on 2026-11-09 (`ad6b79e`).
       a scored report pins nothing (rule 5); a run to be scored that
       holds an attempt's host record is refused. No model or server has
       run through this code.
+    - `a97679c` — **the harness messages cite the signed note:** twelve
+      operator messages of the report and void commands, and one note in
+      every scored report body, cited rule ids of a milestone spec outside
+      the repository. Eleven now cite sections of the signed D6 criteria
+      note and two drop the citation. Only string text changes in
+      `gates.py`, `report.py` and `entry.py`. A hygiene test keeps such ids
+      out of the strings the harness uses at run time. 24 new passing
+      tests.
 
-    Harness tests at `ad6b79e` (2026-11-09, local `.venv`, CPython
-    3.12.10): 4432 passed, 3 skipped (the skips need symlinks or a file
-    name with a trailing space, which this host refuses); 983 more than
-    the 3449 at `8a62a37`. On WSL, Python 3.11.17, the same tests give
-    4428 passed and 7 skipped (four more skips: PEP 701 f-string tests
-    that need Python 3.12). With every outbound socket refused, the same
+    Harness tests at `0bd99d0` (2026-11-10, local `.venv`, CPython
+    3.12.10; the same tree as `a97679c`): 4456 passed, 3 skipped (two
+    need a symlink, which this host refuses, and one a directory name
+    ending in a space, which this host drops); 24 more than the 4432 at
+    `ad6b79e`. On WSL, Python 3.11.17, the same tests give 4452 passed
+    and 7 skipped (four more skips: PEP 701 f-string tests that need
+    Python 3.12). With every outbound socket refused, the same
     tests pass and make no socket call. `ruff check` and
     `ruff format --check` on `app/evaluation` are clean (46 files),
     `ruff check .` is clean, and `mypy --python-version 3.10
@@ -340,8 +349,8 @@ Verified against the repository on 2026-11-09 (`ad6b79e`).
   section 11 item 1). Data preparation, no code.
 - **Phase 1, bake-off harness** — on `sprint7/phase1-harness`. H1 to H3
   are done and merged by pull request #8 (`6534094`); H4a is done
-  (`ad6b79e`) and not yet merged into `main` (see *Completed*); H4b and
-  H5 are next (see *Next milestone*).
+  (`ad6b79e`) and merged by pull request #10 (`0bd99d0`; see
+  *Completed*); H4b and H5 are next (see *Next milestone*).
 - **Prerequisite fixes** — only fixes that need no pending decision, one
   per milestone, smallest first. M1–M7, the old-rows fix, the decision-free
   hardening items, the owner-decided items and the pull-request review fix
@@ -403,8 +412,8 @@ before the phase that uses it:
 ## Next milestone
 
 **Phase 1 — model bake-off** (plan v1.1, Phase 1). The gold set is at
-v0.4 and the bake-off harness has milestones H1 to H3 on `main` and H4a
-on `sprint7/phase1-harness`, not yet merged (see *Completed*).
+v0.4 and the bake-off harness has milestones H1 to H4a on `main`
+(H4a merged by pull request #10, `0bd99d0`; see *Completed*).
 D5's run deadline was set and the D6 criteria note
 ([D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md): who may win, the gates,
 the margin and the licence check) was signed on 2026-10-28; its launch line
