@@ -15,7 +15,7 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 | | |
 |---|---|
 | Date | 2026-11-09 |
-| Branch | `main` @ `c86f0fc` (as of 2026-11-09; pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix (`9887e0b`) was merged by pull request #3 (`4025199`); the gold set v0.4 (`d7071b2`) by pull request #4 (`c021e03`); the D5 run deadline and the signed D6 criteria note S1 and S2 (`420f659`, `ed6792c`) by pull request #5 (`3a22ed2`); the bake-off model-weight record (`be42d0d`) by pull request #6 (`a16f72c`); and the removal of diarization's Hugging Face login (`670b4de`, `551fc85`) by pull request #7 (`c86f0fc`). The D6 bake-off harness H1 to H3 (`fb4a5d8`, `91d8289`, `cf874ee`) is on `sprint7/phase1-harness`, cut from `main` at `c021e03`, with `main` at `c86f0fc` merged in (`cbc3e2f`); not merged into `main` |
+| Branch | `main` @ `6534094` (as of 2026-11-09; pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix (`9887e0b`) was merged by pull request #3 (`4025199`); the gold set v0.4 (`d7071b2`) by pull request #4 (`c021e03`); the D5 run deadline and the signed D6 criteria note S1 and S2 (`420f659`, `ed6792c`) by pull request #5 (`3a22ed2`); the bake-off model-weight record (`be42d0d`) by pull request #6 (`a16f72c`); the removal of diarization's Hugging Face login (`670b4de`, `551fc85`) by pull request #7 (`c86f0fc`); and the D6 bake-off harness H1 to H3 (`fb4a5d8`, `91d8289`, `cf874ee`), with three docs commits (`911ddb1`, `86fd358`, `0ea4ddd`) and three commits that correct stale notes (`3059a59`, `962e0da`, `247d8a1`), by pull request #8 (`6534094`), from `sprint7/phase1-harness`, cut from `main` at `c021e03` with `main` at `c86f0fc` merged in (`cbc3e2f`) |
 | Current phase | **Phase 0 — Contract and scope lock: complete** (signed 2026-10-19). **Phase 1 — model bake-off: in progress.** The gold set is at v0.4 (200 items, not yet frozen as v1.0), and the bake-off harness has milestones H1 to H3; no bake-off has run. Phases 2–7 not started. No Sprint 7 application code exists: the harness is evaluation tooling under `app/evaluation/`, not application code ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9). |
 | Overall progress | **4.17 %** |
 
@@ -46,7 +46,7 @@ evidence* holds yet, so the figure stays 4.17 %.
 
 ## Completed
 
-Verified against the repository on 2026-11-09 (`911ddb1`).
+Verified against the repository on 2026-11-09 (`6534094`).
 
 - **Phase 1 work so far** (no Phase 1 bullet is done yet; see *How the
   percentage is computed*):
@@ -67,9 +67,9 @@ Verified against the repository on 2026-11-09 (`911ddb1`).
     `sprint7/phase1-bakeoff-weights`, merged by pull request #6
     (`a16f72c`): [DATA-FLOW.md](DATA-FLOW.md) §4 (`be42d0d`).
   - **Bake-off harness H1 to H3** (2026-11-04 to 2026-11-08), on
-    `sprint7/phase1-harness`, not merged: evaluation tooling in
-    `app/evaluation/bakeoff/`, outside CI's pytest and mypy paths and
-    linted by CI's ruff (S2 section 11 item 9).
+    `sprint7/phase1-harness`, merged by pull request #8 (`6534094`):
+    evaluation tooling in `app/evaluation/bakeoff/`, outside CI's pytest
+    and mypy paths and linted by CI's ruff (S2 section 11 item 9).
     - `fb4a5d8` — **H1, the scoring core:** gold-set loading with the
       manifest check, strict parsing of one extraction response, the
       section 5 matching and metrics, gates A and S on exact fractions,
@@ -309,9 +309,9 @@ Verified against the repository on 2026-11-09 (`911ddb1`).
   `checkability` of at least 0.6, then the freeze as v1.0 with its
   manifest hashes ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md)
   section 11 item 1). Data preparation, no code.
-- **Phase 1, bake-off harness** — on `sprint7/phase1-harness`, not
-  merged. H1 to H3 are done (see *Completed*); H4 and H5 are next (see
-  *Next milestone*).
+- **Phase 1, bake-off harness** — on `sprint7/phase1-harness`, merged by
+  pull request #8 (`6534094`). H1 to H3 are done (see *Completed*); H4 and
+  H5 are next (see *Next milestone*).
 - **Prerequisite fixes** — only fixes that need no pending decision, one
   per milestone, smallest first. M1–M7, the old-rows fix, the decision-free
   hardening items, the owner-decided items and the pull-request review fix

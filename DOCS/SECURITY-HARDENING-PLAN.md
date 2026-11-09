@@ -249,6 +249,8 @@ Per commit, all via the venv interpreter (`.venv\Scripts\python.exe -m ...`):
 - **Retention policy note** (S2) — TTL default + how to configure.
 - **`CLAUDE.md`** — add a "Tier S — security hardening" row to the sprint table
   and record the retention + rate-limit config knobs under "Working with this repo".
+  (Both landed in `ec8dc1e`. `0ea4ddd` later removed the sprint table from CLAUDE.md;
+  the config knobs remain under "Working with this repo".)
 - **`CHANGELOG.md`** (if started) — one line per item.
 - Commit messages carry the per-item rationale (as with Tier 3 / E2).
 

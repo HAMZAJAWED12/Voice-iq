@@ -1,10 +1,9 @@
-Last verified: 2026-11-09, 911ddb1
+Last verified: 2026-11-09, 6534094
 # Architecture
 
-This document describes the code structure of VoiceIQ at commit `911ddb1`
-(branch `sprint7/phase1-harness`, cut from `main` at `c021e03` and merged
-with `main` at `c86f0fc` in `cbc3e2f`; its code differs from `main` only in
-the D6 bake-off harness under `app/evaluation/`). It shows how the packages
+This document describes the code structure of VoiceIQ at commit `6534094`
+(`main` after pull request #8, which merged the D6 bake-off harness under
+`app/evaluation/`). It shows how the packages
 fit together, how data moves between them, where faults are contained, what
 is stored, and how to extend the system without breaking it.
 
@@ -198,7 +197,8 @@ dependencies and the rate limit have run (§3). Then `process_audio()` and
    FastAPI reads the form before the route runs (`_admission`, `:34-57`;
    `:153-165`). The rate limit's 429 also comes only after the whole upload,
    before the handler runs (`:129`, `app/security/rate_limit.py:84-86`). The count changes only on
-   its own loop, so it needs no lock ([DECISIONS.md #35](DECISIONS.md)).
+   its own loop, so it needs no lock (`:42-47`; the limits themselves are
+   [DECISIONS.md #35](DECISIONS.md)).
 4. `_admitted_request` creates the job workspace `data/jobs/<job_id>/`
    (`:177-178`, `app/utils/job_io.py:32-72`), then streams the upload to
    `input/original<ext>` in 1 MB chunks, checks the first bytes for a known
@@ -288,8 +288,10 @@ lazy, so the light CI lane is unchanged (`orchestrator.py:13-25`).
 How the stages connect:
 
 - Sentiment, keywords, gender and emotion each enrich `speaker_segments` in
-  turn and save a copy. `_final_response` picks the most-enriched saved file
-  (`orchestrator.py:906-911`).
+  turn and save a copy. `_final_response` uses the first non-empty copy of
+  emotion, gender and keywords, in that order, else the alignment output
+  (`orchestrator.py:906-911`). It never reads the sentiment copy, so sentiment
+  labels reach the response's segments only through a later stage's copy.
 - `_run_insights` calls `VoiceIQInsightAdapter.from_orchestrator(...)` and then
   `InsightService.generate(...)`. The adapter passes the pipeline's sentiment
   on as positivity: a positive label with confidence c becomes 0.5 + c/2, a
@@ -585,7 +587,7 @@ silent, and missing tables are created.
 ## 9. Sprint 7 fact-check agent — planned, not built
 
 **Everything in this section is planned, not built.** No code of the
-fact-check agent exists at `911ddb1`. A search of `app/` at that commit finds
+fact-check agent exists at `6534094`. A search of `app/` at that commit finds
 no `/v2` route, no `fact_check_report` key and no `factcheck_agent_*` table.
 The Phase 1 bake-off harness (section 2) is evaluation tooling, and the
 Sprint 7 diarization fixes (`9887e0b`, `670b4de`) change an existing
