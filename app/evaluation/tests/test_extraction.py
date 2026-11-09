@@ -241,7 +241,7 @@ def test_the_validator_has_exactly_the_reference_key_sets() -> None:
 
 
 def test_the_reference_key_sets_are_the_e2_sets() -> None:
-    # The sets H2 freezes and hashes with the prompts and the constrained schema (AMB-19), written out in full.
+    # The sets H2's constrained schema must equal exactly (AMB-19), written out in full.
     assert TOP_LEVEL_KEYS == {"claims", "nonCheckable"}
     assert CLAIM_KEYS == {"text", "segmentIds", "claimId", "speakerId", "checkability"}
     assert CHECKABILITY_KEYS == {"isCheckable", "reason"}

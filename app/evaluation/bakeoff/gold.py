@@ -4,7 +4,7 @@ Implements, from the signed D6 criteria note S2:
 
 - §3.12, data: the set is checked against its `MANIFEST.sha256` using LF bytes before anything is parsed, and it is
   synthetic and English only. `load_gold_set` has no way to skip the check. Refusing anything but v1.0 for a real
-  run is H2's job; the loader accepts any version directory.
+  run is H3's job (`inputs.GOLD_VERSION`); the loader accepts any version directory.
 - §5.1, keys: items are keyed by (`source_id`, `segment_id`), one item per segment (guide §2).
 - §5.2, row groups: in-scope `CHECKABLE` rows; in-scope non-checkable rows; out-of-scope rows; high-stakes rows,
   meaning out-of-scope rows in `HEALTH`, `LEGAL` or `PERSONAL_FINANCE` whatever their checkability. Groups come from

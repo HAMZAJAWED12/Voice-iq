@@ -12,8 +12,9 @@ Implements:
 - S2 §5.3, failures: a request that fails after its retry is an `ExtractionFailure` (invalid output, cut off, a
   timeout or a server error) and scores as empty output.
 
-The key sets below are H1's reference; H2 freezes and hashes them with the prompts and the constrained schema (spec
-AMB-19), and the schema must have exactly these keys. This module imports nothing from the rest of the package.
+The key sets below are H1's reference: H2's constrained schema must have exactly these keys, and
+`schemas.EXTRACTION_SCHEMA_SHA256` pins its bytes (spec AMB-19). H3's `inputs` hashes H5's prompts and each frozen
+request, schema included. This module imports nothing from the rest of the package.
 """
 
 from __future__ import annotations
@@ -141,7 +142,7 @@ class Extraction:
 
 @dataclass(frozen=True, slots=True)
 class ExtractionFailure:
-    """A request that failed after its retry (S2 §5.3); it scores as empty output. H2's runner passes the retry's
+    """A request that failed after its retry (S2 §5.3); it scores as empty output. H2's client passes the retry's
     failure kind."""
 
     source_id: str

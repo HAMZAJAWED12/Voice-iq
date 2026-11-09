@@ -19,8 +19,8 @@ Implements, from the signed D6 criteria note S2:
   numbers; `deliberately_false` is never used (the gold loader drops it).
 - §6, gates A and S, on exact fractions.
 
-Claim fidelity and per-proposition recall (§5.2, reported only) wait for the owner's definitions (spec AMB-4). §9
-reports every section 5 metric and the note fixes the scoring before any result exists, so that ruling is needed
+Claim fidelity and per-proposition recall (§5.2, reported only) wait for the owner's definitions (open point AMB-4).
+§9 reports every section 5 metric and the note fixes the scoring before any result exists, so that ruling is needed
 before the first run. Every ratio is an exact `Fraction`; a ratio with a zero denominator is None and fails any check
 on it. Nothing here calls a model or the network (§3.12: gold rows never leave the host, scoring included).
 """

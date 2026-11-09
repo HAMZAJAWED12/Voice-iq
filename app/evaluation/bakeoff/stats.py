@@ -348,7 +348,7 @@ def paired_bootstrap_multi_run(
 
 def determinism_variant(default_share: Fraction, challenger_share: Fraction) -> bool:
     """S2 §3.13 trigger: True when the share of requests whose output differs from run 1 is above 0 for either 4B
-    model. H2 computes the shares (AMB-25); H1 only applies the rule."""
+    model. H3's `runner.determinism_shares` computes the shares (AMB-25); H1 only applies the rule."""
     for share in (default_share, challenger_share):
         if not isinstance(share, Fraction) or not 0 <= share <= 1:
             raise ValueError("a determinism share is a Fraction between 0 and 1")
