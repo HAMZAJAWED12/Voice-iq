@@ -1,4 +1,4 @@
-Last verified: 2026-11-09, 911ddb1
+Last verified: 2026-11-09, ad6b79e
 # System: Runtime View
 
 This page covers how VoiceIQ runs: the two entrypoints, the Docker image, configuration, where data is stored, which outside services it calls, logging and CI. It does not cover:
@@ -221,7 +221,7 @@ CI is defined in `.github/workflows/test.yml` and runs on pushes to `main` and o
 | `test` ("Run Insight Service unit tests") | 3.10 and 3.11 (matrix) | Installs `requirements-insight.txt` only, then runs `pytest -v app/insights/tests/ app/agent_brain/tests/` with `PYTHONPATH=.`. On failure, the end of the output is posted as an `::error::` annotation (`:56-100`) |
 
 - **Expected test result:** 1793 passed and 2 skipped on the light stack, measured 2026-10-24 at `670b4de`. The skips are `app/insights/tests/test_model_load_concurrency.py`, a 3-test module that needs the ML libraries, and `test_the_allowlisted_names_are_the_real_classes` in `app/insights/tests/test_diarization_service.py` ([CLAUDE.md](../CLAUDE.md), "One test lane").
-- **Not in CI:** a Docker build, the heavy ML stack, the legacy top-level `tests/` folder, and the tests and a mypy run of the D6 bake-off harness in `app/evaluation/` (checked 2026-11-09 at `911ddb1`), which CI's `ruff check .` does lint ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9; local commands in [WORKFLOW.md](WORKFLOW.md#the-bake-off-harness-tests)).
+- **Not in CI:** a Docker build, the heavy ML stack, the legacy top-level `tests/` folder, and the tests and a mypy run of the D6 bake-off harness in `app/evaluation/` (checked 2026-11-09 at `ad6b79e`, with milestone H4a), which CI's `ruff check .` does lint ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9; local commands in [WORKFLOW.md](WORKFLOW.md#the-bake-off-harness-tests)).
 - **Tool settings:** ruff and mypy are configured in `pyproject.toml`: line length 120, target `py310`, and the pydantic mypy plugin.
 - **Python versions in use:** Docker 3.11, CI 3.10 and 3.11, README "Python 3.10+" (`README.md:66`).
 - **Before a commit:** pre-commit hooks run locally: ruff, ruff-format, three hygiene hooks run through `python -m` (`7b25b3f`), and gitleaks (`.pre-commit-config.yaml`). How to use them is in [WORKFLOW.md](WORKFLOW.md).

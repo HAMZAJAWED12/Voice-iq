@@ -1,4 +1,4 @@
-Last verified: 2026-11-09, 911ddb1
+Last verified: 2026-11-09, ad6b79e
 # VoiceIQ in Plain English
 
 This guide is for readers who do not write code: product owners, managers,
@@ -745,7 +745,7 @@ decision, see the decision register in
 and git (`94f6479`, `592e8e7`, `ef5b5e8`–`ef005dd`, `c6284b6`); phases and Phase 1 progress in
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) (*Current status*,
 *In progress*, *Remaining*), the gold set in `app/evaluation/gold/` and the
-bake-off harness in `app/evaluation/bakeoff/` (`fb4a5d8`, `91d8289`, `cf874ee`);
+bake-off harness in `app/evaluation/bakeoff/` (`fb4a5d8`, `91d8289`, `cf874ee`, `ad6b79e`);
 milestones in git (`c1b35d9`, `cedfe96`, `9aff207`, `dc03a44`, `8e51a94`,
 `1dbfac7`, `dc9caf3`, `dbae452`) and
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) (*Completed*);
