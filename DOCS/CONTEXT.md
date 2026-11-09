@@ -1,4 +1,4 @@
-Last verified: 2026-11-09, ad6b79e
+Last verified: 2026-11-10, 0bd99d0
 # Project Context
 
 Background for people joining, reviewing or sponsoring VoiceIQ: what the
@@ -109,7 +109,7 @@ are commit dates; some ranges overlap.
 | 2026-07-25 | Tier S: eight security-hardening items, all committed the same day. | `58f81f2` to `ec8dc1e` |
 | 2026-07-25 to 09-20 | Tier N: callback v2 spec (N1), lazy ML imports (N2), alignment tests and speed-up (N3), deadline phrases (N4a), language wiring for Urdu and Arabic (N4b-1 Phase 1), and the Agent Brain wired into the pipeline (L5). | `36697fd` to `17606d6` |
 | 2026-09-04 to 10-19 | Sprint 7, Phase 0: contract and decision register, gold-set scoping brief, documentation sync, prerequisite fixes M1-M6, security and reliability fixes, the fixes the owner decided on 2026-10-17, the tech-debt milestone M7, the pull-request review fix round, the merge into `main` (pull request #1) and the Phase 0 sign-off. | `c6284b6`, `8fd3972`, `ace45e4` to `e4398b1` |
-| 2026-10-20 to 11-09 | Sprint 7 after the Phase 0 sign-off: its merge into `main` (pull request #2); the diarization fix and the removal of its Hugging Face login (#3, #7); and Phase 1 so far: the gold set v0.1 to v0.4 with its labelling guide (#4), D5's run deadline and the signed D6 criteria note S1 and S2 (#5), the record of the bake-off model-weight downloads (#6), the scoring, model-server client and runner of the bake-off harness (#8) and the docs that record them (#9), and the harness's gates, decision and report (on `sprint7/phase1-harness`, not yet merged). | `415dd88` to `b2f32d1`; `ad6b79e` on the branch |
+| 2026-10-20 to 11-10 | Sprint 7 after the Phase 0 sign-off: its merge into `main` (pull request #2); the diarization fix and the removal of its Hugging Face login (#3, #7); and Phase 1 so far: the gold set v0.1 to v0.4 with its labelling guide (#4), D5's run deadline and the signed D6 criteria note S1 and S2 (#5), the record of the bake-off model-weight downloads (#6), the scoring, model-server client and runner of the bake-off harness (#8) and the docs that record them (#9), and the harness's gates, decision and report (#10). | `415dd88` to `0bd99d0` |
 
 Sprint and tier labels come from commit subjects and from the sprint table
 that CLAUDE.md held until `0ea4ddd`. The historical Sprint 1-4 view is
@@ -168,10 +168,9 @@ synthetic items; [DECISIONS.md](DECISIONS.md) #52 let labelling start before
 the rest of Phase 1). The bake-off harness in `app/evaluation/bakeoff/`,
 evaluation tooling rather than application code
 ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9), has its
-scoring, its model-server client and its runner on `main`. On
-`sprint7/phase1-harness`, not yet merged, it can also score a stored run and
-write its report (`ad6b79e`). It loads no machine evidence yet, so no
-candidate can be pinned. No bake-off has run. Some
+scoring, its model-server client and its runner, and it can score a stored run
+and write its report (`ad6b79e`, merged by pull request #10). It loads no
+machine evidence yet, so no candidate can be pinned. No bake-off has run. Some
 values are still open
 ([FACTCHECK-AGENT-PHASE-0.md §8](FACTCHECK-AGENT-PHASE-0.md#8-exit-checklist)).
 
