@@ -396,35 +396,43 @@ def server_environment(conditions: RunConditions, mode: LaunchMode) -> dict[str,
 
 class ServerProcess:
     """One running server. Building it starts it: an argv list, no shell, nothing on stdin, and stdout and stderr in one
-    new log file, because every log entry goes to stderr. Whoever builds one stops it, in a `finally`."""
+    new log file, because every log entry goes to stderr. With no log path, stdout and stderr go to `DEVNULL` and no
+    file is created; such a process has no log to read (`_server_log`). Whoever builds one stops it, in a `finally`."""
 
-    def __init__(self, argv: tuple[str, ...], env: Mapping[str, str], log_path: str, tools: LaunchTools) -> None:
+    def __init__(self, argv: tuple[str, ...], env: Mapping[str, str], log_path: str | None, tools: LaunchTools) -> None:
         self._log_path = log_path
         self._tools = tools
         self._stopped: StopResult | None = None
         self._stop_failed: ServerStopFailed | None = None
+        if log_path is None:
+            self._process = self._spawn(argv, env, subprocess.DEVNULL, subprocess.DEVNULL)
+            return
         log = tools.open_log(log_path)  # first: a log that exists raises FileExistsError and starts nothing
         try:
-            self._process = tools.popen(
+            self._process = self._spawn(argv, env, log, subprocess.STDOUT)
+        finally:
+            log.close()
+
+    def _spawn(self, argv: tuple[str, ...], env: Mapping[str, str], stdout: Any, stderr: Any) -> Any:
+        try:
+            return self._tools.popen(
                 list(argv),
                 stdin=subprocess.DEVNULL,
-                stdout=log,
-                stderr=subprocess.STDOUT,
+                stdout=stdout,
+                stderr=stderr,
                 env=dict(env),
                 shell=False,
                 close_fds=True,
             )
         except OSError as exc:
             raise SpawnFailed(type(exc).__name__) from None
-        finally:
-            log.close()
 
     @property
     def pid(self) -> int:
         return self._process.pid
 
     @property
-    def log_path(self) -> str:
+    def log_path(self) -> str | None:
         return self._log_path
 
     def poll(self) -> int | None:
@@ -468,8 +476,16 @@ class ServerProcess:
             raise ServerStopFailed from None
 
 
+def _server_log(process: ServerProcess, tools: LaunchTools) -> bytes:
+    """The server log's bytes. A process started without a log has none, and asking for it is a harness bug: a plain
+    `RuntimeError`, not a `LaunchError`, so the runner never records it as a launch fault."""
+    if process.log_path is None:
+        raise RuntimeError("server started without a log")
+    return tools.read_bytes(process.log_path)
+
+
 def _exited(process: ServerProcess, exit_code: int, tools: LaunchTools) -> ServerExited:
-    return ServerExited(exit_code, BIND_FAILED_TEXT.encode("ascii") in tools.read_bytes(process.log_path))
+    return ServerExited(exit_code, BIND_FAILED_TEXT.encode("ascii") in _server_log(process, tools))
 
 
 def wait_ready(
@@ -509,7 +525,7 @@ def read_settled_log(process: ServerProcess, tools: LaunchTools) -> str:
         code = process.poll()
         if code is not None:
             raise _exited(process, code, tools)
-        text = tools.read_bytes(process.log_path).decode("utf-8", errors="replace")
+        text = _server_log(process, tools).decode("utf-8", errors="replace")
         if any(_LISTENING.fullmatch(line) for line in _log_lines(text)):
             return text
         if tools.monotonic() - started >= LOG_SETTLE_SEC:

@@ -58,7 +58,7 @@ from app.evaluation.bakeoff.launch import (
     RunConditions,
 )
 from app.evaluation.bakeoff.records import OPERATOR_FIELDS, RunKey, RunView, load_run, log_name
-from app.evaluation.bakeoff.runner import RunnerDeps, ScheduleConfig, ScheduleResult, run_schedule
+from app.evaluation.bakeoff.runner import RunHooks, RunnerDeps, ScheduleConfig, ScheduleResult, run_schedule
 from app.evaluation.tests._client_fixtures import EMPTY, chat_response, input_tokens_response, valid_content
 from app.evaluation.tests._fixtures import Row, make_conversation, make_item, write_version
 
@@ -334,8 +334,8 @@ class FakeProcess:
 
 
 class FakePopen:
-    """`LaunchTools.popen`. Each call records its arguments, refuses a shell, writes `log` to the stdout file and gives
-    the next process; a step that is an exception is raised instead."""
+    """`LaunchTools.popen`. Each call records its arguments, refuses a shell, writes `log` to the stdout file, if stdout
+    is a file and not `DEVNULL`, and gives the next process; a step that is an exception is raised instead."""
 
     def __init__(self, *steps: FakeProcess | BaseException, log: str = LOG_DEFAULT) -> None:
         self.steps = list(steps)
@@ -349,7 +349,8 @@ class FakePopen:
         step = self.steps.pop(0)
         if isinstance(step, BaseException):
             raise step
-        kwargs["stdout"].write(self.log.encode("utf-8"))
+        if hasattr(kwargs["stdout"], "write"):
+            kwargs["stdout"].write(self.log.encode("utf-8"))
         return step
 
 
@@ -424,6 +425,41 @@ SCHEDULE_CANDIDATES = tuple(
     for candidate, content in zip(CANDIDATES, MODEL_BYTES, strict=True)
 )
 OPERATOR = dict.fromkeys(OPERATOR_FIELDS, "recorded")
+# Parseable, synthetic and role-neutral values for every operator field (H4 spec section 2 item 5): integer MiB, the
+# D5 deadline and allowance, an integer seed, "passed" for every check and section 2 field, synthetic card text and the
+# audio rate fields. `sysmem_fallback` is the policy text, so no shared-memory evidence is needed to pin.
+VALID_OPERATOR: dict[str, str] = {
+    "machine": "synthetic test machine",
+    "wsl_kernel": "synthetic kernel 1.0",
+    "cuda_version": "synthetic cuda 1.0",
+    "wsl_networking_mode": "nat",
+    "wsl_localhost_forwarding": "false",
+    "wslconfig_memory": "synthetic 16GB",
+    "wslconfig_swap": "synthetic 4GB",
+    "gpu_driver": "synthetic driver 1.0",
+    "windows_power_mode": "synthetic best performance",
+    "gpu_profile": "synthetic default profile",
+    "sysmem_fallback": "Prefer No Sysmem Fallback",
+    "namespace_outbound_check": "passed",
+    "namespace_eth0_check": "passed",
+    "namespace_lan_check": "passed",
+    "llama_cpp_commit": "27b7a8a",
+    "idle_free_vram_mib": "7899",
+    "audio_pipeline_vram_mib": "1000",
+    "run_deadline_sec": "125",
+    "rerun_allowance_sec": "25",
+    "bootstrap_seed": "20261109",
+    "section2_qwen3_4b": "passed",
+    "section2_qwen3_5_4b": "passed",
+    "section2_qwen3_8b": "passed",
+    "cuda_process_check": "passed",
+    "card_settings_qwen3_4b": "synthetic card settings one",
+    "card_settings_qwen3_5_4b": "synthetic card settings two",
+    "card_settings_qwen3_8b": "synthetic card settings three",
+    "prompt_development_models": "synthetic/model-a;synthetic/model-b@0123abcd",
+    "audio_vram_samples": "200",
+    "audio_vram_min_per_sec": "10",
+}
 DEFAULT_COUNT = 100
 
 
@@ -576,7 +612,11 @@ class _TrackedClient(ModelServerClient):
 
 class FakeHost:
     """The machine under one schedule. `events` lists `(what, launch)` in order, hooks included, for tests of the order
-    of things. `servers` and `processes` are by launch, and `hashed` lists the files read through `read_chunks`."""
+    of things. `servers` and `processes` are by launch, and `hashed` lists the files read through `read_chunks`.
+
+    With `proc_status`, each launch also registers `/proc/<pid>/status` beside its cmdline, and a stop signal replaces
+    both with a `FileNotFoundError`, as a process that ended leaves /proc. Without it, nothing of that changes, as in
+    H3. `list_pids` gives the pids whose cmdline is still readable."""
 
     def __init__(
         self,
@@ -586,7 +626,9 @@ class FakeHost:
         counts: Mapping[str, int] | None = None,
         realpaths: Mapping[str, str] | None = None,
         net_dev: bytes = NET_DEV_LOOPBACK,
+        proc_status: bytes | None = None,
     ) -> None:
+        self.proc_status = proc_status
         self.scripts = dict(scripts or {})
         self.counts = dict(counts or {})
         self.realpaths = dict(realpaths or {})
@@ -630,14 +672,17 @@ class FakeHost:
         if script.spawn_error is not None:
             raise script.spawn_error
         kwargs["stdout"].write(self._log(name, args, kwargs["env"], script).encode("utf-8"))
+        pid = 4000 + len(self.launches)
         process = FakeProcess(
-            pid=4000 + len(self.launches),
+            pid=pid,
             polls=script.polls,
             waits=script.waits,
-            on_signal=lambda signal: self.events.append((signal, name)),
+            on_signal=lambda signal: self._signalled(signal, name, pid),
         )
         cmdline = b"".join(argument.encode("utf-8") + b"\0" for argument in args)
         self.files.table[f"/proc/{process.pid}/cmdline"] = cmdline if script.cmdline is None else script.cmdline
+        if self.proc_status is not None:
+            self.files.table[f"/proc/{process.pid}/status"] = self.proc_status
         self.processes[name] = process
         self._server = FakeModelServer(
             script,
@@ -650,6 +695,22 @@ class FakeHost:
         )
         self.servers[name] = self._server
         return process
+
+    def _signalled(self, signal: str, name: str, pid: int) -> None:
+        self.events.append((signal, name))
+        if self.proc_status is not None:
+            for entry in ("cmdline", "status"):
+                path = f"/proc/{pid}/{entry}"
+                self.files.table[path] = FileNotFoundError(path)
+
+    def list_pids(self) -> tuple[int, ...]:
+        """The pids of this host's launches whose `/proc/<pid>/cmdline` can still be read, in launch order."""
+        table = self.files.table
+        return tuple(
+            process.pid
+            for process in self.processes.values()
+            if isinstance(table.get(f"/proc/{process.pid}/cmdline"), bytes)
+        )
 
     def _log(self, name: str, args: list[str], env: Mapping[str, str], script: ServerScript) -> str:
         """The log a clean launch writes: its own context, and the recurrent buffer only on Qwen3.5-4B."""
@@ -723,7 +784,7 @@ class ScheduleRig:
     inputs: FrozenInputs
     config: ScheduleConfig
     host: FakeHost
-    hooks: RecordingHooks
+    hooks: RunHooks
     deps: RunnerDeps
 
     @property
@@ -750,11 +811,14 @@ def schedule_rig(
     *,
     conditions: RunConditions = CONDITIONS,
     fail: Callable[[str, RunKey], BaseException | None] = lambda _name, _key: None,
+    hooks: Callable[[FakeHost], RunHooks] | None = None,
+    operator: Mapping[str, str] = OPERATOR,
     **host_options: Any,
 ) -> ScheduleRig:
-    """A schedule over `inputs` into `<root>/run_1`, on a clean `FakeHost` but for `scripts`."""
+    """A schedule over `inputs` into `<root>/run_1`, on a clean `FakeHost` but for `scripts`. `hooks` builds the run
+    hooks from the host; without it they are `RecordingHooks` with `fail`. `operator` is the manifest's operator."""
     host = FakeHost(inputs, scripts, **host_options)
-    hooks = RecordingHooks(host.events, fail)
-    config = ScheduleConfig(SCHEDULE_CANDIDATES, conditions, OPERATOR, str(root), "run_1")
-    deps = RunnerDeps(hooks=hooks, client_factory=host.client, tools=host.tools(), now=fixed_now, fsync=no_fsync)
-    return ScheduleRig(inputs, config, host, hooks, deps)
+    run_hooks = RecordingHooks(host.events, fail) if hooks is None else hooks(host)
+    config = ScheduleConfig(SCHEDULE_CANDIDATES, conditions, operator, str(root), "run_1")
+    deps = RunnerDeps(hooks=run_hooks, client_factory=host.client, tools=host.tools(), now=fixed_now, fsync=no_fsync)
+    return ScheduleRig(inputs, config, host, run_hooks, deps)

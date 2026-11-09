@@ -1,9 +1,11 @@
-Last verified: 2026-11-09, 6534094
+Last verified: 2026-11-09, ad6b79e
 # Architecture
 
-This document describes the code structure of VoiceIQ at commit `6534094`
-(`main` after pull request #8, which merged the D6 bake-off harness under
-`app/evaluation/`). It shows how the packages
+This document describes the code structure of VoiceIQ at commit `ad6b79e`
+(branch `sprint7/phase1-harness`, which adds milestone H4a of the D6
+bake-off harness under `app/evaluation/`; it is not yet merged into `main`,
+which is `b2f32d1` after pull request #9). Outside `app/evaluation/` the
+code is the same as on `main`. It shows how the packages
 fit together, how data moves between them, where faults are contained, what
 is stored, and how to extend the system without breaking it.
 
@@ -85,13 +87,24 @@ Three parts sit outside the request path:
   Only its own modules and its tests in `app/evaluation/tests/` import it,
   and CI runs neither those tests nor mypy over it. It holds the scoring
   core (`gold`, `extraction`, `scoring`, `stats`; milestone H1), the
-  model-server client (`schemas`, `probe`, `client`; H2), and the runner
+  model-server client (`schemas`, `probe`, `client`; H2), the runner
   with its inputs, launch checks and records (`inputs`, `launch`,
-  `records`, `runner`; H3). The package docstring
-  (`app/evaluation/bakeoff/__init__.py`) gives the import direction and
-  the I/O boundaries: only `client` talks to the network, and only to
-  `http://127.0.0.1:<port>`; only `launch` starts a process; only
-  `records` writes results, outside OneDrive. It holds no prompt text yet.
+  `records`, `runner`; H3), and the scoring of a stored run directory
+  with its report (`evidence`, `gates`, `decision`, `report`, `entry`;
+  H4a, on `sprint7/phase1-harness` and not yet on `main`). The package
+  docstring (`app/evaluation/bakeoff/__init__.py`) lists the modules and
+  gives the import direction and the I/O boundaries: only `client` talks
+  to the network, and only to `http://127.0.0.1:<port>`; only `launch`
+  starts a process; only `records` writes results and reports, outside
+  OneDrive; `evidence`, `gates`, `decision` and `report` read no file,
+  start nothing and read no clock. No H1 to H3 module imports an H4a
+  module, and no other module in the package imports `entry`.
+  `entry.main(argv)` runs the `report` and `void` commands as a Python
+  function; there is no command-line wiring yet (no `__main__` and no
+  console script). H4a loads no machine evidence, so gate M never
+  passes, no candidate is pinnable and a scored report pins nothing. No
+  model or server has run through it, and no bake-off has run. It holds
+  no prompt text yet.
   `gold` loads any gold-set version directory, such as those in
   `app/evaluation/gold/` (`v0.1` to `v0.4`, each with `conversations.jsonl`,
   `items.csv`, `items.jsonl` and a `MANIFEST.sha256`), but `inputs` builds
@@ -587,7 +600,7 @@ silent, and missing tables are created.
 ## 9. Sprint 7 fact-check agent — planned, not built
 
 **Everything in this section is planned, not built.** No code of the
-fact-check agent exists at `6534094`. A search of `app/` at that commit finds
+fact-check agent exists at `ad6b79e`. A search of `app/` at that commit finds
 no `/v2` route, no `fact_check_report` key and no `factcheck_agent_*` table.
 The Phase 1 bake-off harness (section 2) is evaluation tooling, and the
 Sprint 7 diarization fixes (`9887e0b`, `670b4de`) change an existing

@@ -447,7 +447,8 @@ class _Schedule:
         self._repeat(candidate, "unconstrained", None, self._unconstrained_work)
 
     def contended(self, candidate: Candidate) -> None:
-        """The contended session-run (S2 §6). It is not gated, so a unit with no complete attempt stays absent."""
+        """The contended session-run (S2 §6). It feeds gate M's together-session swap and RAM checks in H4. A unit with
+        no complete attempt stays absent, which leaves those checks not_measured (AMB-106)."""
         self._repeat(candidate, "contended", None, self._contended_work)
 
     def _repeat(
