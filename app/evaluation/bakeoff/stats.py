@@ -5,7 +5,7 @@ Implements, from the signed D6 criteria note S2:
 - §8, margin test case 1. Qwen3.5-4B (the challenger) against Qwen3-4B (the default): (1) extraction F1 at least
   0.03 higher; (2) a paired bootstrap over the conversations, 10,000 resamples with a recorded seed, gives a
   one-sided 95% lower bound on the F1 difference above 0; (3) Layer B routing accuracy no more than 0.02 lower;
-  (4) no more high-stakes leaks. The "passes every gate" part and decision rules 1-5 are H3's, not here.
+  (4) no more high-stakes leaks. The "passes every gate" part and decision rules 1-5 are H4's, not here.
 - §8, score: extraction F1 from run 1, pooled over conversations (2TP / (2TP + FP + FN)).
 - §3.13, determinism variant: when the share of requests whose output differs from run 1 is above 0 for either 4B
   model, each case-1 condition must hold on the mean over runs and in at least two of the three runs, and the
@@ -507,7 +507,7 @@ def margin_case1(
 
     Without the §3.13 variant, run 1 (index 0) decides. With it, exactly three runs per candidate are needed, and each
     condition must hold on the mean over runs and in at least two of the three runs (run r against run r). The test
-    applies whether or not the default passed its gates; the "passes every gate" part is H3's.
+    applies whether or not the default passed its gates; the "passes every gate" part is H4's.
     """
     if not isinstance(variant, bool):
         raise TypeError("variant must be a bool (S2 §3.13 determinism trigger)")

@@ -99,7 +99,7 @@ SPELLED_NUMBER_WORDS = frozenset(
 )
 FIDELITY_PENDING = (
     "claim fidelity / per-proposition recall: definitions pending the owner (criteria note S2 §5.2); "
-    "see bake-off spec AMB-4"
+    "open point AMB-4"
 )
 
 _DIGIT = re.compile(r"[0-9]")
