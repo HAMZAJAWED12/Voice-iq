@@ -9,8 +9,8 @@ Implements:
 - S2 §3.2, environment: the server binds 127.0.0.1 in a loopback-only namespace, so `http://127.0.0.1:<port>` is the
   only base URL accepted, and proxy, netrc and SSL certificate settings are never read from the environment. The
   harness sends no tools and uses no function calling.
-- S2 §3.3, launch line: every timed request sends `cache_prompt: false`. `fetch_props` reads the context per slot for
-  the pre-run record.
+- S2 §3.3, launch line: every timed request sends `cache_prompt: false`. `fetch_props` reads `/props` for H3's ready
+  wait, launch checks and launch records.
 - S2 §3.5, context: "every request uses no more than 90% of the context". `uses` is the server's count of the exact
   request body plus the output cap, and it fits when `10 * uses <= 9 * n_ctx`, so 11,059 at 12,288. The count comes
   from `/v1/chat/completions/input_tokens`, which applies the chat template, `chat_template_kwargs` and
@@ -400,7 +400,7 @@ class Modalities:
 
 @dataclass(frozen=True, slots=True)
 class ServerProps:
-    """What `GET /props` reports, for H3's pre-run record. H2 never takes a limit from it."""
+    """What `GET /props` reports, for H3's launch checks and launch records. H2 never takes a limit from it."""
 
     n_ctx: int
     total_slots: int
@@ -1014,7 +1014,8 @@ class ModelServerClient:
         return self._count(repair, label="repair_bound", reserved_tokens=request.max_tokens)
 
     def fetch_props(self) -> ServerProps:
-        """`GET /props` for H3's pre-run record (S2 §3.3). Any failure raises `ServerCheckError`."""
+        """`GET /props` for H3's ready wait, launch checks and launch records (S2 §3.3). Any failure raises
+        `ServerCheckError`."""
         exchange = self._exchange("GET", PROPS_PATH, None, CHECK_TIMEOUT_SEC)
         if exchange.fault is not None:
             raise ServerCheckError(PROPS_PATH, f"props: {exchange.fault.text}", exchange.fault.http_status)
