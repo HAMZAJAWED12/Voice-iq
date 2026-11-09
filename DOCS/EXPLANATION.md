@@ -1,4 +1,4 @@
-Last verified: 2026-10-24, 670b4de
+Last verified: 2026-11-09, 911ddb1
 # VoiceIQ in Plain English
 
 This guide is for readers who do not write code: product owners, managers,
@@ -664,7 +664,7 @@ decision, see the decision register in
 | Sprint 4 | The first handover documentation set, files `01`–`10` in this folder (see [00-index.md](00-index.md)) |
 | Sprint 5 | The rule-based fact-check engine described in step 10 (commit `592e8e7`) |
 | Sprint 6 | The Agent Brain described in step 8 (commits `ef5b5e8` to `ef005dd`) |
-| Sprint 7 | The **Fact-Check Agent**: a planned replacement for the rule-based fact-checker that uses an open-source LLM (large language model) to find claims, search for evidence and cite sources. It is organised in Phases 0–7. Sprint 7 Phases 1–7 are planned, not built. |
+| Sprint 7 | The **Fact-Check Agent**: a planned replacement for the rule-based fact-checker that uses an open-source LLM (large language model) to find claims, search for evidence and cite sources. It is organised in Phases 0–7. Phase 1 is under way: a draft of the gold set (not yet frozen for use) and part of the tool that will compare the candidate models exist, and no model has been chosen yet. Phases 2–7 are planned, not built. |
 | Phase 0 | Sprint 7's first phase: agreeing the contract and scope, and signing the decisions in the register (D1–D10, D3b, D10-T and U1–U10). It produces documents only, with no code. Completed 2026-10-19. |
 | Phase 1 | Build a gold set (a hand-checked collection of example claims with known answers, used to measure accuracy), set up a model server, run a "bake-off" between candidate models, and pin the winner |
 | Phase 2 | New version-2 data models, the connection to the language model, and settings |
@@ -742,8 +742,10 @@ decision, see the decision register in
 | Insight engines | The rule-based analysis in step 7 |
 
 *Source:* sprint history in [10-current-status.md](10-current-status.md)
-and git (`94f6479`, `592e8e7`, `ef5b5e8`–`ef005dd`, `c6284b6`); phases in
-[FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) (*Remaining*);
+and git (`94f6479`, `592e8e7`, `ef5b5e8`–`ef005dd`, `c6284b6`); phases and Phase 1 progress in
+[FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) (*Current status*,
+*In progress*, *Remaining*), the gold set in `app/evaluation/gold/` and the
+bake-off harness in `app/evaluation/bakeoff/` (`fb4a5d8`, `91d8289`, `cf874ee`);
 milestones in git (`c1b35d9`, `cedfe96`, `9aff207`, `dc03a44`, `8e51a94`,
 `1dbfac7`, `dc9caf3`, `dbae452`) and
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md) (*Completed*);

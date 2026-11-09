@@ -1,4 +1,4 @@
-Last verified: 2026-10-24, 670b4de
+Last verified: 2026-11-09, 911ddb1
 # Changelog
 
 What changed in VoiceIQ, backfilled from git history. Newest first, grouped
@@ -22,23 +22,31 @@ Taken from git at write time.
 
 | Measure | Value | Command |
 |---|---|---|
-| Commits reachable from HEAD (`670b4de`) | 221 | `git rev-list --count HEAD` |
-| Non-merge commits | 217 | `git rev-list --count --no-merges HEAD` |
-| Merge commits | 4 (`032d822`, `49063bb`, `6e92898`, `4025199`) | `git rev-list --count --merges HEAD` |
-| Commits on `origin/main` (`4025199`) | 220 | `git rev-list --count origin/main` |
+| Commits reachable from HEAD (`911ddb1`) | 238 | `git rev-list --count HEAD` |
+| Non-merge commits | 229 | `git rev-list --count --no-merges HEAD` |
+| Merge commits | 9 (`032d822`, `49063bb`, `6e92898`, `4025199`, `c021e03`, `3a22ed2`, `a16f72c`, `c86f0fc`, `cbc3e2f`) | `git rev-list --count --merges HEAD` |
+| Commits on `origin/main` (`c86f0fc`) | 233 | `git rev-list --count origin/main` |
 | Commits merged from `sprint7/doc-sync` by pull request #1 | 72 | `git rev-list --count 8fd3972..aa453f0` |
 | Commits merged from `sprint7/phase0-decisions` by pull request #2 | 2 | `git rev-list --count 49063bb..415dd88` |
 | Commits merged from `sprint7/diarization-fix` by pull request #3 | 2 | `git rev-list --count 6e92898..378d748` |
+| Commits merged from `sprint7/phase1-gold-set` by pull request #4 | 4 | `git rev-list --count 6e92898..d7071b2` |
+| Commits merged from `sprint7/phase1-d5-deadline` by pull request #5 | 2 | `git rev-list --count c021e03..ed6792c` |
+| Commits merged from `sprint7/phase1-bakeoff-weights` by pull request #6 | 1 | `git rev-list --count c021e03..be42d0d` |
+| Commits merged from `sprint7/diarization-no-login` by pull request #7 | 2 | `git rev-list --count 4025199..551fc85` |
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse --format="%h %ad" --date=short` |
 
-Each of the 221 commits is listed in exactly one row below; a few hashes
+Each of the 238 commits is listed in exactly one row below; a few hashes
 also appear elsewhere as cross-references. Small commits of the same kind
 (wave-completion notes, a batch of stage extractions) share a row. Sections
 are ordered by their most recent commit. Dates are author dates.
 
 | Section | Dates | Commits |
 |---|---|---|
-| [Diarization login removal on `sprint7/diarization-no-login`](#diarization-login-removal-on-sprint7diarization-no-login) | 2026-10-24 | 1 |
+| [D6 bake-off harness on `sprint7/phase1-harness`](#d6-bake-off-harness-on-sprint7phase1-harness) | 2026-11-04 to 2026-11-09 | 5 |
+| [Diarization login removal on `sprint7/diarization-no-login`](#diarization-login-removal-on-sprint7diarization-no-login) | 2026-10-24 to 2026-11-09 | 3 |
+| [Bake-off model-weight record on `sprint7/phase1-bakeoff-weights`](#bake-off-model-weight-record-on-sprint7phase1-bakeoff-weights) | 2026-10-30 to 2026-11-09 | 2 |
+| [D5 run deadline and D6 criteria note on `sprint7/phase1-d5-deadline`](#d5-run-deadline-and-d6-criteria-note-on-sprint7phase1-d5-deadline) | 2026-10-28 to 2026-11-09 | 3 |
+| [Gold set on `sprint7/phase1-gold-set`](#gold-set-on-sprint7phase1-gold-set) | 2026-10-23 to 2026-10-25 | 5 |
 | [Diarization fix on `sprint7/diarization-fix`](#diarization-fix-on-sprint7diarization-fix) | 2026-10-24 | 3 |
 | [Phase 0 sign-off on `sprint7/phase0-decisions`](#phase-0-sign-off-on-sprint7phase0-decisions) | 2026-10-19 to 2026-10-20 | 3 |
 | [Sprint 7 on `sprint7/doc-sync`](#sprint-7-on-sprint7doc-sync) | 2026-10-11 to 2026-10-19 | 73 |
@@ -55,13 +63,70 @@ are ordered by their most recent commit. Dates are author dates.
 | [Sprint 5: fact-check engine](#sprint-5-fact-check-engine) | 2026-05-03 | 2 |
 | [Initial code and Sprints 1 to 4](#initial-code-and-sprints-1-to-4) | 2026-02-10 to 2026-04-25 | 9 |
 
+## D6 bake-off harness on `sprint7/phase1-harness`
+
+5 commits, 2026-11-04 to 2026-11-09, on a branch cut from `main` at
+`c021e03`: three harness milestones, a merge of `main` into the branch and
+one docs commit; not merged. The harness is Phase 1 evaluation tooling in
+`app/evaluation/bakeoff/`, with its tests in `app/evaluation/tests/`,
+outside CI's pytest and mypy paths and linted by CI's ruff
+([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9).
+
+| Date | Change | Commit |
+|---|---|---|
+| 2026-11-04 | Harness H1, the scoring core. `gold.py` loads a gold-set version and checks its SHA-256 manifest and that `items.csv` equals `items.jsonl`. `extraction.py` parses one extraction response strictly. `scoring.py` matches rows and computes recall, precision, F1, Layer B routing, checkability F1, leaks, and gates A and S, on exact fractions. `stats.py` holds the paired bootstrap and the three-run margin test. Nothing calls a model or the network. 548 tests on synthetic fixtures. Readings the note does not settle are marked NEEDS-OWNER in the code (AMB-1 to AMB-4). | `fb4a5d8` |
+| 2026-11-05 | Harness H2, the model-server client. `schemas.py` holds the constrained schemas with pinned hashes and `canonical_json`. `probe.py` parses one reasoning-probe output strictly. `client.py` builds request bodies, accepts only a base URL of `http://127.0.0.1:<port>`, makes at most two attempts (the repair or same-request retry), and applies the 30 s and 300 s timeouts and the 90 % context check. No prompt text. The tests use `httpx.MockTransport` with sockets refused: 1561 new passing tests and 11 strict xfails, which pin a record rule marked NEEDS-OWNER(AMB-52) in `client.py`. NEEDS-OWNER: AMB-26 to AMB-30. | `91d8289` |
+| 2026-11-08 | Harness H3, the runner and its records. `inputs.py` builds the frozen requests and their hashes, only from gold v1.0. `launch.py` holds the frozen launch line and the server's start-up checks. `records.py` keeps an append-only run directory outside OneDrive. `runner.py` runs the pre-run checks and three interleaved runs, each starting with a discarded warm-up, with fault handling and voids. Records are stored as ASCII-escaped JSON (AMB-52, option (a)), so H2's 11 strict xfails now pass and the NEEDS-OWNER(AMB-52) marker is gone. The tests use fake processes and `httpx.MockTransport`, with sockets and process starts refused: 1329 new passing tests, plus 3 that skip on a host without symlinks or trailing-space names; 3449 pass in all. NEEDS-OWNER: AMB-66 and AMB-69. Before the commit, one local end-to-end pass on synthetic inputs, in a loopback-only network namespace, drove the pinned server through the runner. | `cf874ee` |
+| 2026-11-09 | `main` at `c86f0fc` is merged into the branch, bringing in pull requests #5 to #7. No conflicts. | `cbc3e2f` |
+| 2026-11-09 | The status doc's branch row lists pull requests #4 to #7 with their merge commits, and WORKFLOW.md names `sprint7/phase1-harness` as the current branch and in the push rule. Docs only. | `911ddb1` |
+
 ## Diarization login removal on `sprint7/diarization-no-login`
 
-1 commit, 2026-10-24, on a branch cut from `main` at `4025199`; not merged.
+3 commits, 2026-10-24 to 2026-11-09 (2 from the branch plus the merge
+commit). Pull request #7 merged them into `main` on 2026-11-09.
 
 | Date | Change | Commit |
 |---|---|---|
 | 2026-10-24 | The diarization service no longer calls `huggingface_hub.login()` on each cold load: the token still goes to pyannote with the load, nothing writes it to disk, and with the models cached diarization loads offline (`HF_HUB_OFFLINE=1`). 3 new tests. | `670b4de` |
+| 2026-10-24 | The login removal is recorded and the test counts refreshed. Docs only. | `551fc85` |
+| 2026-11-09 | Pull request #7 merges `sprint7/diarization-no-login` into `main` (merge commit). | `c86f0fc` |
+
+## Bake-off model-weight record on `sprint7/phase1-bakeoff-weights`
+
+2 commits, 2026-10-30 to 2026-11-09 (1 from the branch plus the merge
+commit). Pull request #6 merged them into `main` on 2026-11-09.
+
+| Date | Change | Commit |
+|---|---|---|
+| 2026-10-30 | DATA-FLOW.md records the bake-off model-weight source (W6b entry 4) in a summary row and a new section 4. The downloads are manual and happen at provisioning time only, over HTTPS from huggingface.co, with no call content and no token. Every file of the three candidates is pinned by revision and SHA-256 (42 files). The model server, llama.cpp `b11936`, serves on loopback only. Docs only. | `be42d0d` |
+| 2026-11-09 | Pull request #6 merges `sprint7/phase1-bakeoff-weights` into `main` (merge commit). | `a16f72c` |
+
+## D5 run deadline and D6 criteria note on `sprint7/phase1-d5-deadline`
+
+3 commits, 2026-10-28 to 2026-11-09 (2 from the branch plus the merge
+commit). Pull request #5 merged them into `main` on 2026-11-09.
+
+| Date | Change | Commit |
+|---|---|---|
+| 2026-10-28 | PHASE-0 §1 and §7 record D5's run deadline: 125 s, with a 25 s D10 re-run allowance. [D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md) is added. It fixes the candidates, the run conditions, the scoring, the gates, the margin and the decision rule before any result exists. PHASE-0 §6 gains the gold-set guide's Q15 note. DECISIONS #54. Docs only. | `420f659` |
+| 2026-10-30 | [D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) is S1 with the section 3.3 launch line changed (`-fit off`, `--cache-ram 0`, `-ctxcp 0`) and a start-up check of the running server's command line; nothing else changes. PHASE-0 §1 and §8 point to S2. DECISIONS #55. Docs only. | `ed6792c` |
+| 2026-11-09 | Pull request #5 merges `sprint7/phase1-d5-deadline` into `main` (merge commit; the tree equals `ed6792c`). | `3a22ed2` |
+
+## Gold set on `sprint7/phase1-gold-set`
+
+5 commits, 2026-10-23 to 2026-10-25 (4 from the branch plus the merge
+commit). Pull request #4 merged them into `main` on 2026-10-25. Data
+preparation only; no code changes. An AI assistant drafted every item and
+the project owner checked each one. The data is in `app/evaluation/gold/`;
+the rules are in [GOLD-SET-LABELLING-GUIDE.md](GOLD-SET-LABELLING-GUIDE.md).
+
+| Date | Change | Commit |
+|---|---|---|
+| 2026-10-23 | The labelling guide v0.4 (D3 Option A: Layers A and B, English, synthetic, no verdict labels; rulings G1 to G10) and the calibration batch, set v0.1: 20 synthetic conversations and 65 items with a SHA-256 manifest. `app/evaluation/gold/README.md` marks the set as synthetic, unverified, possibly deliberately false and not advice. 00-index.md lists the guide. | `ab14378` |
+| 2026-10-23 | Guide v0.5 (rulings G11 to G23) and set v0.2, batches 01 and 02: 35 conversations, 116 items. Three batch 01 false values move closer to their range (G22). | `1652a57` |
+| 2026-10-24 | Guide v0.6 (rulings G24 to G31) and set v0.3, batches 01 to 03: 53 conversations, 166 items. | `50a7d25` |
+| 2026-10-25 | Guide v0.7 (rulings G32 to G45) and set v0.4, batches 01 to 04: 63 conversations and 200 items, meeting every target and minimum in guide section 12. The re-check changed nine approved items. | `d7071b2` |
+| 2026-10-25 | Pull request #4 merges `sprint7/phase1-gold-set` into `main` (merge commit). | `c021e03` |
 
 ## Diarization fix on `sprint7/diarization-fix`
 

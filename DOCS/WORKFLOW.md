@@ -1,4 +1,4 @@
-Last verified: 2026-10-24, 670b4de
+Last verified: 2026-11-09, 911ddb1
 # Workflow
 
 How work gets done in this repository: branches, the local Python environment, the checks, the commit rules and the milestone loop. AI assistants read [CLAUDE.md](../CLAUDE.md) first. For where Sprint 7 stands, see [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For what the project is, see [CONTEXT.md](CONTEXT.md).
@@ -15,16 +15,16 @@ Run these from the repository root. At `670b4de` (2026-10-24) the tests (1797 pa
 git status --short
 ```
 
-Then stage files by explicit path and commit. The pre-commit hooks run on their own.
+Before a commit that touches `app/evaluation/`, also run the harness checks in [The bake-off harness tests](#the-bake-off-harness-tests). Then stage files by explicit path and commit. The pre-commit hooks run on their own.
 
 ## Branches
 
 | Rule | Detail |
 |---|---|
 | Base branch | `main`. |
-| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/diarization-no-login`, cut from `main` at `4025199`; it removes the diarization service's Hugging Face login. `sprint7/diarization-fix` (the diarization fix, cut from `main` at `6e92898`) was merged into `main` by pull request #3 with a merge commit (`4025199`). `sprint7/phase0-decisions` (the Phase 0 sign-off, cut from `main` at `49063bb`) was merged into `main` by pull request #2 with a merge commit (`6e92898`). Before it, `sprint7/doc-sync` (cut from `main` at `8fd3972`: the 2026-10-11 documentation sync, milestones M1 to M7, the project knowledge set, security and reliability fixes, the fixes the owner decided on 2026-10-17, the updates that followed and the pull-request review fix round, 72 commits), was merged into `main` by pull request #1 with a merge commit (`49063bb`). |
+| Working branch | A `sprint7/<topic>` branch cut from `main`. The current one is `sprint7/phase1-harness`, cut from `main` at `c021e03`; it holds the D6 bake-off harness. Pull request #7 merged `sprint7/diarization-no-login` (the removal of the diarization service's Hugging Face login, cut from `main` at `4025199`) into `main` with a merge commit (`c86f0fc`). Before it, pull request #6 merged `sprint7/phase1-bakeoff-weights` (the record of the bake-off model-weight downloads, cut from `main` at `c021e03`) with a merge commit (`a16f72c`), and pull request #5 merged `sprint7/phase1-d5-deadline` (the D5 run deadline and the signed D6 criteria note, cut from `main` at `c021e03`) with a merge commit (`3a22ed2`). Pull request #4 merged `sprint7/phase1-gold-set` (the gold set v0.4, cut from `main` at `6e92898`) with a merge commit (`c021e03`). `sprint7/diarization-fix` (the diarization fix, cut from `main` at `6e92898`) was merged into `main` by pull request #3 with a merge commit (`4025199`). `sprint7/phase0-decisions` (the Phase 0 sign-off, cut from `main` at `49063bb`) was merged into `main` by pull request #2 with a merge commit (`6e92898`). Before it, `sprint7/doc-sync` (cut from `main` at `8fd3972`: the 2026-10-11 documentation sync, milestones M1 to M7, the project knowledge set, security and reliability fixes, the fixes the owner decided on 2026-10-17, the updates that followed and the pull-request review fix round, 72 commits), was merged into `main` by pull request #1 with a merge commit (`49063bb`). |
 | `main` | Never commit to `main` directly. |
-| Push | Never push without the owner's go-ahead. `sprint7/diarization-no-login` was created with `--no-track` and has no upstream (`git rev-parse --abbrev-ref sprint7/diarization-no-login@{upstream}` fails), so a bare `git push` stops with an error instead of pushing anywhere. Push it only with `git push origin sprint7/diarization-no-login`, which does not set an upstream. |
+| Push | Never push without the owner's go-ahead. `sprint7/phase1-harness` was created with `--no-track` and has no upstream (`git rev-parse --abbrev-ref sprint7/phase1-harness@{upstream}` fails), so a bare `git push` stops with an error instead of pushing anywhere. Push it only with `git push origin sprint7/phase1-harness`, which does not set an upstream. |
 | CI trigger | CI runs on a push to `main` and on a pull request into `main`, nothing else ([.github/workflows/test.yml](../.github/workflows/test.yml), lines 3-7). Until a pull request is open, nothing checks a branch except the local checks. |
 
 The repository sits in a synced OneDrive folder, which sometimes causes `index.lock` collisions. If git starts fighting itself, pause the sync ([CLAUDE.md](../CLAUDE.md), *Working with this repo*).
@@ -33,7 +33,7 @@ The repository sits in a synced OneDrive folder, which sometimes causes `index.l
 
 ### What `.venv` holds
 
-`.venv` lives at the repository root and git ignores it ([.gitignore](../.gitignore)). It is built from the light stack only, as below. On the current development machine it now also holds heavy packages (torch 2.8.0, pyannote.audio 3.3.2, numpy) installed outside this recipe, so light-stack counts there are measured with those imports blocked:
+`.venv` lives at the repository root and git ignores it ([.gitignore](../.gitignore)). It is built from the light stack only, as below. On the current development machine it now also holds heavy packages (among them torch 2.8.0, pyannote.audio 3.3.2, transformers 4.47.0, spaCy 3.8.16 and numpy) installed outside this recipe, so light-stack counts there are measured with those imports blocked:
 
 | Package set | Source |
 |---|---|
@@ -101,6 +101,19 @@ The skips are `app/insights/tests/test_model_load_concurrency.py`, which holds 3
 The two errors come from the legacy folder. `tests/test_diarization.py` imports `app.services.diarization_service`, which needs `soundfile`. `tests/test_diarization_load.py` imports `huggingface_hub`. The light stack includes neither. Always pass the two paths.
 
 CI job logs cannot be read without repository admin rights. The workflow surfaces failures as annotations instead; see [CLAUDE.md](../CLAUDE.md), *CI pipeline notes*. Rules for heavy services (mock anything that imports an ML library or loads a model artifact) are in [CLAUDE.md](../CLAUDE.md), *Testing requirements*.
+
+### The bake-off harness tests
+
+The D6 bake-off harness (`app/evaluation/bakeoff/`) and its tests (`app/evaluation/tests/`) sit outside CI's pytest and mypy paths ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9); CI's `ruff check .` lints them. These local runs are the only test evidence for the harness:
+
+```powershell
+.venv\Scripts\python.exe -m pytest app/evaluation/tests -q -p no:cacheprovider
+.venv\Scripts\python.exe -m ruff check app/evaluation
+.venv\Scripts\python.exe -m ruff format --check app/evaluation
+.venv\Scripts\python.exe -m mypy --python-version 3.10 app/evaluation/bakeoff
+```
+
+At `911ddb1` (2026-11-09, `.venv`, CPython 3.12.10) they gave 3449 passed and 3 skipped: two tests need a symlink and one needs a file name that ends in a space, which the development machine does not allow. Both ruff commands were clean (35 files already formatted), and mypy found no issues in 12 source files.
 
 ## Lint and types
 
@@ -173,7 +186,7 @@ The body says what was wrong, what changed, which tests pin it, the red-check re
 
 ## The milestone loop
 
-Each Sprint 7 prerequisite fix is one milestone: the smallest first, and only fixes that need no pending decision ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *In progress*). M1 to M6 followed this loop; M6 landed in one batch with security fixes and shares their docs commit. M7 (keyword rules match whole words only), a tech-debt fix that came after the prerequisites, followed the same loop (`dbae452`). The fixes the owner decided on 2026-10-17 landed as small commits under the size rule below, one per decision that needed code (`dc97a84` to `45a5b22`; [DECISIONS.md](DECISIONS.md) #34 to #49; #33 was recorded without code). Phase 0 is complete (2026-10-19) and Phase 1 may start ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *Next milestone*).
+Each Sprint 7 prerequisite fix is one milestone: the smallest first, and only fixes that need no pending decision ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *In progress*). M1 to M6 followed this loop; M6 landed in one batch with security fixes and shares their docs commit. M7 (keyword rules match whole words only), a tech-debt fix that came after the prerequisites, followed the same loop (`dbae452`). The fixes the owner decided on 2026-10-17 landed as small commits under the size rule below, one per decision that needed code (`dc97a84` to `45a5b22`; [DECISIONS.md](DECISIONS.md) #34 to #49; #33 was recorded without code). Phase 0 is complete (2026-10-19) and Phase 1 is under way: the D6 bake-off harness is built in milestones, H1 to H3 are done, and H4 and H5 follow ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), *Next milestone*).
 
 | Step | What happens | Evidence |
 |---|---|---|

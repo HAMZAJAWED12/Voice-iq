@@ -1,6 +1,6 @@
 # Fact-Check Agent — Live Status
 
-Owner: engineering · Status: **Phase 0 complete; Phase 1 may start** · Created: 2026-10-11 · Updated: 2026-10-30
+Owner: engineering · Status: **Phase 0 complete; Phase 1 in progress** · Created: 2026-10-11 · Updated: 2026-11-09
 
 The one place that says where Sprint 7 stands. Update it with every
 milestone. Decision status is **not** kept here — it lives only in the
@@ -14,9 +14,9 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 
 | | |
 |---|---|
-| Date | 2026-10-24 |
-| Branch | `main` @ `4025199` (pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix (`9887e0b`) was merged by pull request #3 (`4025199`); the removal of diarization's Hugging Face login is on `sprint7/diarization-no-login` (`670b4de`), not merged |
-| Current phase | **Phase 0 — Contract and scope lock: complete** (signed 2026-10-19). **Phase 1 may start**; gold-set labelling may start at once (D3). Phases 1–7 not started; no Sprint 7 application code exists. |
+| Date | 2026-11-09 |
+| Branch | `main` @ `c86f0fc` (as of 2026-11-09; pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix (`9887e0b`) was merged by pull request #3 (`4025199`); the gold set v0.4 (`d7071b2`) by pull request #4 (`c021e03`); the D5 run deadline and the signed D6 criteria note S1 and S2 (`420f659`, `ed6792c`) by pull request #5 (`3a22ed2`); the bake-off model-weight record (`be42d0d`) by pull request #6 (`a16f72c`); and the removal of diarization's Hugging Face login (`670b4de`, `551fc85`) by pull request #7 (`c86f0fc`). The D6 bake-off harness H1 to H3 (`fb4a5d8`, `91d8289`, `cf874ee`) is on `sprint7/phase1-harness`, cut from `main` at `c021e03`, with `main` at `c86f0fc` merged in (`cbc3e2f`); not merged into `main` |
+| Current phase | **Phase 0 — Contract and scope lock: complete** (signed 2026-10-19). **Phase 1 — model bake-off: in progress.** The gold set is at v0.4 (200 items, not yet frozen as v1.0), and the bake-off harness has milestones H1 to H3; no bake-off has run. Phases 2–7 not started. No Sprint 7 application code exists: the harness is evaluation tooling under `app/evaluation/`, not application code ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9). |
 | Overall progress | **4.17 %** |
 
 **How the percentage is computed** — countable plan deliverables only. Each
@@ -36,14 +36,71 @@ overall = (0.5 / 12.0) × (10 / 10) = 0.0417 → 4.17 %
 Other countable measures: the 10 original register decisions are all
 signed, and D3b, D10-T and U1–U10 were added and signed; Phase 0 exit
 deliverables approved **3 / 3**. Some values are still open (see
-*Blockers*); none blocks the start of Phase 1, and the earliest is needed
-before the first bake-off run. Prerequisite fixes (such
-as M1) are not plan deliverables and do not move the percentage.
+*Blockers*); none blocks the start of Phase 1 or the first bake-off run,
+and the earliest phase any of them names is Phase 2. Prerequisite fixes (such
+as M1) are not plan deliverables and do not move the percentage. The
+Phase 1 work so far (the gold set up to v0.4 and harness milestones H1 to
+H3) completes no Phase 1 bullet: the gold set is not frozen as v1.0, the
+harness still lacks H4 and H5, and no exit deliverable in *Acceptance
+evidence* holds yet, so the figure stays 4.17 %.
 
 ## Completed
 
-Verified against the repository on 2026-10-24 (`670b4de`).
+Verified against the repository on 2026-11-09 (`911ddb1`).
 
+- **Phase 1 work so far** (no Phase 1 bullet is done yet; see *How the
+  percentage is computed*):
+  - **Gold set v0.1 to v0.4** (2026-10-23 to 2026-10-25), on
+    `sprint7/phase1-gold-set`, merged by pull request #4 (`c021e03`):
+    [GOLD-SET-LABELLING-GUIDE.md](GOLD-SET-LABELLING-GUIDE.md), now v0.7
+    with rulings G1–G45, and the set in `app/evaluation/gold/`, now v0.4:
+    63 synthetic conversations and 200 items, meeting every target and
+    minimum in guide section 12 (`ab14378`, `1652a57`, `50a7d25`,
+    `d7071b2`). An AI assistant drafted every item and the project owner
+    checked each one. Data preparation; no code.
+  - **D5 run deadline and D6 criteria note** (2026-10-28, 2026-10-30), on
+    `sprint7/phase1-d5-deadline`, merged by pull request #5 (`3a22ed2`):
+    [D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md) (`420f659`) and
+    [D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) (`ed6792c`);
+    [DECISIONS #54–#55](DECISIONS.md#phase-1-bake-off-inputs-2026-10-28).
+  - **Bake-off model-weight record** (2026-10-30), on
+    `sprint7/phase1-bakeoff-weights`, merged by pull request #6
+    (`a16f72c`): [DATA-FLOW.md](DATA-FLOW.md) §4 (`be42d0d`).
+  - **Bake-off harness H1 to H3** (2026-11-04 to 2026-11-08), on
+    `sprint7/phase1-harness`, not merged: evaluation tooling in
+    `app/evaluation/bakeoff/`, outside CI's pytest and mypy paths and
+    linted by CI's ruff (S2 section 11 item 9).
+    - `fb4a5d8` — **H1, the scoring core:** gold-set loading with the
+      manifest check, strict parsing of one extraction response, the
+      section 5 matching and metrics, gates A and S on exact fractions,
+      and the section 8 paired bootstrap. 548 tests.
+    - `91d8289` — **H2, the model-server client:** constrained schemas
+      with pinned hashes, probe parsing, and a client limited to
+      `http://127.0.0.1:<port>`, with the retry, the timeouts, the
+      context check and frozen call records. 1561 new passing tests and
+      11 strict xfails.
+    - `cf874ee` — **H3, the runner and its records:** frozen requests
+      built only from gold v1.0, the frozen launch line and start-up
+      checks, an append-only run directory outside OneDrive, and the
+      runner (pre-run checks, three interleaved runs, faults and voids).
+      1329 new passing tests; H2's 11 strict xfails now pass. Before the
+      commit, one local end-to-end pass on synthetic inputs, in a
+      loopback-only network namespace, drove the pinned server through
+      the runner.
+
+    Harness tests at `911ddb1` (2026-11-09, local `.venv`, CPython
+    3.12.10): 3449 passed, 3 skipped (the skips need symlinks or a file
+    name with a trailing space, which this host refuses). With every
+    outbound socket refused, the same tests pass and make no socket call.
+    `ruff check` and `ruff format --check` on `app/evaluation` are clean,
+    and `mypy --python-version 3.10 app/evaluation/bakeoff` finds no
+    issues in 12 source files. CI runs neither these tests nor this mypy,
+    so these local runs are the harness's only test evidence. No test
+    uses a gold row, and the harness holds no prompt text yet. Readings
+    the note does not settle are marked NEEDS-OWNER in the code: AMB-1 to
+    AMB-4, AMB-26 to AMB-30, AMB-66 and AMB-69. H1 to H3 change no file
+    outside `app/evaluation/`, and the main suite (`app/insights/tests/` and
+    `app/agent_brain/tests/`) still gives 1797 passed locally.
 - **Phase 0 complete (2026-10-19).** The project owner (sole maintainer),
   who holds every role in the register, signed the remaining register
   decisions, added D3b, D10-T and U1–U10 to the register with their own
@@ -225,7 +282,7 @@ Verified against the repository on 2026-10-24 (`670b4de`).
     clean; mypy clean with `--no-site-packages`.
   - **Diarization without a Hugging Face login** (2026-10-24), a
     follow-up from the review of the diarization fix; on
-    `sprint7/diarization-no-login`, not merged:
+    `sprint7/diarization-no-login`, merged by pull request #7 (`c86f0fc`):
     - `670b4de` — the diarization service no longer calls
       `huggingface_hub.login()` on each cold load; the token still goes
       to pyannote with the load. No login network call, no token written
@@ -236,17 +293,25 @@ Verified against the repository on 2026-10-24 (`670b4de`).
 
     Suite 1797 passed locally; light stack 1793 passed, 2 skipped; ruff
     clean; mypy clean with `--no-site-packages`.
-- **2026-10-11 audit and documentation sync** (this branch): stale
+- **2026-10-11 audit and documentation sync** (on `sprint7/doc-sync`,
+  merged by pull request #1, `49063bb`): stale
   operational docs corrected, PHASE-0 wording made consistent with its own
   register, this status document created.
 
 ## In progress
 
-- **Phase 1, gold set** — labelling may start now, before the rest of
-  Phase 1 (D3's clause; [DECISIONS #52](DECISIONS.md#52-gold-set-labelling-may-start-before-the-phase-1-gate)).
-  English, synthetic-first, Layers A+B; drafts are machine-assisted and the
-  project owner checks every item; consistency is a blind re-label of 40
-  items after one week. Data preparation, no code.
+- **Phase 1, gold set** — at v0.4 (63 conversations, 200 items,
+  `d7071b2`), labelled ahead of the rest of Phase 1 (D3's clause;
+  [DECISIONS #52](DECISIONS.md#52-gold-set-labelling-may-start-before-the-phase-1-gate)).
+  English, synthetic, Layers A+B; drafts are machine-assisted and the
+  project owner checks every item. Next: the owner's blind re-label of 40
+  items, at least seven days after the 2026-10-25 draw, with kappa on
+  `checkability` of at least 0.6, then the freeze as v1.0 with its
+  manifest hashes ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md)
+  section 11 item 1). Data preparation, no code.
+- **Phase 1, bake-off harness** — on `sprint7/phase1-harness`, not
+  merged. H1 to H3 are done (see *Completed*); H4 and H5 are next (see
+  *Next milestone*).
 - **Prerequisite fixes** — only fixes that need no pending decision, one
   per milestone, smallest first. M1–M7, the old-rows fix, the decision-free
   hardening items, the owner-decided items and the pull-request review fix
@@ -268,7 +333,7 @@ Ordered backlog. Phase numbers are the plan's.
    1. Java callback fires on every Agent Brain run — needs the D10 final-pass predicate and an exactly-one test; lands with Phase 6, which adds the re-run [6].
    2. Claim-detector limits left after M5 — past prices read as current ("I bought ETH at 1200"), capitalised acronyms read as tickers, any number after a coin, ticker or commodity read as a price ("Gold is 29.99 with free shipping"); listed in [FEATURES.md §4.3](FEATURES.md#43-known-functional-limits-of-the-detector). *Wait for Phase 3* (DECISIONS #26) [3].
    3. A Unicode-capable PDF font — M6 only contains the failure (DECISIONS #31) [6].
-3. **Phase 1** — gold set (may start now, DECISIONS #52), local model server (U3), the D6 criteria note before the first bake-off run, the bake-off, a pinned model and runtime.
+3. **Phase 1** — harness milestones H4 and H5; the preconditions in [D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 (gold set v1.0, the Annex A checks, the GGUF model files, the local model server (U3) and its start-up checks, the memory measurement, the freeze hashes); the bake-off; a pinned model and runtime.
 4. **Phase 2** — typed v2 models, OpenAI-compatible client, the `VOICEIQ_` settings named in PHASE-0 §7 (claim cap and run deadline renamed `FACTCHECK_AGENT_*`; no key reuses an existing name), stubbed boundary, the DB-polled runner's run model (U1).
 5. **Phase 3** — claim extraction with segment/speaker/timestamp traceability, checkability gate, dedup, claim cap.
 6. **Phase 4** — retrieval interface, trusted clients first, SearXNG adapter, `url_guard` SSRF controls, frozen fixtures.
@@ -307,17 +372,34 @@ before the phase that uses it:
 
 ## Next milestone
 
-**Phase 1 — model bake-off** (plan v1.1, Phase 1). It starts with the gold
-set, which may begin now: labelling is data preparation and needs no code.
+**Phase 1 — model bake-off** (plan v1.1, Phase 1). The gold set is at
+v0.4 and the bake-off harness has milestones H1 to H3 (see *Completed*).
 D5's run deadline was set and the D6 criteria note
 ([D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md): who may win, the gates,
 the margin and the licence check) was signed on 2026-10-28; its launch line
-was revised in S2 ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md)) on 2026-10-30. Before the
-first bake-off run: the gold set is frozen as v1.0 after the owner's blind
-re-label, and the local model server of record is set up (U3: llama.cpp
-with model files pinned by revision and SHA-256). The note's section 11
-lists every precondition. Fetching model files needs the project owner's
-go.
+was revised in S2 ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md)) on 2026-10-30. Next, on
+`sprint7/phase1-harness`:
+
+- **H4:** scoring from the stored run records (H3's records judge
+  nothing; H4 sets each unit's scored marker before it scores it), the
+  sampler that attaches to the runner's before- and after-run hooks, and
+  the section 3.6 thinking rule that the runner leaves to H4. Of the note's
+  section 6 gates, H1 computes only A and S. The harness has no section 8
+  decision rule (rules 1 to 5), no section 9 report and no entry point yet.
+- **H5:** the frozen inputs: the prompt set and the retry wording,
+  developed outside the gold set and then frozen and hashed; the reasoning
+  probe of 20 synthetic claims with their evidence bundles, approved by the
+  project owner (note section 4); the cap-session list
+  from gold v1.0; and the synthetic warm-up.
+
+Each starts once the project owner approves its plan
+([WORKFLOW.md](WORKFLOW.md), *The milestone loop*). Before the first
+bake-off run, every precondition in the note's section 11 must hold, among
+them gold v1.0 after the owner's blind 40-item re-label with kappa of at
+least 0.6, the Annex A checks, the local model server of record (U3:
+llama.cpp with model files pinned by revision and SHA-256), the memory
+measurement and the freeze hashes. The model-weight downloads are recorded
+in [DATA-FLOW.md](DATA-FLOW.md) §4 (`be42d0d`).
 
 ## Acceptance evidence
 

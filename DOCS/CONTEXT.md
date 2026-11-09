@@ -1,4 +1,4 @@
-Last verified: 2026-10-19, e4398b1
+Last verified: 2026-11-09, 911ddb1
 # Project Context
 
 Background for people joining, reviewing or sponsoring VoiceIQ: what the
@@ -58,7 +58,7 @@ team and the N4b native-speaker reviewers are outside that.
 | Role | Part in the project | Where the docs say so |
 |---|---|---|
 | Engineering (this repo's team) | Writes and maintains the Python service and the planning docs. | "Owner: engineering" headers in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), [FACTCHECK-AGENT-PHASE-0.md](FACTCHECK-AGENT-PHASE-0.md), [TIER-N-PLAN.md](TIER-N-PLAN.md) |
-| Project owner | Sets the working rules and makes the owner decisions outside the register, such as the currency-rate provider and the limits on the service (2026-10-17); holds every Phase 0 role, signed the Phase 0 decisions and owns register rows D3b, D10-T and U1–U10 (2026-10-19). | [DECISIONS.md](DECISIONS.md) (#26, #27, #33 to #52); register rows D3b, D10-T, U1–U10 |
+| Project owner | Sets the working rules and makes the owner decisions outside the register, such as the currency-rate provider and the limits on the service (2026-10-17); holds every Phase 0 role, signed the Phase 0 decisions and owns register rows D3b, D10-T and U1–U10 (2026-10-19). | [DECISIONS.md](DECISIONS.md) (#26, #27, #33 to #55); register rows D3b, D10-T, U1–U10 |
 | Senior sponsor | Decides register questions on open-source scope and on the model choice. | Register rows D4 and D6 |
 | Tech lead | Decides the persistence and re-run questions and co-decides execution mode with product; confirmed the Phase 0 wording changes, together with the engineering manager (2026-10-19); decides several N4b questions. | Register rows D1, D2, D10; [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register) (W1) and §8 (W1–W3); [DECISIONS.md](DECISIONS.md) #51; [N4B-MULTILINGUAL-STRATEGY.md](N4B-MULTILINGUAL-STRATEGY.md) §7 (L2-L5) |
 | Engineering manager | Decides who owns and resources the gold set; co-confirmed the Phase 0 wording changes (2026-10-19). | Register row D3; [D3-GOLD-SET-BRIEF.md](D3-GOLD-SET-BRIEF.md); [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register) (W1) and §8 (W1–W3); [DECISIONS.md](DECISIONS.md) #51 |
@@ -81,12 +81,12 @@ It is the only place decision status is kept; this doc does not repeat it.
 | Measure | Value | Command |
 |---|---|---|
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse` |
-| Commits reachable from HEAD (`e4398b1`) | 215 (213 non-merge, 2 merges) | `git rev-list --count [--no-merges / --merges] HEAD` |
-| Merges | `032d822` (2026-04-25) and `49063bb` (pull request #1, 2026-10-19) | `git rev-list --merges HEAD` |
-| Commits on `main` | 214 (tip `49063bb`, 2026-10-19) | `git rev-list --count main` |
+| Commits reachable from HEAD (`e4398b1`) | 215 (213 non-merge, 2 merges) | `git rev-list --count [--no-merges / --merges] e4398b1` |
+| Merges | `032d822` (2026-04-25) and `49063bb` (pull request #1, 2026-10-19) | `git rev-list --merges e4398b1` |
+| Commits on `main` | 214 (tip `49063bb`, 2026-10-19) | `git rev-list --count 49063bb` |
 | Commits merged from `sprint7/doc-sync` by pull request #1 | 72 (16 on 2026-10-11, 16 on 2026-10-16, 33 on 2026-10-17, 3 on 2026-10-18, 4 on 2026-10-19) | `git rev-list --count 8fd3972..aa453f0` |
 
-Commits per month (`git log --date=format:%Y-%m`): Feb 6, Apr 4, May 19,
+Commits per month (`git log --date=format:%Y-%m e4398b1`): Feb 6, Apr 4, May 19,
 Jun 41, Jul 49, Sep 22, Oct 74. There are no commits in March or August 2026.
 
 ### Timeline
@@ -109,6 +109,7 @@ are commit dates; some ranges overlap.
 | 2026-07-25 | Tier S: eight security-hardening items, all committed the same day. | `58f81f2` to `ec8dc1e` |
 | 2026-07-25 to 09-20 | Tier N: callback v2 spec (N1), lazy ML imports (N2), alignment tests and speed-up (N3), deadline phrases (N4a), language wiring for Urdu and Arabic (N4b-1 Phase 1), and the Agent Brain wired into the pipeline (L5). | `36697fd` to `17606d6` |
 | 2026-09-04 to 10-19 | Sprint 7, Phase 0: contract and decision register, gold-set scoping brief, documentation sync, prerequisite fixes M1-M6, security and reliability fixes, the fixes the owner decided on 2026-10-17, the tech-debt milestone M7, the pull-request review fix round, the merge into `main` (pull request #1) and the Phase 0 sign-off. | `c6284b6`, `8fd3972`, `ace45e4` to `e4398b1` |
+| 2026-10-20 to 11-09 | Sprint 7 after the Phase 0 sign-off: its merge into `main` (pull request #2); the diarization fix and the removal of its Hugging Face login (#3, #7); and Phase 1 so far: the gold set v0.1 to v0.4 with its labelling guide (#4), D5's run deadline and the signed D6 criteria note S1 and S2 (#5), the record of the bake-off model-weight downloads (#6), and the scoring, model-server client and runner of the bake-off harness (on `sprint7/phase1-harness`, not merged). | `415dd88` to `911ddb1` |
 
 Sprint and tier labels come from commit subjects and from the sprint table in
 [CLAUDE.md](../CLAUDE.md). The historical Sprint 1-4 view is
@@ -131,7 +132,7 @@ language model, evidence retrieval, and verdicts that cite their evidence
   register ([FACTCHECK-AGENT-PHASE-0.md](FACTCHECK-AGENT-PHASE-0.md) lines
   6-8).
 - **Phase 1 is measurement.** Implementation starts in Phase 2
-  ([FACTCHECK-AGENT-PHASE-0.md](FACTCHECK-AGENT-PHASE-0.md) lines 1144-1145).
+  ([FACTCHECK-AGENT-PHASE-0.md](FACTCHECK-AGENT-PHASE-0.md) lines 1149-1150).
 - **No Sprint 7 application code exists at HEAD.** `git grep` finds no
   `/v2/fact-check` route, `fact_check_report` or agent master flag under
   `app/`.
@@ -161,8 +162,13 @@ owner decision, and those fixes landed as small commits (`dc97a84` to
 `45a5b22`; [DECISIONS.md](DECISIONS.md) #33 to #49). Some partner-team items
 and one operations item are parked and tracked privately.
 
-Phase 0 is complete and Phase 1 may start; gold-set labelling may start at
-once ([DECISIONS.md](DECISIONS.md) #52). Some values are still open
+Phase 0 is complete and Phase 1 is under way. The gold set is at v0.4 (200
+synthetic items; [DECISIONS.md](DECISIONS.md) #52 let labelling start before
+the rest of Phase 1). The bake-off harness in `app/evaluation/bakeoff/`,
+evaluation tooling rather than application code
+([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9), has its
+scoring, its model-server client and its runner. No bake-off has run. Some
+values are still open
 ([FACTCHECK-AGENT-PHASE-0.md §8](FACTCHECK-AGENT-PHASE-0.md#8-exit-checklist)).
 
 For live progress, the next milestone and its acceptance checks, read
@@ -180,7 +186,7 @@ decision status is in the
 
 | Blocked | Why | Who can unblock it | Read more |
 |---|---|---|---|
-| Sprint 7 work after the Phase 1 start | Phase 0 is complete and Phase 1 may start ([DECISIONS.md](DECISIONS.md) #51); gold-set labelling may start now (#52). Some values were left open at the sign-off, and each must be set before the phase that uses it. D5's provisional run deadline was set on 2026-10-28 ([DECISIONS.md](DECISIONS.md) #54); still open are the U7 report state, the U9 data volume and deployment recipe, the §6.3–§6.5 limits and provider terms, and the Java action layer team's acknowledgement of §3. | The project owner; the Java action layer team for the §3 acknowledgement | [PHASE-0 §8](FACTCHECK-AGENT-PHASE-0.md#8-exit-checklist), [Blockers](FACT-CHECK-AGENT-STATUS.md#blockers), [Register](FACTCHECK-AGENT-PHASE-0.md#1-decision-register) |
+| Sprint 7 work after the Phase 1 start | Phase 0 is complete and Phase 1 is under way ([DECISIONS.md](DECISIONS.md) #51, #52). Some values were left open at the sign-off, and each must be set before the phase that uses it. D5's provisional run deadline was set on 2026-10-28 ([DECISIONS.md](DECISIONS.md) #54); still open are the runner and admission defaults that follow from that deadline, the U7 report state, the U9 data volume and deployment recipe, the §6.3–§6.5 limits and provider terms, and the Java action layer team's acknowledgement of §3. | The project owner; the Java action layer team for the §3 acknowledgement | [PHASE-0 §8](FACTCHECK-AGENT-PHASE-0.md#8-exit-checklist), [Blockers](FACT-CHECK-AGENT-STATUS.md#blockers), [Register](FACTCHECK-AGENT-PHASE-0.md#1-decision-register) |
 | Urdu and Arabic recommendations (N4b) | Language routing is built and tested (`app/agent_brain/extraction/language.py` lines 34-51; `c2fadaa`, `9ac7487`), but every vocabulary table holds English only. Filling them needs native speakers, because guessed terms would produce confident false positives in recommendations. | Product, by deciding who supplies and reviews the vocabulary (decision L1) | [N4B-MULTILINGUAL-STRATEGY.md §7](N4B-MULTILINGUAL-STRATEGY.md#7-open-decisions) |
 | Callback signature v2 | The Python side shipped in `a54944b`. The Java side is outstanding, and it lives in the separate Java service, so no work in this repo can finish it. | Java action layer team | [JAVA-CALLBACK-V2.md](JAVA-CALLBACK-V2.md) |
 

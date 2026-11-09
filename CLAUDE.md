@@ -17,81 +17,12 @@ Audio Upload → ASR → Diarization → Alignment → Metadata → NLP Enrichme
 
 The Insight Service (`app/insights/`) is the current focus of active development.
 
-## Repository layout
-
-```
-voiceiq-AI/
-├── app/
-│   ├── insights/              # ← primary work area
-│   │   ├── core/              # engines (one file per engine)
-│   │   │   ├── signal_aggregation.py
-│   │   │   ├── rule_engine.py            # main orchestrator
-│   │   │   ├── timeline_engine.py
-│   │   │   ├── scoring_engine.py
-│   │   │   ├── summary_engine.py
-│   │   │   ├── escalation_engine.py
-│   │   │   ├── inconsistency_engine.py
-│   │   │   ├── analytics_engine.py
-│   │   │   ├── normalizer.py
-│   │   │   └── validator.py
-│   │   ├── models/            # Pydantic models (one file per concern)
-│   │   │   ├── input_models.py
-│   │   │   ├── signal_models.py
-│   │   │   ├── insight_models.py
-│   │   │   ├── analytics_models.py
-│   │   │   ├── api_models.py
-│   │   │   ├── escalation_models.py
-│   │   │   └── inconsistency_models.py
-│   │   ├── api/               # FastAPI routes
-│   │   ├── repository/        # SQLAlchemy ORM + SQLite persistence
-│   │   ├── adapters/          # external integration adapters
-│   │   ├── config/            # settings module
-│   │   ├── service.py         # orchestration service
-│   │   └── tests/             # pytest tests for the insight layer
-│   ├── agent_brain/           # Sprint 6: action-recommendation layer
-│   │   ├── models/            # AgentContext, Recommendation (camelCase Java contract)
-│   │   ├── core/              # 5 agents + confidence/dedup/ranker/runner
-│   │   ├── extraction/        # signals, assignee/date/priority extractors
-│   │   ├── api/               # POST /internal/v1/agent-brain/recommendations/generate
-│   │   ├── adapters/          # internal SessionInput/Insight/FactCheck -> AgentContext
-│   │   ├── integrations/      # HMAC-signed Java callback client
-│   │   ├── config/, service.py, tests/
-│   ├── pipeline/              # upstream pipeline (ASR, NLP)
-│   ├── routes/
-│   ├── services/              # ASR, diarization, sentiment, etc.
-│   ├── utils/
-│   └── main.py                # FastAPI entrypoint
-├── DOCS/                      # markdown handoff documentation
-├── tests/                     # legacy / top-level tests
-├── samples/                   # sample audio
-├── .github/workflows/test.yml # CI pipeline (lightweight)
-├── Dockerfile
-├── requirements.txt           # heavy: torch, whisper, pyannote, transformers
-├── requirements-insight.txt   # lightweight: FastAPI, Pydantic, SQLAlchemy, pytest
-├── requirements-dev.txt       # eval/metrics deps
-└── VoiceIQ-Insight-Service-Handoff.docx
-```
-
 ## Sprint status
 
-| Sprint | Scope | Status |
-|---|---|---|
-| 1 | Foundation: Signal Aggregation, Rule, Timeline, Scoring, Summary engines | ✅ Done |
-| 2 | Intelligence: Escalation Engine + Inconsistency Engine | ✅ Done |
-| 3 | Persistence + ops: SQLite via SQLAlchemy, Dockerfile, OpenAPI polish, integration tests | ✅ Done |
-| 4 | Handoff documentation: DOCS/ markdown set + polished .docx | ✅ Done |
-| 5 | Fact-check engine: claim detector, classifier, comparator, scorer, orchestrator; 5 source clients (exchangerate.host — replaced by open.er-api.com on 2026-10-17 — CoinGecko, OpenWeather, Alpha Vantage, Wikipedia REST); SQLite `fact_check_results` table; `POST /v1/fact-check` + `GET /v1/fact-check/{id}`; auto-enrichment in `/v1/process-audio`; 91 new tests (118 insight tests passing) | ✅ Done |
-| CI | GitHub Actions: lint (ruff + mypy hard-gate + gitleaks) + tests on Python 3.10/3.11, on a push or pull request to `main` | ✅ Done |
-| Tier 1 | Production-readiness security: X-API-Key auth, payload-size caps, ffmpeg subprocess timeout, model-loader concurrency locks | ✅ Done |
-| Tier 2 | Test-coverage closure: 6 insight-core engines to 100%; CI ruff + gitleaks + mypy + 3.10/3.11 matrix | ✅ Done |
-| Tier 3 | Waves A/B/D: cleanups, schema fixes, mypy hard-gate | ✅ Done |
-| Sprint 6 | Agent Brain (`app/agent_brain/`): 5 rule-based agents (Task/FollowUp/Email/Escalation/FactCheckReview), confidence refine, difflib dedup, ranker, runner w/ per-agent fault isolation, internal API, pipeline adapter, HMAC Java callback; 103 tests, 100% | ✅ Done |
-| Tier S | Security hardening (8 items): rate limiting, job-artifact TTL, opt-in fact-check + `DOCS/DATA-FLOW.md`, error-detail leak, filename guard, URL encoding, callback replay/TLS, prod docs gating. See `DOCS/SECURITY-HARDENING-PLAN.md` | ✅ Done |
-| Sprint 7 | **Fact-Check Agent** — open-source LLM (Qwen3) claim extraction, hybrid retrieval, evidence-grounded reasoning, citations. Phases 0–7. Phase 0 (contract lock, no code) in `DOCS/FACTCHECK-AGENT-PHASE-0.md`, complete 2026-10-19 | 🟡 Phase 1 may start — see [`DOCS/FACT-CHECK-AGENT-STATUS.md`](DOCS/FACT-CHECK-AGENT-STATUS.md) |
-
 **Currently open:** Sprint 7 Fact-Check Agent. Phase 0 is complete (signed
-2026-10-19) and Phase 1 may start; gold-set labelling may start at once
-(DECISIONS #52). A few values are still open (PHASE-0 §8). Live status, progress
+2026-10-19) and Phase 1 is in progress: the gold set is at v0.4, not yet frozen
+as v1.0, and the bake-off harness has milestones H1 to H3; no bake-off has run.
+A few values are still open (PHASE-0 §8). Live status, progress
 and the next milestone: [`DOCS/FACT-CHECK-AGENT-STATUS.md`](DOCS/FACT-CHECK-AGENT-STATUS.md).
 Decision status lives **only** in the register,
 [`DOCS/FACTCHECK-AGENT-PHASE-0.md` §1](DOCS/FACTCHECK-AGENT-PHASE-0.md#1-decision-register) —
@@ -318,15 +249,6 @@ curl -s https://api.github.com/repos/HAMZAJAWED12/Voice-iq/check-runs/<JOB_ID>/a
 ```
 
 Keep that step — it is the only way to see why the harness failed without repo-admin rights.
-
-## Known issues / tech debt
-
-These need attention but are not blocking new work:
-
-1. ~~**`__pycache__/*.pyc` files tracked in git.**~~ **RESOLVED** — untracked in `2d017b7`; `.gitignore` covers them (0 tracked).
-2. ~~**`run_eval_dev.LOCAL.py` exists alongside `run_eval_dev.py`.**~~ **RESOLVED** — deleted in `31585b4`.
-3. ~~**Wave E punch list lives in CLAUDE.md next-task candidates.**~~ **RESOLVED** — Wave E is closed (see next-task candidates).
-4. ~~**E3 — `alignment_service` O(n²)**~~ **RESOLVED.** See the E3 entry under next-task candidates for the final numbers and the one trap worth remembering.
 
 ## Working with this repo
 

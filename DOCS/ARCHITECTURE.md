@@ -1,10 +1,12 @@
-Last verified: 2026-10-24, 670b4de
+Last verified: 2026-11-09, 911ddb1
 # Architecture
 
-This document describes the code structure of VoiceIQ at commit `9887e0b`
-(branch `sprint7/diarization-fix`, cut from `main` at `6e92898`; its code differs from `main` only in the diarization fix). It shows how the packages fit together, how data
-moves between them, where faults are contained, what is stored, and how to
-extend the system without breaking it.
+This document describes the code structure of VoiceIQ at commit `911ddb1`
+(branch `sprint7/phase1-harness`, cut from `main` at `c021e03` and merged
+with `main` at `c86f0fc` in `cbc3e2f`; its code differs from `main` only in
+the D6 bake-off harness under `app/evaluation/`). It shows how the packages
+fit together, how data moves between them, where faults are contained, what
+is stored, and how to extend the system without breaking it.
 
 [02-architecture.md](02-architecture.md) is the historical Sprint 1–4 view.
 It was written before the fact-check engine, the Agent Brain and the
@@ -73,9 +75,28 @@ app/utils     per-job workspace, logging, audio helpers, upload and fact-check g
 | `app/security` | API-key check, Content-Length cap, rate limits, and the middleware that runs the key and size checks before a body is read | `api_key.py`, `payload_size.py`, `rate_limit.py`, `request_guard.py` |
 | `app/utils` | `JobIO` per-job workspace, logging setup (`configure_logging` applies `VOICEIQ_LOG_LEVEL` at startup), ffmpeg normalisation and the audio length limit, audio-quality check, magic-byte sniff, upload filename check, fact-check opt-in gate, the retention sweep for job folders and stored records (`sweep`, `run_retention`), the `/readyz` checks, and whole-word keyword matching for the flag, intent and email-draft rules (`contains_phrase`, `starts_with_phrase`) | `job_io.py`, `logger.py`, `audio_utils.py`, `audio_quality.py`, `audio_sniff.py`, `upload.py`, `factcheck_gate.py`, `retention.py`, `readiness.py`, `text_match.py` |
 
-Two modules sit outside the request path: `app/evaluation/evaluator.py` is
-used by the repository-root script `run_eval_dev.py` (line 8), and
-`app/models/response_model.py` is not imported by any module under `app/`.
+Three parts sit outside the request path:
+
+- `app/evaluation/evaluator.py` is used by the repository-root script
+  `run_eval_dev.py` (line 8).
+- `app/models/response_model.py` is not imported by any module under `app/`.
+- `app/evaluation/bakeoff/` is the D6 bake-off harness: Sprint 7 Phase 1
+  evaluation tooling, not application code
+  ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9).
+  Only its own modules and its tests in `app/evaluation/tests/` import it,
+  and CI runs neither those tests nor mypy over it. It holds the scoring
+  core (`gold`, `extraction`, `scoring`, `stats`; milestone H1), the
+  model-server client (`schemas`, `probe`, `client`; H2), and the runner
+  with its inputs, launch checks and records (`inputs`, `launch`,
+  `records`, `runner`; H3). The package docstring
+  (`app/evaluation/bakeoff/__init__.py`) gives the import direction and
+  the I/O boundaries: only `client` talks to the network, and only to
+  `http://127.0.0.1:<port>`; only `launch` starts a process; only
+  `records` writes results, outside OneDrive. It holds no prompt text yet.
+  `gold` loads any gold-set version directory, such as those in
+  `app/evaluation/gold/` (`v0.1` to `v0.4`, each with `conversations.jsonl`,
+  `items.csv`, `items.jsonl` and a `MANIFEST.sha256`), but `inputs` builds
+  a run's requests only from v1.0, which is not in the repository yet.
 
 ## 3. Routes
 
@@ -563,9 +584,12 @@ silent, and missing tables are created.
 
 ## 9. Sprint 7 fact-check agent — planned, not built
 
-**Everything in this section is planned, not built.** No Sprint 7
-application code exists at `e4398b1`. A search of `app/` at that commit finds
+**Everything in this section is planned, not built.** No code of the
+fact-check agent exists at `911ddb1`. A search of `app/` at that commit finds
 no `/v2` route, no `fact_check_report` key and no `factcheck_agent_*` table.
+The Phase 1 bake-off harness (section 2) is evaluation tooling, and the
+Sprint 7 diarization fixes (`9887e0b`, `670b4de`) change an existing
+service; neither is part of the agent.
 For progress and the next milestone, see
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For each
 decision and its status, see the
@@ -595,5 +619,5 @@ What the current code does in its place: the in-pipeline Agent Brain
 passes `fact_check=None`, so `FactCheckReviewAgent` is dormant on that path
 (`orchestrator.py:742-750`, `780`), and the PDF shows only the legacy
 `fact_checks` list (`orchestrator.py:882`). The code contains no job runner.
-The job will run on a DB-polled worker (U1, signed 2026-10-19; see the
+The job will run on a DB-polled worker (U1; for its status, see the
 [register](FACTCHECK-AGENT-PHASE-0.md#1-decision-register)).
