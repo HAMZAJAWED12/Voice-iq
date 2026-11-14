@@ -15,8 +15,8 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 | | |
 |---|---|
 | Date | 2026-11-14 |
-| Branch | `main` @ `b7ec04f` (as of 2026-11-14; pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix (`9887e0b`) was merged by pull request #3 (`4025199`); the gold set v0.4 (`d7071b2`) by pull request #4 (`c021e03`); the D5 run deadline and the signed D6 criteria note S1 and S2 (`420f659`, `ed6792c`) by pull request #5 (`3a22ed2`); the bake-off model-weight record (`be42d0d`) by pull request #6 (`a16f72c`); the removal of diarization's Hugging Face login (`670b4de`, `551fc85`) by pull request #7 (`c86f0fc`); the D6 bake-off harness H1 to H3 (`fb4a5d8`, `91d8289`, `cf874ee`), with three docs commits (`911ddb1`, `86fd358`, `0ea4ddd`) and three commits that correct stale notes (`3059a59`, `962e0da`, `247d8a1`), by pull request #8 (`6534094`), from `sprint7/phase1-harness`, cut from `main` at `c021e03` with `main` at `c86f0fc` merged in (`cbc3e2f`); the docs commit that records pull request #8 (`8a62a37`) by pull request #9 (`b2f32d1`), from the same branch; harness milestone H4a (`ad6b79e`), the docs commit that records H4a and pull request #9 (`39e51d3`), and the commit that makes the harness messages cite the signed D6 criteria note (`a97679c`), by pull request #10 (`0bd99d0`), from the same branch; and the docs commit that records pull request #10 and H4a (`e97e13d`) by pull request #11 (`b7ec04f`), from the same branch. Harness milestone H4b (`7f91130`, committed 2026-11-14) is on `sprint7/phase1-harness`, not yet merged |
-| Current phase | **Phase 0 — Contract and scope lock: complete** (signed 2026-10-19). **Phase 1 — model bake-off: in progress.** The gold set is at v0.4 (200 items, not yet frozen as v1.0), and the bake-off harness has milestones H1 to H4a on `main` (H4a merged by pull request #10, `0bd99d0`) and H4b committed on `sprint7/phase1-harness` (`7f91130`), not yet merged; no bake-off has run. Phases 2–7 not started. No Sprint 7 application code exists: the harness is evaluation tooling under `app/evaluation/`, not application code ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9). |
+| Branch | `main` @ `efb1f03` (as of 2026-11-14; pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix (`9887e0b`) was merged by pull request #3 (`4025199`); the gold set v0.4 (`d7071b2`) by pull request #4 (`c021e03`); the D5 run deadline and the signed D6 criteria note S1 and S2 (`420f659`, `ed6792c`) by pull request #5 (`3a22ed2`); the bake-off model-weight record (`be42d0d`) by pull request #6 (`a16f72c`); the removal of diarization's Hugging Face login (`670b4de`, `551fc85`) by pull request #7 (`c86f0fc`); the D6 bake-off harness H1 to H3 (`fb4a5d8`, `91d8289`, `cf874ee`), with three docs commits (`911ddb1`, `86fd358`, `0ea4ddd`) and three commits that correct stale notes (`3059a59`, `962e0da`, `247d8a1`), by pull request #8 (`6534094`), from `sprint7/phase1-harness`, cut from `main` at `c021e03` with `main` at `c86f0fc` merged in (`cbc3e2f`); the docs commit that records pull request #8 (`8a62a37`) by pull request #9 (`b2f32d1`), from the same branch; harness milestone H4a (`ad6b79e`), the docs commit that records H4a and pull request #9 (`39e51d3`), and the commit that makes the harness messages cite the signed D6 criteria note (`a97679c`), by pull request #10 (`0bd99d0`), from the same branch; the docs commit that records pull request #10 and H4a (`e97e13d`) by pull request #11 (`b7ec04f`), from the same branch; and harness milestone H4b (`7f91130`) and the docs commit that records H4b and pull request #11 (`8c0fd31`) by pull request #12 (`efb1f03`), from the same branch |
+| Current phase | **Phase 0 — Contract and scope lock: complete** (signed 2026-10-19). **Phase 1 — model bake-off: in progress.** The gold set is at v0.4 (200 items, not yet frozen as v1.0), and the bake-off harness has milestones H1 to H4b on `main` (H4b merged by pull request #12, `efb1f03`); no bake-off has run. Phases 2–7 not started. No Sprint 7 application code exists: the harness is evaluation tooling under `app/evaluation/`, not application code ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9). |
 | Overall progress | **4.17 %** |
 
 **How the percentage is computed** — countable plan deliverables only. Each
@@ -46,7 +46,7 @@ as v1.0, the harness still lacks H5, and no exit deliverable in
 
 ## Completed
 
-Verified against the repository on 2026-11-14 (`7f91130`).
+Verified against the repository on 2026-11-14 (`efb1f03`).
 
 - **Phase 1 work so far** (no Phase 1 bullet is done yet; see *How the
   percentage is computed*):
@@ -69,7 +69,7 @@ Verified against the repository on 2026-11-14 (`7f91130`).
   - **Bake-off harness H1 to H4b** (2026-11-04 to 2026-11-14), on
     `sprint7/phase1-harness`; H1 to H3 merged by pull request #8
     (`6534094`), H4a (`ad6b79e`) by pull request #10 (`0bd99d0`), and
-    H4b (`7f91130`) committed, not yet merged:
+    H4b (`7f91130`) by pull request #12 (`efb1f03`):
     evaluation tooling in `app/evaluation/bakeoff/`, outside CI's pytest
     and mypy paths and linted by CI's ruff (S2 section 11 item 9).
     - `fb4a5d8` — **H1, the scoring core:** gold-set loading with the
@@ -122,11 +122,11 @@ Verified against the repository on 2026-11-14 (`7f91130`).
     - `7f91130` — **H4b, the machine sampler and the schedule entry
       point:** the machine evidence that gate M reads, measured around
       each timed and contended attempt, and the function that runs a
-      schedule with those hooks; not yet merged. New module `machine`:
-      before each attempt, the compute-apps check for any other CUDA
-      process, the swap counter and the GPU sampler (`nvidia-smi` at 20
-      samples a second, with a floor of 10); during it, a `/proc` thread
-      that reads the server's RssAnon; after it, `proc.csv` and
+      schedule with those hooks; merged by pull request #12. New module
+      `machine`: before each attempt, the compute-apps check for any other
+      CUDA process, the swap counter and the GPU sampler (`nvidia-smi` at
+      20 samples a second, with a floor of 10); during it, a `/proc`
+      thread that reads the server's RssAnon; after it, `proc.csv` and
       `host.json` beside the server log; the contention hooks, which
       discard the command's output and keep only a hash of its argv; and
       `load_evidence`, which reads the logs back. `entry` gains
@@ -147,26 +147,27 @@ Verified against the repository on 2026-11-14 (`7f91130`).
       header follow an operator capture in WSL, inside the loopback-only
       namespace.
 
-    Harness tests at `7f91130` (2026-11-14, local `.venv`, CPython
+    Harness tests at `efb1f03` (2026-11-14, local `.venv`, CPython
     3.12.10): 4877 passed, 3 skipped (two need a symlink, which this host
     refuses, and one a directory name ending in a space, which this host
     drops); 421 more than the 4456 at `0bd99d0`. On WSL, Python 3.11.17,
     the same tests give 4873 passed and 7 skipped (all seven are f-string
     forms that only the Python 3.12 parser accepts, in `test_hygiene.py`).
-    With every outbound socket refused, the same tests pass and make no
-    socket call. `ruff check` and `ruff format --check` on
-    `app/evaluation` are clean (48 files), `ruff check .` is clean, and
-    `mypy --python-version 3.10 app/evaluation/bakeoff` finds no issues
-    in 18 source files. CI runs neither these tests nor this mypy, so
-    these local runs are the harness's only test evidence. No test uses a
-    gold row, and the harness holds no prompt text yet. Readings the note
-    does not settle are marked NEEDS-OWNER in the code: AMB-1 to AMB-4,
-    AMB-26 to AMB-30, AMB-66 and AMB-69; H4a's AMB-106, AMB-116,
-    AMB-129, AMB-130, AMB-134, AMB-135, AMB-136, AMB-137 and AMB-139; and
-    H4b's AMB-108 and AMB-140, with a second AMB-69 site in
-    `run_bakeoff`. H1 to H4b change no file outside `app/evaluation/`,
-    and the main suite (`app/insights/tests/` and
-    `app/agent_brain/tests/`) still gives 1797 passed locally.
+    The tree under `app/` is the same as at `7f91130`, where, with every
+    outbound socket refused, the same tests pass and make no socket call.
+    `ruff check` and `ruff format --check` on `app/evaluation` are clean
+    (48 files), `ruff check .` is clean, and `mypy --python-version
+    3.10 app/evaluation/bakeoff` finds no issues in 18 source files. CI
+    runs neither these tests nor this mypy, so these local runs are
+    the harness's only test evidence. No test uses a gold row, and
+    the harness holds no prompt text yet. Readings the note does not
+    settle are marked NEEDS-OWNER in the code: AMB-1 to AMB-4, AMB-26
+    to AMB-30, AMB-66 and AMB-69; H4a's AMB-106, AMB-116, AMB-129,
+    AMB-130, AMB-134, AMB-135, AMB-136, AMB-137 and AMB-139; and H4b's
+    AMB-108 and AMB-140, with a second AMB-69 site in `run_bakeoff`. H1
+    to H4b change no file outside `app/evaluation/`, and the main suite
+    (`app/insights/tests/` and `app/agent_brain/tests/`) still gives
+    1797 passed locally at `7f91130`.
 - **Phase 0 complete (2026-10-19).** The project owner (sole maintainer),
   who holds every role in the register, signed the remaining register
   decisions, added D3b, D10-T and U1–U10 to the register with their own
@@ -378,10 +379,10 @@ Verified against the repository on 2026-11-14 (`7f91130`).
 - **Phase 1, bake-off harness** — on `sprint7/phase1-harness`. H1 to H3
   are done and merged by pull request #8 (`6534094`); H4a is done
   (`ad6b79e`) and merged by pull request #10 (`0bd99d0`); H4b is done
-  (`7f91130`), not yet merged (see *Completed*); H5 is next (see *Next
-  milestone*). A synthetic end-to-end pass with the real machine hooks,
-  in the loopback-only namespace, is an operator step with its own
-  approval and has not run.
+  (`7f91130`) and merged by pull request #12 (`efb1f03`; see
+  *Completed*); H5 is next (see *Next milestone*). A synthetic end-to-end
+  pass with the real machine hooks, in the loopback-only namespace, is
+  an operator step with its own approval and has not run.
 - **Prerequisite fixes** — only fixes that need no pending decision, one
   per milestone, smallest first. M1–M7, the old-rows fix, the decision-free
   hardening items, the owner-decided items and the pull-request review fix
@@ -444,9 +445,8 @@ before the phase that uses it:
 ## Next milestone
 
 **Phase 1 — model bake-off** (plan v1.1, Phase 1). The gold set is at
-v0.4 and the bake-off harness has milestones H1 to H4a on `main`
-(H4a merged by pull request #10, `0bd99d0`) and H4b committed on
-`sprint7/phase1-harness` (`7f91130`), not yet merged; see *Completed*.
+v0.4 and the bake-off harness has milestones H1 to H4b on `main`
+(H4b merged by pull request #12, `efb1f03`; see *Completed*).
 D5's run deadline was set and the D6 criteria note
 ([D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md): who may win, the gates,
 the margin and the licence check) was signed on 2026-10-28; its launch line
