@@ -102,8 +102,8 @@ CAVEATS: tuple[str, ...] = (
     "Nothing here bears on the safety of regulated domains.",
     "In a few approved rows, a market professional states a false value (the guide's realism note).",
 )
-# The NEEDS-OWNER readings the H4a harness implements and the owner has still to rule (H1 to H4 specs, section 7).
-OPEN_RULINGS: tuple[int, ...] = (1, 2, 3, 4, 26, 27, 28, 29, 30, 66, 69, 106, 116, 129, 130, 134, 135, 136, 137, 139)
+# The NEEDS-OWNER readings the harness implements and the owner has still to rule (H1 to H4 specs, section 7).
+OPEN_RULINGS = (*range(1, 5), *range(26, 31), 66, 69, 106, 108, 116, 129, 130, *range(134, 138), 139, 140)
 BOOTSTRAP_METHOD = "paired percentile bootstrap over conversations, nearest-rank lower bound (H1 AMB-3)"
 CARD_SETTINGS_LABEL = "recorded, not used (S2 §3.7)"
 SCORED_FAULT_NOTE = "fault on a scored unit: no void possible (H3 refuses void_run once the marker exists)"
