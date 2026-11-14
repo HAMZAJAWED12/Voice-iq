@@ -1,21 +1,26 @@
 """The report and void commands: H4 spec section 4 G4-3, G4-14, G4-21, G4-37, G4-42 to G4-44 and section 8's
 test_entry row, cut to the H4a subset (H4a brief sections 4 and 9, step A6; amendments 2, 3 and 4) (S2 §3.2,
-§3.12, §3.13, §9, §11).
+§3.12, §3.13, §9, §11). Then the schedule's entry point: the entry config, the deps with the machine hooks and
+`run_bakeoff`, ending in a fake pass over the whole schedule that a report pins under rule 2 (S2 §3.1, §3.13, §6;
+AMB-132, AMB-140).
 
-Run directories come from two sources. `schedule_rig` runs a whole schedule over `frozen_inputs` with the H3 fakes and
-`RecordingHooks`, so it holds no machine evidence and the H4a loader leaves gate M not measured. `_h4_fixtures`'s
-`make_view` builds a schedule that can pass every gate when an injected loader supplies clean evidence. No gold row is
-used, no process is started and no socket is opened.
+Run directories come from three sources. `schedule_rig` runs a whole schedule over `frozen_inputs` with the H3 fakes
+and `RecordingHooks`, so it holds no machine evidence and `machine.load_evidence` leaves gate M not measured.
+`_h4_fixtures`'s `make_view` builds a schedule that can pass every gate when an injected loader supplies clean
+evidence. `run_bakeoff` runs a schedule with the real machine hooks over the machine fakes. No gold row is used, no
+process is started and no socket is opened.
 """
 
 from __future__ import annotations
 
+import ast
 import copy
 import dataclasses
 import hashlib
 import inspect
 import json
 import os
+import re
 import shutil
 from collections.abc import Callable, Mapping
 from fractions import Fraction
@@ -27,21 +32,30 @@ import pytest
 
 from app.evaluation.bakeoff import entry as entry_module
 from app.evaluation.bakeoff import gates as gates_module
+from app.evaluation.bakeoff import machine, stats
 from app.evaluation.bakeoff import report as report_module
-from app.evaluation.bakeoff import stats
+from app.evaluation.bakeoff import runner as runner_module
+from app.evaluation.bakeoff.client import ModelServerClient
 from app.evaluation.bakeoff.entry import (
     RECORDS_ONLY_EXIT,
+    EntryConfig,
     ReportOutcome,
-    _no_machine_evidence,
+    ScheduleOutcome,
+    _loopback_client,
     _path_needles,
+    build_deps,
+    load_entry_config,
+    load_machine_config,
     main,
+    run_bakeoff,
     score_and_report,
 )
-from app.evaluation.bakeoff.evidence import AttemptEvidence
-from app.evaluation.bakeoff.gates import ReportError, ReportInputs, units_to_mark
+from app.evaluation.bakeoff.evidence import AttemptEvidence, ContentionRecord, HostRecord
+from app.evaluation.bakeoff.gates import RUN_CONDITION_FIELDS, ReportError, ReportInputs, units_to_mark
 from app.evaluation.bakeoff.gold import GoldSet, load_gold_set
 from app.evaluation.bakeoff.inputs import FrozenInputs
 from app.evaluation.bakeoff.launch import CANDIDATE_IDS, CANDIDATE_SLUGS, LaunchTools, ServerStopFailed
+from app.evaluation.bakeoff.machine import MachineHooks, MachineTools
 from app.evaluation.bakeoff.records import (
     RunKey,
     RunStore,
@@ -55,15 +69,26 @@ from app.evaluation.bakeoff.records import (
 from app.evaluation.bakeoff.runner import RunsExhausted
 from app.evaluation.tests._client_fixtures import block_sockets
 from app.evaluation.tests._h4_fixtures import (
+    MACHINE_CONFIG,
+    FakeMachinePopen,
+    FakeThreads,
+    answering_scripts,
+    apps_output,
+    h4_frozen_inputs,
+    install_machine,
     loader,
+    machine_tools,
     make_view,
     passing_evidence,
+    proc_status,
     store_view,
     write_h4_gold,
 )
 from app.evaluation.tests._runner_fixtures import (
+    CONDITIONS,
     SCHEDULE_CANDIDATES,
     VALID_OPERATOR,
+    FakeHost,
     ServerScript,
     block_processes,
     fixed_now,
@@ -72,6 +97,7 @@ from app.evaluation.tests._runner_fixtures import (
     schedule_rig,
     small_inputs,
     synthetic_gold,
+    unit_of,
 )
 
 Q4B, Q35, Q8B = CANDIDATE_IDS
@@ -137,7 +163,7 @@ def score(
     *,
     inputs: ReportInputs = NO_INPUTS,
     abandoned: tuple[str, ...] = (),
-    load_evidence: Any = _no_machine_evidence,
+    load_evidence: Any = machine.load_evidence,
     tools: LaunchTools | None = None,
 ) -> ReportOutcome:
     return score_and_report(
@@ -204,7 +230,7 @@ def test_score_and_report_defaults_to_the_s2_resample_count() -> None:
     ]
 
 
-# ---------------------------------------------------------------- a schedule_rig directory and the H4a loader
+# ---------------------------------------------------------------- a schedule_rig directory and the machine loader
 
 
 def test_a_rig_schedule_scores_to_rule_5_with_every_gate_m_not_measured(
@@ -226,7 +252,7 @@ def test_a_rig_schedule_scores_to_rule_5_with_every_gate_m_not_measured(
 
     def load(run: str, key: RunKey, read_bytes: Callable[[str], bytes]) -> AttemptEvidence | None:
         events.append(("evidence", key))
-        return _no_machine_evidence(run, key, read_bytes)
+        return machine.load_evidence(run, key, read_bytes)
 
     monkeypatch.setattr(RunStore, "mark_scored", mark)
     monkeypatch.setattr(gates_module, "evaluate", evaluate)
@@ -283,27 +309,13 @@ def test_a_gold_mismatch_is_refused_with_nothing_marked(rig: Rig, tmp_path: Path
     assert not (run_dir / "reports").exists()
 
 
-def test_a_hand_placed_host_record_is_refused_with_nothing_marked(rig: Rig, tmp_path: Path) -> None:
+def test_a_malformed_host_record_is_refused_with_nothing_marked(rig: Rig, tmp_path: Path) -> None:
     run_dir = copy_run(rig.run_dir, tmp_path)
     (run_dir / machine_log_name(RunKey(Q4B, "timed_run", 1, 1), "host")).write_bytes(b"{}\n")
-    with pytest.raises(ReportError, match="machine evidence present for qwen3-4b.run1.a1; .* no evidence loader"):
+    with pytest.raises(StoreError, match="qwen3-4b.run1.a1"):
         score(run_dir, rig.gold_dir)
     assert markers(run_dir) == []
     assert not (run_dir / "reports").exists()
-
-
-def test_the_h4a_loader_reads_only_the_host_record() -> None:
-    key = RunKey(Q35, "contended", None, 2)
-    seen: list[str] = []
-
-    def missing(path: str) -> bytes:
-        seen.append(path)
-        raise FileNotFoundError(path)
-
-    assert _no_machine_evidence("/runs/run_1", key, missing) is None
-    assert seen == ["/runs/run_1/logs/qwen3.5-4b.contended.a2.host.json"]
-    with pytest.raises(ReportError, match="qwen3.5-4b.contended.a2"):
-        _no_machine_evidence("/runs/run_1", key, lambda _path: b"{}")
 
 
 def test_three_contended_voids_list_the_unit_as_needing_a_repeat(rig: Rig, tmp_path: Path) -> None:
@@ -1000,3 +1012,646 @@ def test_a_filesystem_root_parent_is_no_needle(h4: tuple[Path, GoldSet]) -> None
         assert needles == deeper[:-1], run_dir
         assert not any(os.path.dirname(needle) == needle for needle in needles)
     report_module.check_paths(view, NO_INPUTS, (), (), _path_needles(view, "/run_1"))
+
+
+# ---------------------------------------------------------------- the entry config (AMB-132, AMB-138, AMB-140)
+
+
+def config_data(parent: Path | str) -> dict[str, Any]:
+    """A valid entry config for a schedule into `<parent>/run_1`, as the JSON object the operator writes."""
+    return {
+        "store_parent": str(parent),
+        "run_name": "run_1",
+        "conditions": {
+            "binary_path": CONDITIONS.binary_path,
+            "home": CONDITIONS.home,
+            "port": CONDITIONS.port,
+            "context": CONDITIONS.context,
+            "kv_type": CONDITIONS.kv_type,
+        },
+        "candidates": [
+            {
+                "candidate_id": row.candidate_id,
+                "gguf_path": row.gguf_path,
+                "gguf_sha256": row.gguf_sha256,
+                "source_revision": row.source_revision,
+                "quantization_commands": row.quantization_commands,
+            }
+            for row in SCHEDULE_CANDIDATES
+        ],
+        "operator": dict(VALID_OPERATOR),
+        "machine": {
+            "nvidia_smi_path": MACHINE_CONFIG.nvidia_smi_path,
+            "contention_argv": list(MACHINE_CONFIG.contention_argv),
+            "contention_env": dict(MACHINE_CONFIG.contention_env),
+            "contention_lead_sec": MACHINE_CONFIG.contention_lead_sec,
+        },
+    }
+
+
+def config_text(data: Any) -> str:
+    return json.dumps(data) + "\n"
+
+
+class Reads:
+    """A `read_bytes` that records every path it reads."""
+
+    def __init__(self) -> None:
+        self.paths: list[str] = []
+
+    def __call__(self, path: str) -> bytes:
+        self.paths.append(path)
+        return Path(path).read_bytes()
+
+
+def entry_config(parent: Path | str, **changes: Any) -> EntryConfig:
+    fields: dict[str, Any] = {
+        "store_parent": str(parent),
+        "run_name": "run_1",
+        "conditions": CONDITIONS,
+        "candidates": SCHEDULE_CANDIDATES,
+        "operator": VALID_OPERATOR,
+        "machine": MACHINE_CONFIG,
+    }
+    return EntryConfig(**{**fields, **changes})
+
+
+def test_a_valid_entry_config_loads_reading_only_its_file(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(config_text(config_data(tmp_path / "runs")), encoding="ascii")
+    reads = Reads()
+    config = load_entry_config(str(path), reads)
+    assert config == entry_config(tmp_path / "runs")
+    assert dict(config.operator) == VALID_OPERATOR
+    assert isinstance(config.operator, MappingProxyType)
+    assert config.machine == MACHINE_CONFIG
+    assert reads.paths == [str(path)]
+
+
+def setting(*path: Any, value: Any) -> Callable[[dict[str, Any]], None]:
+    def change(data: dict[str, Any]) -> None:
+        *head, last = path
+        for part in head:
+            data = data[part]
+        data[last] = value
+
+    return change
+
+
+def dropping(*path: Any) -> Callable[[dict[str, Any]], None]:
+    def change(data: dict[str, Any]) -> None:
+        *head, last = path
+        for part in head:
+            data = data[part]
+        del data[last]
+
+    return change
+
+
+def _two_candidates(data: dict[str, Any]) -> None:
+    data["candidates"].pop()
+
+
+def _four_candidates(data: dict[str, Any]) -> None:
+    data["candidates"].append(dict(data["candidates"][0]))
+
+
+def _swapped_candidates(data: dict[str, Any]) -> None:
+    data["candidates"][0], data["candidates"][1] = data["candidates"][1], data["candidates"][0]
+
+
+def _shared_path(data: dict[str, Any]) -> None:
+    data["candidates"][1]["gguf_path"] = data["candidates"][0]["gguf_path"]
+
+
+def _operator(**values: str) -> Callable[[dict[str, Any]], None]:
+    def change(data: dict[str, Any]) -> None:
+        data["operator"].update(values)
+
+    return change
+
+
+NOT_PASSED = "run-condition checks not exactly 'passed': "
+CONFIG_REFUSALS: list[tuple[Callable[[dict[str, Any]], None], str]] = [
+    (dropping("machine"), "missing keys ['machine']"),
+    (dropping("operator"), "missing keys ['operator']"),
+    (setting("schedule", value="x"), "unexpected keys ['schedule']"),
+    (setting("conditions", "ready_deadline_sec", value=600.0), "ready_deadline_sec"),
+    (dropping("conditions", "context"), "missing keys ['context']"),
+    (setting("conditions", "port", value="18080"), "RunConditions.port"),
+    (dropping("candidates", 0, "source_revision"), "candidates[0]: missing keys ['source_revision']"),
+    (setting("candidates", 2, "argv", value=[]), "candidates[2]: missing keys [], unexpected keys ['argv']"),
+    (_two_candidates, "candidates must be a list of exactly 3"),
+    (_four_candidates, "candidates must be a list of exactly 3"),
+    (_swapped_candidates, "candidates: candidates must be exactly"),
+    (_shared_path, "candidates: every candidate needs its own GGUF path"),
+    (dropping("operator", "bootstrap_seed"), "operator: missing keys ['bootstrap_seed']"),
+    (setting("operator", "note", value="x"), "operator: missing keys [], unexpected keys ['note']"),
+    (setting("operator", "bootstrap_seed", value=20261109), "operator.bootstrap_seed must be a string"),
+    (setting("operator", value=[]), "operator must be an object"),
+    (setting("run_name", value="../run_1"), "run_name must match"),
+    (setting("run_name", value=""), "run_name must match"),
+    (setting("store_parent", value="  "), "store_parent must be a non-blank string"),
+    (setting("store_parent", value=7), "store_parent must be a non-blank string"),
+    (setting("machine", "audio_start_argv", value=["/opt/audio/start"]), "unexpected keys ['audio_start_argv']"),
+    (dropping("machine", "contention_lead_sec"), "machine: missing keys ['contention_lead_sec']"),
+    (setting("machine", "contention_argv", value="/opt/audio/contention"), "machine.contention_argv must be a list"),
+    (setting("machine", "nvidia_smi_path", value="nvidia-smi"), "MachineConfig.nvidia_smi_path"),
+    (setting("machine", "contention_lead_sec", value=True), "MachineConfig.contention_lead_sec"),
+    (setting("machine", "contention_lead_sec", value=10**400), "machine: MachineConfig.contention_lead_sec"),
+    (setting("machine", "contention_env", value={"PATH": 1}), "MachineConfig.contention_env"),
+    # the test_gates value table, through the config
+    *(
+        (_operator(run_deadline_sec=text), "operator.run_deadline_sec")
+        for text in ("1.25e2", "1e2", " 125", "125 ", "abc", "0")
+    ),
+    (_operator(idle_free_vram_mib="1512", audio_pipeline_vram_mib="1000"), "the gate M budget"),
+    (_operator(audio_vram_min_per_sec="9"), "operator.audio_vram_min_per_sec must be at least 10"),
+    (_operator(prompt_development_models=""), "operator.prompt_development_models"),
+    # each run condition not exactly "passed" (S2 §3.1, §3.2, §11 item 5; AMB-132)
+    *(
+        (_operator(**{name: value}), f"{NOT_PASSED}{name} (S2 ")
+        for name in RUN_CONDITION_FIELDS
+        for value in ("failed", "Passed", " passed", "not recorded: x")
+    ),
+    (
+        _operator(namespace_lan_check="failed", cuda_process_check="failed"),
+        f"{NOT_PASSED}cuda_process_check, namespace_lan_check (S2 §3.1, §3.2, §11 item 5; AMB-132)",
+    ),
+]
+
+
+def assert_refused(tmp_path: Path, text: str, message: str) -> None:
+    """`load_entry_config` refuses the file with `message`, reads nothing else and creates nothing."""
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    path = tmp_path / "config.json"
+    path.write_bytes(text.encode("utf-8"))
+    reads = Reads()
+    with pytest.raises(ReportError, match=re.escape(message)):
+        load_entry_config(str(path), reads)
+    assert reads.paths == [str(path)]
+    assert list(runs.iterdir()) == []
+    assert sorted(entry.name for entry in tmp_path.iterdir()) == ["config.json", "runs"]
+
+
+@pytest.mark.parametrize(("change", "message"), CONFIG_REFUSALS)
+def test_a_bad_entry_config_is_refused_naming_the_key(
+    tmp_path: Path, change: Callable[[dict[str, Any]], None], message: str
+) -> None:
+    data = config_data(tmp_path / "runs")
+    change(data)
+    assert_refused(tmp_path, config_text(data), message)
+
+
+@pytest.mark.parametrize(
+    ("edit", "message"),
+    [
+        (lambda text: text[:-3], "not one JSON object in ASCII"),
+        (lambda text: text.replace("synthetic test machine", "synthetic test m" + chr(225) + "chine"), "in ASCII"),
+        (lambda text: text.replace('"run_name": "run_1"', '"run_name": "run_1", "run_name": "run_1"'), "in ASCII"),
+        (lambda text: text.replace('"contention_lead_sec": 5.0', '"contention_lead_sec": NaN'), "in ASCII"),
+        (
+            lambda text: text.replace('"contention_lead_sec": 5.0', '"contention_lead_sec": 1e400'),
+            "machine: MachineConfig.contention_lead_sec",
+        ),
+        (lambda _text: "[]\n", "the entry config must be an object"),
+    ],
+)
+def test_an_entry_config_that_is_not_one_ascii_json_object_is_refused(
+    tmp_path: Path, edit: Callable[[str], str], message: str
+) -> None:
+    text = config_text(config_data(tmp_path / "runs"))
+    assert edit(text) != text
+    assert_refused(tmp_path, edit(text), message)
+
+
+def test_an_unreadable_entry_config_raises_its_os_error(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        load_entry_config(str(tmp_path / "missing.json"), Reads())
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        dropping("operator"),
+        setting("operator", value=dict.fromkeys(VALID_OPERATOR, "not recorded: x")),
+        setting("tools", value={"anything": 1}),
+        setting("conditions", value=None),
+    ],
+)
+def test_the_machine_config_is_read_alone(tmp_path: Path, change: Callable[[dict[str, Any]], None]) -> None:
+    data = config_data(tmp_path / "runs")
+    change(data)
+    path = tmp_path / "config.json"
+    path.write_text(config_text(data), encoding="ascii")
+    reads = Reads()
+    assert load_machine_config(str(path), reads) == MACHINE_CONFIG
+    assert reads.paths == [str(path)]
+
+
+@pytest.mark.parametrize(
+    ("data", "message"),
+    [
+        ({"machine": {**config_data("/runs")["machine"], "audio_submit_argv": []}}, "audio_submit_argv"),
+        ({"operator": dict(VALID_OPERATOR)}, "an object holding a machine object"),
+        ([], "an object holding a machine object"),
+        ({"machine": []}, "machine must be an object"),
+        (
+            {"machine": {**config_data("/runs")["machine"], "contention_lead_sec": 10**400}},
+            "machine: MachineConfig.contention_lead_sec",
+        ),
+    ],
+)
+def test_a_bad_machine_object_is_refused(tmp_path: Path, data: Any, message: str) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(config_text(data), encoding="ascii")
+    with pytest.raises(ReportError, match=re.escape(message)):
+        load_machine_config(str(path), Reads())
+
+
+def test_the_entry_config_checks_types_only(tmp_path: Path) -> None:
+    placeholders = dict.fromkeys(VALID_OPERATOR, "not recorded: x")
+    config = entry_config(tmp_path, operator=placeholders)
+    assert dict(config.operator) == placeholders
+    for changes in (
+        {"operator": {"machine": 1}},
+        {"candidates": tuple(reversed(SCHEDULE_CANDIDATES))},
+        {"conditions": None},
+        {"machine": None},
+        {"run_name": None},
+    ):
+        with pytest.raises(ValueError):
+            entry_config(tmp_path, **changes)
+
+
+# ---------------------------------------------------------------- build_deps
+
+
+def no_real_tools(**changes: Any) -> LaunchTools:
+    """Tools whose real defaults are never called by `build_deps`; the realpath is the identity unless changed."""
+    return LaunchTools(**{"realpath": lambda path: path, **changes})
+
+
+def test_build_deps_passes_its_tools_on_with_the_loopback_client_by_default(tmp_path: Path) -> None:
+    tools = no_real_tools()
+    hooks_tools = MachineTools(launch=tools)
+    config = entry_config(tmp_path)
+    schedule, deps = build_deps(config, tools=tools, machine_tools=hooks_tools, fsync=no_fsync, now=fixed_now)
+    assert schedule == runner_module.ScheduleConfig(
+        SCHEDULE_CANDIDATES, CONDITIONS, config.operator, str(tmp_path), "run_1"
+    )
+    assert schedule.operator is config.operator
+    assert (deps.tools, deps.now, deps.fsync) == (tools, fixed_now, no_fsync)
+    assert deps.tools is tools and deps.now is fixed_now and deps.fsync is no_fsync
+    assert deps.client_factory is _loopback_client
+    assert isinstance(deps.hooks, MachineHooks)
+    assert deps.hooks._tools is hooks_tools and deps.hooks._config is MACHINE_CONFIG
+    assert deps.hooks._fsync is no_fsync and deps.hooks._run_dir == f"{tmp_path}/run_1"
+    client = deps.client_factory(f"http://127.0.0.1:{CONDITIONS.port}", CONDITIONS.context)
+    try:
+        assert type(client) is ModelServerClient
+        assert client.base_url == f"http://127.0.0.1:{CONDITIONS.port}"
+        assert client._n_ctx == CONDITIONS.context
+    finally:
+        client.close()
+
+
+def test_build_deps_keeps_an_injected_client_factory(tmp_path: Path) -> None:
+    def factory(url: str, n_ctx: int) -> ModelServerClient:
+        raise AssertionError("never called by build_deps")
+
+    tools = no_real_tools()
+    _schedule, deps = build_deps(
+        entry_config(tmp_path),
+        tools=tools,
+        machine_tools=MachineTools(launch=tools),
+        fsync=no_fsync,
+        now=fixed_now,
+        client_factory=factory,
+    )
+    assert deps.client_factory is factory
+
+
+def test_build_deps_resolves_only_the_run_directory_and_gives_it_to_the_hooks(tmp_path: Path) -> None:
+    resolved: list[str] = []
+
+    def recording(path: str) -> str:
+        resolved.append(path)
+        return "/data/runs/run_1"
+
+    tools = no_real_tools(realpath=recording)
+    _schedule, deps = build_deps(
+        entry_config(tmp_path), tools=tools, machine_tools=MachineTools(launch=tools), fsync=no_fsync, now=fixed_now
+    )
+    assert resolved == [f"{tmp_path}/run_1"]
+    assert isinstance(deps.hooks, MachineHooks)
+    assert deps.hooks._run_dir == "/data/runs/run_1"
+
+
+def test_build_deps_refuses_a_store_under_onedrive_with_nothing_created(tmp_path: Path) -> None:
+    tools = no_real_tools()
+    parent = tmp_path / ("One" + "Drive") / "runs"
+    with pytest.raises(StoreError, match="OneDrive"):
+        build_deps(
+            entry_config(parent), tools=tools, machine_tools=MachineTools(launch=tools), fsync=no_fsync, now=fixed_now
+        )
+    assert list(tmp_path.iterdir()) == []
+
+
+def _call_names(source: str) -> set[str]:
+    """The name or attribute each call in `source` calls."""
+    names = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call):
+            func = node.func
+            names.add(func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else "")
+    return names
+
+
+def _all_names(source: str) -> set[str]:
+    tree = ast.parse(source)
+    return {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)} | {
+        node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)
+    }
+
+
+BUILD_NEVER_CALLS = frozenset({"LaunchTools", "MachineTools", "realpath", "fsync", "now"})
+RUN_NEVER_NAMES = frozenset({"mark_scored", "attach", "score_and_report", "write_report", "build_report", "load_run"})
+
+
+def test_build_deps_builds_no_tool_and_run_bakeoff_never_scores() -> None:
+    assert not _call_names(inspect.getsource(build_deps)) & BUILD_NEVER_CALLS
+    assert not _all_names(inspect.getsource(run_bakeoff)) & RUN_NEVER_NAMES
+    assert "run_schedule" in _all_names(inspect.getsource(run_bakeoff))
+    assert _call_names("tools.realpath(path)\nLaunchTools()\nfsync(1)\n") & BUILD_NEVER_CALLS == {
+        "realpath",
+        "LaunchTools",
+        "fsync",
+    }
+    assert _call_names("deps = f(realpath=tools.realpath, fsync=fsync, now=now)\n") & BUILD_NEVER_CALLS == set()
+    assert _all_names("store = RunStore.attach(d)\nstore.mark_scored(k)\n") & RUN_NEVER_NAMES == {
+        "attach",
+        "mark_scored",
+    }
+
+
+# ---------------------------------------------------------------- run_bakeoff over the machine fakes
+
+
+@dataclasses.dataclass
+class Bakeoff:
+    """One schedule ready for `run_bakeoff`, with the real machine hooks over the fakes, and its gold directory."""
+
+    inputs: FrozenInputs
+    gold_dir: Path
+    host: FakeHost
+    popen: FakeMachinePopen
+    config: EntryConfig
+    schedule: runner_module.ScheduleConfig
+    deps: runner_module.RunnerDeps
+
+    @property
+    def run_dir(self) -> Path:
+        return Path(self.config.store_parent) / "run_1"
+
+    def run(self) -> ScheduleOutcome:
+        return run_bakeoff(self.config, self.inputs, self.schedule, self.deps)
+
+
+def bakeoff(
+    root: Path,
+    scripts: Mapping[str, ServerScript] | None = None,
+    *,
+    inputs: FrozenInputs | None = None,
+    realpaths: Mapping[str, str] | None = None,
+    **popen_options: Any,
+) -> Bakeoff:
+    """`h4_frozen_inputs` under `root`, every timed launch answering, and the entry config loaded from a file holding
+    `CONDITIONS`, `SCHEDULE_CANDIDATES`, `VALID_OPERATOR` and `MACHINE_CONFIG`; `scripts` replace launches' scripts."""
+    frozen = h4_frozen_inputs(root)
+    gold_dir = root / "v1.0"
+    answers = answering_scripts(frozen, load_gold_set(gold_dir))
+    answers.update(scripts or {})
+    inputs = frozen if inputs is None else inputs
+    host = FakeHost(inputs, answers, realpaths=realpaths, proc_status=proc_status())
+    threads = FakeThreads()
+    install_machine(host, threads)
+    popen = FakeMachinePopen(host.clock, **popen_options)
+    (root / "runs").mkdir()
+    path = root / "config.json"
+    path.write_text(config_text(config_data(root / "runs")), encoding="ascii")
+    config = load_entry_config(str(path), Reads())
+    schedule, deps = build_deps(
+        config,
+        tools=host.tools(),
+        machine_tools=machine_tools(host, popen, threads),
+        fsync=no_fsync,
+        now=fixed_now,
+        client_factory=host.client,
+    )
+    return Bakeoff(inputs, gold_dir, host, popen, config, schedule, deps)
+
+
+def report_dir_state(run_dir: Path) -> tuple[list[str], bool]:
+    return markers(run_dir), (run_dir / "reports").exists()
+
+
+def test_a_fake_bake_off_runs_unscored_and_its_report_pins_under_rule_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    events: list[str] = []
+    real_mark = RunStore.mark_scored
+    real_evaluate = gates_module.evaluate
+
+    def mark(self: RunStore, key: RunKey) -> None:
+        events.append("mark")
+        real_mark(self, key)
+
+    def evaluate(*args: Any, **kwargs: Any) -> Any:
+        events.append("evaluate")
+        return real_evaluate(*args, **kwargs)
+
+    monkeypatch.setattr(RunStore, "mark_scored", mark)
+    monkeypatch.setattr(gates_module, "evaluate", evaluate)
+    run = bakeoff(tmp_path)
+    outcome = run.run()
+    run_dir = run.run_dir
+    assert outcome == ScheduleOutcome(f"{tmp_path / 'runs'}/run_1", None)
+    assert len(list((run_dir / "logs").glob("*.host.json"))) == 12
+    assert report_dir_state(run_dir) == ([], False)
+    assert events == []
+    out = capsys.readouterr().out
+    assert out.count("\n") == 1 and out.endswith("\n")
+    assert out.startswith(f"run run_1: {outcome.run_dir}; stopped: no; next: report --run-dir {outcome.run_dir} ")
+    assert re.search("G[0-9]-[0-9]", out) is None
+    assert run.popen.running() == []
+    shutil.copytree(run_dir, tmp_path / "copy" / "run_1")
+
+    result = score(run_dir, run.gold_dir)
+    assert (result.end, result.rule, result.pinned) == ("complete", "rule 2", Q4B)
+    assert [Path(path).name for path in result.paths] == REPORT_NAMES
+    assert events == ["mark"] * 15 + ["evaluate"]
+    report = json_of(run_dir)
+    assert (report["decision"]["rule"], report["decision"]["pinned"]) == ("rule 2", Q4B)
+    for candidate_id in CANDIDATE_IDS:
+        entry = candidate(report, candidate_id)
+        assert entry["gates"]["M"]["status"] == "pass", candidate_id
+        attempts = entry["memory"]["attempts"]
+        assert len(attempts) == 4 and all(attempt["sample_rate"] is not None for attempt in attempts.values())
+    for gate in ("A", "S", "J", "C", "T", "L"):
+        assert candidate(report, Q4B)["gates"][gate]["status"] == "pass", gate
+    second = score(run_dir, run.gold_dir)
+    for one, two in zip(result.paths, second.paths, strict=True):
+        assert Path(one).read_bytes() == Path(two).read_bytes()
+    assert main(report_argv(tmp_path / "copy" / "run_1", run.gold_dir)) == 0
+
+
+def test_a_schedule_with_no_ready_pre_run_ends_pre_run_stopped(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    scripts = {unit_of(RunKey(c, "pre_run", None, 1)): ServerScript(spawn_error=OSError()) for c in CANDIDATE_IDS}
+    run = bakeoff(tmp_path, scripts)
+    outcome = run.run()
+    assert outcome == ScheduleOutcome(f"{tmp_path / 'runs'}/run_1", "pre_run_stopped")
+    assert "; stopped: pre_run_stopped; " in capsys.readouterr().out
+    assert main(report_argv(run.run_dir, run.gold_dir)) == RECORDS_ONLY_EXIT
+    assert json_of(run.run_dir)["schedule_end"] == "pre_run_stopped"
+
+
+def test_a_timed_run_void_three_times_ends_runs_exhausted(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    run = bakeoff(tmp_path, apps={f"qwen3-4b.run1.a{n}": apps_output(9001) for n in (1, 2, 3)})
+    outcome = run.run()
+    assert outcome.stopped == "runs_exhausted: qwen3-4b.run1.a3"
+    assert "; stopped: runs_exhausted: qwen3-4b.run1.a3; " in capsys.readouterr().out
+    assert report_dir_state(run.run_dir) == ([], False)
+    assert run.popen.running() == []
+    assert main(report_argv(run.run_dir, run.gold_dir)) == RECORDS_ONLY_EXIT
+    report = json_of(run.run_dir)
+    assert report["schedule_end"] == "runs_exhausted"
+    assert [void["unit"] for void in report["reopening"]["voids"]] == [f"qwen3-4b.run1.a{n}" for n in (1, 2, 3)]
+
+
+def test_a_server_that_will_not_stop_propagates_out_of_run_bakeoff(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = bakeoff(tmp_path, {RUN_1: ServerScript(waits=(None, None))})
+    with pytest.raises(ServerStopFailed):
+        run.run()
+    assert capsys.readouterr().out == ""
+    assert (run.run_dir / machine_log_name(RunKey(Q4B, "timed_run", 1, 1), "host")).exists()
+    assert report_dir_state(run.run_dir) == ([], False)
+    assert main(report_argv(run.run_dir, run.gold_dir)) == RECORDS_ONLY_EXIT
+    report = json_of(run.run_dir)
+    assert report["schedule_end"] == "incomplete"
+    assert [(void["unit"], void["fault_kind"]) for void in report["reopening"]["voids"]] == [
+        (RUN_1, "server_not_stopped")
+    ]
+
+
+def test_a_pre_run_that_will_not_stop_propagates_out_of_run_bakeoff(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = bakeoff(tmp_path, {unit_of(RunKey(Q4B, "pre_run", None, 1)): ServerScript(waits=(None, None))})
+    with pytest.raises(ServerStopFailed):
+        run.run()
+    assert capsys.readouterr().out == ""
+    assert main(report_argv(run.run_dir, run.gold_dir)) == RECORDS_ONLY_EXIT
+    assert json_of(run.run_dir)["schedule_end"] == "pre_run_stopped"
+
+
+def test_a_third_attempt_that_will_not_stop_ends_the_schedule_with_three_voids(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = bakeoff(
+        tmp_path,
+        {"qwen3-4b.run1.a3": ServerScript(waits=(None, None))},
+        apps={f"qwen3-4b.run1.a{n}": apps_output(9001) for n in (1, 2)},
+    )
+    with pytest.raises(ServerStopFailed):
+        run.run()
+    assert capsys.readouterr().out == ""
+    assert (run.run_dir / machine_log_name(RunKey(Q4B, "timed_run", 1, 3), "host")).exists()
+    assert report_dir_state(run.run_dir) == ([], False)
+    assert main(report_argv(run.run_dir, run.gold_dir)) == RECORDS_ONLY_EXIT
+    report = json_of(run.run_dir)
+    assert report["schedule_end"] == "runs_exhausted"
+    assert [(void["unit"], void["fault_kind"]) for void in report["reopening"]["voids"]] == [
+        ("qwen3-4b.run1.a1", "hook_failed"),
+        ("qwen3-4b.run1.a2", "hook_failed"),
+        ("qwen3-4b.run1.a3", "server_not_stopped"),
+    ]
+
+
+def test_a_schedule_for_another_run_is_refused_before_anything_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = bakeoff(tmp_path)
+
+    def refuse(*_args: Any) -> Any:
+        raise AssertionError("the schedule ran")
+
+    monkeypatch.setattr(runner_module, "run_schedule", refuse)
+    for changes in ({"run_name": "run_2"}, {"store_parent": str(tmp_path)}):
+        with pytest.raises(ReportError, match="differ from the entry config"):
+            run_bakeoff(run.config, run.inputs, dataclasses.replace(run.schedule, **changes), run.deps)
+    assert list((tmp_path / "runs").iterdir()) == []
+    assert run.host.events == []
+
+
+def test_the_hooks_write_where_the_store_resolves(tmp_path: Path) -> None:
+    (tmp_path / "real").mkdir()
+    real = str(tmp_path / "real" / "run_1")
+    named = f"{tmp_path / 'runs'}/run_1"
+    small = small_inputs(frozen_inputs(tmp_path / "small"), singles=1, sessions=1, probes=1)
+    run = bakeoff(tmp_path, inputs=small, realpaths={named: real})
+    assert isinstance(run.deps.hooks, MachineHooks)
+    assert run.deps.hooks._run_dir == real
+    outcome = run.run()
+    assert outcome == ScheduleOutcome(real, None)
+    assert list((tmp_path / "runs").iterdir()) == []
+    key = RunKey(Q4B, "timed_run", 1, 1)
+    loaded = machine.load_evidence(real, key, lambda path: Path(path).read_bytes())
+    assert loaded is not None and loaded.host.problem is None
+
+
+# ---------------------------------------------------------------- main reads the machine evidence
+
+
+def test_main_reads_the_machine_evidence_and_refuses_a_malformed_host_record(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_dir = copy_run(rig.run_dir, tmp_path)
+    loaders: list[Any] = []
+    real_score = entry_module.score_and_report
+
+    def spy(*args: Any, **kwargs: Any) -> ReportOutcome:
+        loaders.append(kwargs["load_evidence"])
+        return real_score(*args, **kwargs)
+
+    monkeypatch.setattr(entry_module, "score_and_report", spy)
+    (run_dir / machine_log_name(RunKey(Q8B, "contended", None, 1), "host")).write_bytes(b"{}" + bytes([10]))
+    assert main(report_argv(run_dir, rig.gold_dir)) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("refused, nothing written: StoreError: ") and "qwen3-8b.contended.a1" in err
+    assert loaders == [machine.load_evidence]
+    assert loaders[0] is machine.load_evidence
+    assert report_dir_state(run_dir) == ([], False)
+
+
+@pytest.mark.parametrize("lead", [b"1" + b"0" * 400, b"1e400"], ids=["int_too_large", "float_overflow"])
+def test_main_refuses_a_host_record_whose_lead_is_out_of_range(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str], lead: bytes
+) -> None:
+    run_dir = copy_run(rig.run_dir, tmp_path)
+    key = RunKey(Q8B, "contended", None, 1)
+    record = ContentionRecord("c" * 64, 5.0, 0, False, None, "terminated")
+    raw = machine._host_json(HostRecord(key, 0, 1204, 1204, 3000, "terminated", True, None, record))
+    changed = raw.replace(b'"lead_sec":5.0', b'"lead_sec":' + lead)
+    assert changed != raw
+    (run_dir / machine_log_name(key, "host")).write_bytes(changed)
+    assert main(report_argv(run_dir, rig.gold_dir)) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("refused, nothing written: StoreError: ")
+    assert "qwen3-8b.contended.a1" in err and "lead_sec is out of range" in err
+    assert report_dir_state(run_dir) == ([], False)

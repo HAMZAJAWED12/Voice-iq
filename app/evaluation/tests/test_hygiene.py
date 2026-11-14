@@ -34,7 +34,7 @@ H2_MODULES = ("schemas", "probe", "client")
 H3_MODULES = ("inputs", "launch", "records", "runner")
 # H4 spec section 2, hygiene item 1: the step that creates each H4 module appends it here, so that every check over
 # MODULES covers it from then on.
-H4_MODULES: tuple[str, ...] = ("evidence", "gates", "decision", "report", "entry")
+H4_MODULES: tuple[str, ...] = ("evidence", "gates", "decision", "report", "entry", "machine")
 # H4a brief section 7, items 13 and 14: each step adds its new test module here.
 H4_TEST_FILES: tuple[str, ...] = (
     "test_evidence.py",
@@ -42,6 +42,7 @@ H4_TEST_FILES: tuple[str, ...] = (
     "test_decision.py",
     "test_report.py",
     "test_entry.py",
+    "test_machine.py",
 )
 EARLIER_MODULES = ("__init__", "gold", "extraction", "scoring", "stats", *H2_MODULES, *H3_MODULES)
 MODULES = (*EARLIER_MODULES, *H4_MODULES)
@@ -68,11 +69,13 @@ ALLOWED = frozenset(
         "pydantic",
     }
 )
-# H4 spec section 2, hygiene item 2: the entry point parses its command line and writes to stdout and stderr.
+# H4 spec section 2, hygiene item 2: the entry point parses its command line and writes to stdout and stderr, and
+# machine runs the /proc thread.
 EXTRA_ALLOWED = {
     "client": frozenset({"httpx", "time"}),
     "launch": frozenset({"subprocess", "time"}),
     "entry": frozenset({"argparse", "sys"}),
+    "machine": frozenset({"threading"}),
 }
 
 
@@ -372,6 +375,257 @@ def test_the_entry_file_check_catches_each_reach(snippet: str, rule: str) -> Non
     assert _entry_file_reaches("tools.read_bytes(path)\nstore = attach(path, fsync=os.fsync)\n") == []
 
 
+@pytest.mark.parametrize("module", [module for module in MODULES if module != "machine"])
+def test_only_machine_may_import_threading(module: str) -> None:
+    assert _disallowed_for(module, _source(module) + "\nimport threading\n") == {"threading"}
+
+
+def test_the_machine_source_passes_with_threading() -> None:
+    source = _source("machine")
+    assert {"threading", "os"} <= _imports(source)
+    assert _disallowed_for("machine", source) == set()
+    assert _disallowed_for("machine", source + "\nimport subprocess\n") == {"subprocess"}
+
+
+# The machine module reaches files, processes and clocks only through the launch tools, so it imports none of the other
+# ways out; hashlib is among them because the contention argv is hashed through `schemas`.
+_MACHINE_NEVER_IMPORTS = frozenset(
+    {
+        "pathlib",
+        "io",
+        "shutil",
+        "tempfile",
+        "logging",
+        "subprocess",
+        "httpx",
+        "socket",
+        "urllib",
+        "hashlib",
+        "sys",
+        "time",
+    }
+)
+
+
+def _machine_way_out(source: str) -> set[str]:
+    return {name.split(".")[0] for name in _imports(source)} & _MACHINE_NEVER_IMPORTS
+
+
+def test_machine_imports_no_other_way_out() -> None:
+    assert _machine_way_out(_source("machine")) == set()
+
+
+@pytest.mark.parametrize(
+    ("line", "name"),
+    [
+        ("from pathlib import Path", "pathlib"),
+        ("import io", "io"),
+        ("import shutil", "shutil"),
+        ("from tempfile import mkdtemp", "tempfile"),
+        ("import logging", "logging"),
+        ("import subprocess", "subprocess"),
+        ("import httpx", "httpx"),
+        ("import socket", "socket"),
+        ("from urllib import request", "urllib"),
+        ("import hashlib", "hashlib"),
+        ("import sys", "sys"),
+        ("from time import monotonic", "time"),
+    ],
+)
+def test_the_machine_import_ban_catches_each_name(line: str, name: str) -> None:
+    assert _machine_way_out(_source("machine") + f"\n{line}\n") == {name}
+
+
+_MACHINE_FILE_NAMES = frozenset({"read_bytes", "listdir", "fsync"})
+_RECORD_WRITES = frozenset({"log_fault", "void_run", "mark_scored", "write_text", "write_bytes", "write_report"})
+
+
+def _proc_listing(tree: ast.Module) -> ast.AST | None:
+    """The func of the one `os.listdir("/proc")` inside `_list_pids`, the only file reach not through the tools."""
+    for function in tree.body:
+        if isinstance(function, ast.FunctionDef) and function.name == "_list_pids":
+            for node in ast.walk(function):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "listdir"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "os"
+                    and len(node.args) == 1
+                    and isinstance(node.args[0], ast.Constant)
+                    and node.args[0].value == "/proc"
+                    and not node.keywords
+                ):
+                    return node.func
+    return None
+
+
+def _unrouted_file_attributes(source: str) -> set[str]:
+    """File names reached on anything but `<x>.launch` or a name `tools`, the `/proc` listing excepted."""
+    tree = ast.parse(source)
+    allowed = _proc_listing(tree)
+    return {
+        node.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        and node.attr in _FILE_ATTRIBUTES
+        and node is not allowed
+        and not (isinstance(node.value, ast.Attribute) and node.value.attr == "launch")
+        and not (isinstance(node.value, ast.Name) and node.value.id == "tools")
+    }
+
+
+def _machine_file_problems(source: str) -> list[str]:
+    """The machine module touches files only through the injected tools and writes no record."""
+    problems = []
+    if _open_modes(source) != set():
+        problems.append("an open call")
+    if not _attributes(source) & _FILE_ATTRIBUTES <= _MACHINE_FILE_NAMES:
+        problems.append("a file name beyond read_bytes, listdir and fsync")
+    if _unrouted_file_attributes(source):
+        problems.append("a file reach outside the injected tools")
+    names = _names(ast.parse(source))
+    if names & _RECORD_WRITES or any(name.startswith("append_") for name in names):
+        problems.append("a record write")
+    return problems
+
+
+def test_machine_touches_files_only_through_tools() -> None:
+    source = _source("machine")
+    assert _machine_file_problems(source) == []
+    assert source.count("os.listdir(") == 1
+    assert _proc_listing(ast.parse(source)) is not None
+
+
+@pytest.mark.parametrize(
+    ("snippet", "problem"),
+    [
+        ("Path('/etc/x').read_bytes()\n", "a file reach outside the injected tools"),
+        ("from pathlib import Path\nPath('/etc/x').read_bytes()\n", "a file reach outside the injected tools"),
+        ("import os\nos.listdir('/etc')\n", "a file reach outside the injected tools"),
+        ("x.fsync(1)\n", "a file reach outside the injected tools"),
+        ("store.append_call(key)\n", "a record write"),
+        ("Path('x').open('xb')\n", "an open call"),
+    ],
+)
+def test_the_machine_file_check_catches_each_reach(snippet: str, problem: str) -> None:
+    assert problem in _machine_file_problems(_source("machine") + "\n" + snippet)
+
+
+def test_the_machine_import_ban_also_catches_the_pathlib_reach() -> None:
+    snippet = "\nfrom pathlib import Path\nPath('/etc/x').read_bytes()\n"
+    assert _machine_way_out(_source("machine") + snippet) == {"pathlib"}
+
+
+def test_a_builtin_open_in_machine_is_caught_by_the_name_ban() -> None:
+    tree = ast.parse(_source("machine") + "\nopen('/etc/x').read()\n")
+    names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+    assert names & {"__import__", "eval", "exec", "compile", "open"} == {"open"}
+
+
+@pytest.mark.parametrize("snippet", ["deps.launch.read_bytes(path)\n", "tools.read_bytes(p)\n"])
+def test_the_machine_file_check_passes_the_tools(snippet: str) -> None:
+    assert _machine_file_problems(snippet) == []
+    assert _machine_file_problems(_source("machine") + "\n" + snippet) == []
+
+
+# `popen` is refused on any receiver: machine starts its processes only through `launch.ServerProcess`, so even the
+# injected `tools.launch.popen` is out of bounds for it.
+_MACHINE_PROCESS_NAMES = frozenset(
+    {"Popen", "check_output", "check_call", "getoutput", "getstatusoutput", "startfile", "popen"}
+)
+_MACHINE_ARGVS = frozenset({"gpu_argv", "apps_argv"})
+
+
+def _is_server_process(func: ast.expr) -> bool:
+    return (isinstance(func, ast.Name) and func.id == "ServerProcess") or (
+        isinstance(func, ast.Attribute) and func.attr == "ServerProcess"
+    )
+
+
+def _machine_process_problems(source: str) -> list[str]:
+    """machine starts processes only as a `ServerProcess` of the sampler, the compute-apps query or the contention
+    command."""
+    tree = ast.parse(source)
+    problems = []
+    if _names(tree) & _MACHINE_PROCESS_NAMES:
+        problems.append("a process call by name")
+    if any(
+        isinstance(node, ast.Attribute)
+        and node.attr in {"run", "call", "system", "popen"}
+        and isinstance(node.value, ast.Name)
+        and node.value.id in {"subprocess", "os", "shutil"}
+        for node in ast.walk(tree)
+    ):
+        problems.append("a process call on subprocess, os or shutil")
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and _is_server_process(node.func)):
+            continue
+        argv = node.args[0] if node.args else None
+        named = isinstance(argv, ast.Call) and isinstance(argv.func, ast.Name) and argv.func.id in _MACHINE_ARGVS
+        configured = isinstance(argv, ast.Attribute) and argv.attr == "contention_argv"
+        if not (named or configured):
+            problems.append("a ServerProcess argv outside gpu_argv, apps_argv and contention_argv")
+    return problems
+
+
+def test_machine_starts_processes_only_through_server_process() -> None:
+    source = _source("machine")
+    assert _machine_process_problems(source) == []
+    calls = [
+        node for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Call) and _is_server_process(node.func)
+    ]
+    assert len(calls) >= 3
+
+
+def test_the_machine_process_check_passes_the_allowed_forms() -> None:
+    snippet = (
+        "key.run\nstored.call\nplatform.system()\nServerProcess(gpu_argv(c), e, p, t)\n"
+        "ServerProcess(self._config.contention_argv, e, None, t)\n"
+    )
+    assert _machine_process_problems(snippet) == []
+
+
+@pytest.mark.parametrize(
+    ("snippet", "problem"),
+    [
+        ("subprocess.run(['x'])\n", "a process call on subprocess, os or shutil"),
+        ("os.system('x')\n", "a process call on subprocess, os or shutil"),
+        ("tools.launch.popen(['x'])\n", "a process call by name"),
+        ("x.Popen(a)\n", "a process call by name"),
+        (
+            "ServerProcess(argv, env, None, tools)\n",
+            "a ServerProcess argv outside gpu_argv, apps_argv and contention_argv",
+        ),
+        ("launch.ServerProcess()\n", "a ServerProcess argv outside gpu_argv, apps_argv and contention_argv"),
+    ],
+)
+def test_the_machine_process_check_catches_each_form(snippet: str, problem: str) -> None:
+    assert problem in _machine_process_problems(_source("machine") + "\n" + snippet)
+
+
+def _shell_problems(source: str) -> list[int]:
+    """The line of every `shell=` keyword whose value is not the constant False."""
+    return [
+        node.value.lineno
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.keyword)
+        and node.arg == "shell"
+        and not (isinstance(node.value, ast.Constant) and node.value.value is False)
+    ]
+
+
+@pytest.mark.parametrize("module", MODULES)
+def test_no_module_passes_a_shell(module: str) -> None:
+    assert _shell_problems(_source(module)) == []
+
+
+@pytest.mark.parametrize("snippet", ["f(shell=True)\n", "f(shell=flag)\n", "f(shell=0)\n"])
+def test_the_shell_check_catches_each_form(snippet: str) -> None:
+    assert _shell_problems(snippet) == [1]
+    assert _shell_problems("f(shell=False)\n") == []
+
+
 def test_records_never_rewrites_or_deletes_a_file() -> None:
     source = _source("records")
     assert not _attributes(source) & _RECORDS_NEVER
@@ -536,11 +790,25 @@ H4_ALLOWED_IMPORTS: dict[str, frozenset[str]] = {
     "decision": frozenset({"gates", "launch", "runner", "scoring", "stats"}),
     "report": frozenset({"decision", "evidence", "gates", "launch", "records", "runner", "scoring", "stats"}),
     "entry": frozenset(
-        {"decision", "evidence", "gates", "gold", "inputs", "launch", "records", "report", "runner", "stats"}
+        {
+            "client",
+            "decision",
+            "evidence",
+            "gates",
+            "gold",
+            "inputs",
+            "launch",
+            "machine",
+            "records",
+            "report",
+            "runner",
+            "stats",
+        }
     ),
+    "machine": frozenset({"evidence", "launch", "records", "schemas"}),
 }
 # H4a brief section 5: these rows are exact, the others are subsets.
-H4_EXACT_IMPORTS = frozenset({"evidence"})
+H4_EXACT_IMPORTS = frozenset({"evidence", "machine"})
 # H4a brief section 12, amendment 1: evidence's standard-library imports.
 EVIDENCE_STDLIB = frozenset({"__future__", "collections.abc", "dataclasses", "typing"})
 
@@ -677,18 +945,34 @@ def test_the_report_write_check_catches_each_reach(snippet: str) -> None:
 @pytest.mark.parametrize(
     "line",
     [
-        "from . import machine",
-        "from .client import ModelServerClient",
         "from .scoring import score_run",
         "from .extraction import parse_extraction",
         "from .schemas import canonical_sha256",
+        "from .probe import ProbeOutput",
     ],
 )
 def test_the_entry_row_catches_an_import_outside_its_set(line: str) -> None:
-    """H4a brief section 5: entry imports from decision, evidence, gates, gold, inputs, launch, records, report, runner
-    and stats only. H4b adds client and machine."""
+    """entry imports from client, decision, evidence, gates, gold, inputs, launch, machine, records, report, runner and
+    stats only."""
     assert not _own_modules(_source("entry") + f"\n{line}\n") <= H4_ALLOWED_IMPORTS["entry"]
     assert _own_modules(_source("entry")) <= H4_ALLOWED_IMPORTS["entry"]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "from . import gates",
+        "from .client import ModelServerClient",
+        "from .runner import RunHooks",
+        "from .inputs import FrozenInputs",
+        "from .gold import load_gold_set",
+        "from . import entry",
+    ],
+)
+def test_the_machine_row_catches_an_import_outside_its_set(line: str) -> None:
+    """machine imports only from evidence, launch, records and schemas."""
+    assert not _own_modules(_source("machine") + f"\n{line}\n") <= H4_ALLOWED_IMPORTS["machine"]
+    assert _own_modules(_source("machine")) <= H4_ALLOWED_IMPORTS["machine"]
 
 
 def test_decision_calls_the_stats_rules_through_the_module() -> None:
@@ -834,6 +1118,10 @@ def test_the_package_docstring_states_every_module_and_its_imports() -> None:
         ),
         ("`evidence` imports\n`records`", "`evidence` imports\n`records` and `launch`"),
         ("`gold`, `extraction`, `schemas` and `stats` import", "`gold`, `extraction` and `stats` import"),
+        (
+            "`machine` imports `evidence`, `launch`, `records` and `schemas`",
+            "`machine` imports `launch`, `records` and `schemas`",
+        ),
     ],
 )
 def test_the_package_docstring_check_catches_a_drifted_sentence(old: str, new: str) -> None:
@@ -963,9 +1251,8 @@ def test_the_core_runs_with_the_network_switched_off(monkeypatch: pytest.MonkeyP
     assert result.observed_difference == 1 - default.f1
 
 
-# H4a brief section 8: the final H4a tuple of NEEDS-OWNER numbers, each with a marked site. H4b adds 108 and 140 with
-# their sites, and H5 adds 133.
-OWNER_MARKERS = (*range(1, 5), *range(26, 31), 66, 69, 106, 116, 129, 130, 134, 135, 136, 137, 139)
+# The final H4 tuple of NEEDS-OWNER numbers, each with a marked site; H5 adds 133.
+OWNER_MARKERS = (*range(1, 5), *range(26, 31), 66, 69, 106, 108, 116, 129, 130, 134, 135, 136, 137, 139, 140)
 
 
 def test_owner_markers_are_in_the_sources() -> None:
@@ -975,15 +1262,18 @@ def test_owner_markers_are_in_the_sources() -> None:
     assert "NEEDS-OWNER(AMB-52)" not in sources
 
 
-# H4a brief section 8: the module that holds each H4a marker, with its count there. AMB-66 keeps its H3 site in records
-# beside its new gates site, and AMB-106 has two gates sites.
+# The module that holds each H4 marker, with its count there. AMB-66 keeps its H3 site in records beside its gates
+# site, AMB-69 keeps its H3 site in runner beside its entry site, and AMB-106 has two gates sites.
 OWNER_MARKER_SITES = MappingProxyType(
     {
         66: (("records", 1), ("gates", 1)),
+        69: (("runner", 1), ("entry", 1)),
         106: (("gates", 2),),
         116: (("gates", 1),),
         135: (("gates", 1),),
         139: (("gates", 1),),
+        108: (("machine", 1),),
+        140: (("entry", 1),),
         129: (("decision", 1),),
         130: (("decision", 1),),
         134: (("decision", 1),),
@@ -994,7 +1284,7 @@ OWNER_MARKER_SITES = MappingProxyType(
 
 
 @pytest.mark.parametrize("number", sorted(OWNER_MARKER_SITES))
-def test_each_h4a_owner_marker_sits_in_its_listed_module(number: int) -> None:
+def test_each_h4_owner_marker_sits_in_its_listed_module(number: int) -> None:
     for module, count in OWNER_MARKER_SITES[number]:
         assert _source(module).count(f"NEEDS-OWNER(AMB-{number})") == count, (number, module)
     assert number in OWNER_MARKERS
@@ -1059,6 +1349,7 @@ def test_the_report_lists_every_open_ruling_that_has_a_site() -> None:
         ("decision", ("§1", "§2", "§3.6", "§3.13", "§8")),
         ("report", ("§3.13", "§9", "§10", "Annex A")),
         ("entry", ("§3.2", "§3.12", "§11", "§3.13", "§9")),
+        ("machine", ("§3.1", "§3.13", "§6", "§9")),
     ],
 )
 def test_module_docstrings_cite_their_sections(module: str, citations: tuple[str, ...]) -> None:
@@ -1106,7 +1397,7 @@ def _text_reaches(source: str) -> set[str]:
     return {node.attr for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Attribute)} & _TEXT_FIELDS
 
 
-@pytest.mark.parametrize("module", ["gates", "decision", "report", "evidence"])
+@pytest.mark.parametrize("module", ["gates", "decision", "report", "evidence", "machine"])
 def test_h4_modules_never_read_text_fields(module: str) -> None:
     assert _text_reaches(_source(module)) == set()
 

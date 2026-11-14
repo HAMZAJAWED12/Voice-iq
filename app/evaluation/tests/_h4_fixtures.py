@@ -6,18 +6,31 @@ unconstrained pass and contended session-run. Every call is a `CallRecord` built
 hashes the manifest holds. `store_view` writes such a view through a real `RunStore`, so `load_run` gives it back.
 
 The gold set adds a fifth conversation to `_runner_fixtures.gold_rows()`, with one out-of-scope row, so that gate S's
-out-of-scope leak rate is defined and a candidate can pass every gate. No nvidia-smi text, gpu.csv or host.json is
-written: machine evidence is built as `AttemptEvidence` values, with the evidence figures (37/37 layers, 2 graph
-splits, CUDA buffers 2,375.91 / 1,728.00 / 89.01 MiB, RssAnon 269,428 kB).
+out-of-scope leak rate is defined and a candidate can pass every gate. For the gates, machine evidence is built as
+`AttemptEvidence` values, with the evidence figures (37/37 layers, 2 graph splits, CUDA buffers 2,375.91 / 1,728.00 /
+89.01 MiB, RssAnon 269,428 kB).
+
+For the H4b machine tests, the builders after `loader` give nvidia-smi lines, compute-apps output, /proc/vmstat and
+/proc status text in the form of the operator's private capture of 2026-11-10, with no captured file copied and no
+path from it; the machine fakes write that text under `tmp_path` only. `answering_scripts` makes every timed launch
+answer each single with its perfect extraction and each cap session with 12 valid claims, so a whole schedule over
+`h4_frozen_inputs` can reach a pin.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
+import math
+import subprocess
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+import httpx
 
 from app.evaluation.bakeoff.client import (
     INVALID_KINDS,
@@ -41,7 +54,9 @@ from app.evaluation.bakeoff.evidence import (
 )
 from app.evaluation.bakeoff.extraction import ExtractedClaim, Extraction
 from app.evaluation.bakeoff.gold import GoldSet, load_gold_set
-from app.evaluation.bakeoff.launch import PINNED_BUILD_INFO, StartupLog, frozen_argv
+from app.evaluation.bakeoff.inputs import FrozenInputs, freeze_inputs
+from app.evaluation.bakeoff.launch import CANDIDATE_IDS, CLEAN_PATH, PINNED_BUILD_INFO, StartupLog, frozen_argv
+from app.evaluation.bakeoff.machine import APPS_HEADER, PROC_INTERVAL_SEC, MachineConfig, MachineTools
 from app.evaluation.bakeoff.probe import ProbeOutput
 from app.evaluation.bakeoff.records import (
     RUNS,
@@ -62,15 +77,25 @@ from app.evaluation.bakeoff.records import (
 )
 from app.evaluation.bakeoff.runner import _THINKING_MODE
 from app.evaluation.bakeoff.schemas import EXTRACTION_SCHEMA_SHA256, PROBE_SCHEMA_SHA256
+from app.evaluation.tests._client_fixtures import chat_response
 from app.evaluation.tests._fixtures import make_conversation, make_item, write_version
 from app.evaluation.tests._runner_fixtures import (
+    CAP_SESSIONS,
     CONDITIONS,
     NOW,
+    PROBE_ITEMS,
+    PROMPTS,
     SCHEDULE_CANDIDATES,
     VALID_OPERATOR,
+    WARMUP,
+    FakeHost,
+    FakeProcess,
+    FakeTime,
+    ServerScript,
     fixed_now,
     gold_rows,
     no_fsync,
+    unit_of,
 )
 
 SINGLE: RequestKind = "single_conversation_extraction"
@@ -514,3 +539,320 @@ def loader(mapping: Mapping[RunKey, AttemptEvidence | None]) -> EvidenceLoader:
         return mapping.get(key)
 
     return load
+
+
+# H4b machine fakes. The values follow the operator's private capture of 2026-11-10 (capture P0): the nvidia-smi path,
+# the line form, the compute-apps header and the row WSL printed for a running server, and the idle and loaded memory
+# readings. Nothing here is copied from a captured file.
+NVIDIA_SMI = "/usr/lib/wsl/lib/nvidia-smi"
+MACHINE_CONFIG = MachineConfig(
+    NVIDIA_SMI, ("/opt/audio/contention", "--file", "synthetic.wav"), {"PATH": "/usr/bin:/bin"}, 5.0
+)
+BASELINE = (0, 7899)  # memory.used and memory.free in MiB, GPU idle
+LOADED = (4308, 3592)  # the same with a 4B model loaded
+_FIRST_STAMP = datetime(2026, 11, 10, 1, 26, 9, 702_000)
+
+
+def gpu_line(
+    t_ms: int,
+    used: int = BASELINE[0],
+    free: int = BASELINE[1],
+    *,
+    clocks_gr: str = "1552 MHz",
+    clocks_mem: str = "11001 MHz",
+    temperature: str = "55",
+    power: str = "9.86 W",
+) -> str:
+    """One nvidia-smi line, stamped `t_ms` after 2026/11/10 01:26:09.702, with ms from integers, never rounded."""
+    stamp = _FIRST_STAMP + timedelta(milliseconds=t_ms)
+    text = stamp.strftime("%Y/%m/%d %H:%M:%S.") + f"{stamp.microsecond // 1000:03d}"
+    return ", ".join((text, f"{used} MiB", f"{free} MiB", clocks_gr, clocks_mem, temperature, power))
+
+
+def gpu_log(*lines: str, tail: bytes = b"") -> bytes:
+    """A gpu.csv: each line in ASCII with its LF, then a cut tail."""
+    return b"".join(line.encode("ascii") + b"\n" for line in lines) + tail
+
+
+def apps_output(*pids: int) -> bytes:
+    """The compute-apps output: the header, then the row form WSL printed for each listed process."""
+    return (APPS_HEADER + "\n" + "".join(f"{pid}, [Not Found], [N/A]\n" for pid in pids)).encode("ascii")
+
+
+def vmstat(pswpout: int = 1204) -> bytes:
+    """A /proc/vmstat with its swap-out counter at `pswpout`."""
+    return f"nr_free_pages 1000\npswpin 0\npswpout {pswpout}\nnr_dirty 3\n".encode("ascii")
+
+
+def proc_status(rss_kib: int = 269_428) -> bytes:
+    """A /proc/<pid>/status of a running server; 269,428 kB is the 2026-11-07 evidence figure."""
+    return (
+        "Name:\tllama-server\nVmRSS:\t  403200 kB\n"
+        f"RssAnon:\t  {rss_kib} kB\nRssFile:\t  133772 kB\nRssShmem:\t       0 kB\n"
+    ).encode("ascii")
+
+
+UNRELATED_PIDS = (1, 77)  # pid 1 is another program; pid 77 leaves /proc while the step scans it
+_APPS_SUFFIX = ".apps.txt"
+_GPU_SUFFIX = ".gpu.csv"
+
+
+@dataclass
+class GpuScript:
+    """How one attempt's GPU sampler behaves; the defaults are a clean 20 Hz sampler. It writes the baseline line at
+    spawn unless `first_line` is False, and on its terminate appends one `loaded` line per sample since the spawn,
+    then a line stamped back at the start if `backwards`, then `extra` (a bad line or a cut tail). `exit_early` makes
+    it exit 0 by itself, and `waits` is what each wait of its stop does."""
+
+    first_line: bool = True
+    rate_hz: int = 20
+    loaded: tuple[int, int] = LOADED
+    exit_early: bool = False
+    backwards: bool = False
+    extra: bytes = b""
+    waits: tuple[int | None, ...] = (0,)
+
+
+@dataclass
+class ContentionScript:
+    """How one together-session command behaves. `lead_exit` is the code it exits with at once, during its lead;
+    `exit_after_sec` makes it exit 0 that long after its spawn; `stop_waits` is what each wait of its stop does."""
+
+    lead_exit: int | None = None
+    exit_after_sec: float | None = None
+    stop_waits: tuple[int | None, ...] = (0,)
+
+
+class _ClockedProcess(FakeProcess):
+    """A `FakeProcess` that exits with `code` once the fake clock reaches `exits_at`."""
+
+    def __init__(self, clock: FakeTime, exits_at: float | None, code: int, **options: Any) -> None:
+        super().__init__(**options)
+        self.clock = clock
+        self.exits_at = exits_at
+        self.code = code
+
+    def poll(self) -> int | None:
+        if self.exit_code is None and self.exits_at is not None and self.clock.now >= self.exits_at:
+            self.exit_code = self.code
+        return super().poll()
+
+
+class FakeMachinePopen:
+    """`LaunchTools.popen` for the machine's own processes, dispatched on the first two arguments. The compute-apps
+    query and the sampler are scripted by unit, the stem of their log; the contention command, which has no log, takes
+    its scripts in spawn order and the default after they run out. `spawn_errors` maps "apps", "gpu", "contention" or
+    a unit to what its spawn raises. Pids start at 9000, apart from `FakeHost`'s. `spawned` lists `(kind, unit,
+    process)` in order, and `running()` the processes not yet ended."""
+
+    def __init__(
+        self,
+        clock: FakeTime,
+        *,
+        apps: Mapping[str, bytes] | None = None,
+        apps_polls: Mapping[str, tuple[int | None, ...]] | None = None,
+        apps_waits: Mapping[str, tuple[int | None, ...]] | None = None,
+        gpu: Mapping[str, GpuScript] | None = None,
+        contention: Sequence[ContentionScript] = (),
+        spawn_errors: Mapping[str, BaseException] | None = None,
+    ) -> None:
+        self.clock = clock
+        self.apps = dict(apps or {})
+        self.apps_polls = dict(apps_polls or {})
+        self.apps_waits = dict(apps_waits or {})
+        self.gpu = dict(gpu or {})
+        self.contention = list(contention)
+        self.spawn_errors = dict(spawn_errors or {})
+        self.calls: list[tuple[list[str], dict[str, Any]]] = []
+        self.spawned: list[tuple[str, str | None, FakeProcess]] = []
+        self._next_pid = 9000
+
+    def running(self) -> list[FakeProcess]:
+        return [process for _kind, _unit, process in self.spawned if process.exit_code is None]
+
+    def of(self, kind: str) -> list[FakeProcess]:
+        return [process for spawned_kind, _unit, process in self.spawned if spawned_kind == kind]
+
+    def __call__(self, args: list[str], **kwargs: Any) -> FakeProcess:
+        if kwargs.get("shell") is not False:
+            raise AssertionError("a machine process must start with no shell")
+        if kwargs.get("stdin") is not subprocess.DEVNULL:
+            raise AssertionError("a machine process must read nothing")
+        self.calls.append((args, kwargs))
+        kind, unit = self._kind(args, kwargs)
+        for name in (kind, unit):
+            if name is not None and name in self.spawn_errors:
+                raise self.spawn_errors[name]
+        pid = self._next_pid
+        self._next_pid += 1
+        process: FakeProcess
+        if kind == "apps":
+            assert unit is not None
+            kwargs["stdout"].write(self.apps.get(unit, apps_output()))
+            polls, waits = self.apps_polls.get(unit, (0,)), self.apps_waits.get(unit, (0,))
+            process = FakeProcess(pid=pid, polls=polls, waits=waits)
+        elif kind == "gpu":
+            assert unit is not None
+            process = self._sampler(pid, self.gpu.get(unit, GpuScript()), kwargs["stdout"])
+        else:
+            script = self.contention.pop(0) if self.contention else ContentionScript()
+            exits_at: float | None = None
+            code = 0
+            if script.lead_exit is not None:
+                exits_at, code = self.clock.now, script.lead_exit
+            elif script.exit_after_sec is not None:
+                exits_at = self.clock.now + script.exit_after_sec
+            process = _ClockedProcess(self.clock, exits_at, code, pid=pid, waits=script.stop_waits)
+        self.spawned.append((kind, unit, process))
+        return process
+
+    def _kind(self, args: list[str], kwargs: Mapping[str, Any]) -> tuple[str, str | None]:
+        if args[:1] == [NVIDIA_SMI] and len(args) > 1:
+            if args[1].startswith("--query-compute-apps="):
+                kind, suffix = "apps", _APPS_SUFFIX
+            elif args[1].startswith("--query-gpu="):
+                kind, suffix = "gpu", _GPU_SUFFIX
+            else:
+                raise AssertionError(f"an unexpected nvidia-smi query: {args[1]}")
+            if kwargs["env"] != {"PATH": CLEAN_PATH}:
+                raise AssertionError("nvidia-smi must run with the clean PATH only")
+            name = Path(kwargs["stdout"].name).name
+            assert name.endswith(suffix), name
+            return kind, name[: -len(suffix)]
+        if args == list(MACHINE_CONFIG.contention_argv):
+            if kwargs["stdout"] is not subprocess.DEVNULL or kwargs["stderr"] is not subprocess.DEVNULL:
+                raise AssertionError("the contention command's output must be discarded")
+            return "contention", None
+        raise AssertionError(f"an unexpected machine process: {args[:1]}")
+
+    def _sampler(self, pid: int, script: GpuScript, stdout: Any) -> FakeProcess:
+        path = stdout.name
+        spawned = self.clock.now
+        if script.first_line:
+            stdout.write(gpu_log(gpu_line(0, *BASELINE)))
+        appended: list[bool] = []
+
+        def append(signal: str) -> None:
+            if signal != "terminate" or appended:
+                return
+            appended.append(True)
+            count = max(1, math.floor((self.clock.now - spawned) * script.rate_hz))
+            lines = [gpu_line(k * 1000 // script.rate_hz, *script.loaded) for k in range(1, count + 1)]
+            if script.backwards:
+                lines.append(gpu_line(0, *script.loaded))
+            with Path(path).open("ab") as log:
+                log.write(gpu_log(*lines) + script.extra)
+
+        return FakeProcess(pid=pid, polls=(0,) if script.exit_early else (), waits=script.waits, on_signal=append)
+
+
+class FakeThreads:
+    """`MachineTools.start_thread` with no thread. `drive()` runs the current step once, as the thread would; a step
+    that returns False or raises is no longer current, and a raise is kept as its class name. The stopper records its
+    timeout and gives the kept class name, else the next of `results`, else None. Steps never run inside the stopper,
+    and the stopper calls `stop` when it runs, so a test may replace `stop`."""
+
+    def __init__(self, results: Sequence[str | None] = ()) -> None:
+        self.results = list(results)
+        self.current: Callable[[], bool] | None = None
+        self.caught: str | None = None
+        self.timeouts: list[float] = []
+        self.started = 0
+
+    def start(self, step: Callable[[], bool], interval: float) -> Callable[[float], str | None]:
+        assert interval == PROC_INTERVAL_SEC
+        self.current = step
+        self.caught = None
+        self.started += 1
+        return lambda timeout: self.stop(timeout)
+
+    def drive(self) -> None:
+        step = self.current
+        if step is None:
+            return
+        try:
+            if not step():
+                self.current = None
+        except Exception as exc:
+            self.caught = type(exc).__name__
+            self.current = None
+
+    def stop(self, timeout: float) -> str | None:
+        self.timeouts.append(timeout)
+        self.current = None
+        if self.caught is not None:
+            return self.caught
+        return self.results.pop(0) if self.results else None
+
+
+def machine_tools(host: FakeHost, machine_popen: FakeMachinePopen, threads: FakeThreads) -> MachineTools:
+    """The machine's tools on `host`: its files and clock, the machine popen, the host's pids and two unrelated ones."""
+    return MachineTools(
+        launch=dataclasses.replace(host.tools(), popen=machine_popen),
+        list_pids=lambda: (*host.list_pids(), *UNRELATED_PIDS),
+        start_thread=threads.start,
+    )
+
+
+def install_machine(host: FakeHost, threads: FakeThreads, *, request_sec: float = 0.05) -> None:
+    """Seed `host`'s /proc with vmstat and the unrelated pids, and make each request to its server first drive the
+    current /proc step and then move the clock by `request_sec`. Install it before the first launch: `FakeHost.client`
+    reads `host.handle` per launch. The host needs `proc_status`, so that a stopped server leaves /proc."""
+    table = host.files.table
+    table["/proc/vmstat"] = vmstat()
+    table["/proc/1/cmdline"] = b"/sbin/init\x00"
+    table["/proc/1/status"] = proc_status(1_000)
+    table["/proc/77/cmdline"] = FileNotFoundError("/proc/77/cmdline")
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        threads.drive()
+        host.clock.now += request_sec
+        return FakeHost.handle(host, request)
+
+    host.handle = handle  # type: ignore[method-assign]
+
+
+def h4_frozen_inputs(root: Path) -> FrozenInputs:
+    """The standard inputs frozen from `write_h4_gold`, whose out-of-scope row makes gate S defined."""
+    return freeze_inputs(
+        str(write_h4_gold(root)),
+        prompts=PROMPTS,
+        cap_sessions=CAP_SESSIONS,
+        probe_items=PROBE_ITEMS,
+        warmup=WARMUP,
+    )
+
+
+def _wire(claims: Iterable[tuple[str, tuple[str, ...]]]) -> str:
+    """An extraction in its wire shape, with no nonCheckable entry."""
+    entries = [{"segmentIds": list(segment_ids), "text": text} for text, segment_ids in claims]
+    return json.dumps({"claims": entries, "nonCheckable": []})
+
+
+def _answer(content: str) -> Callable[[httpx.Request], httpx.Response]:
+    def answer(_request: httpx.Request) -> httpx.Response:
+        return chat_response(content)
+
+    return answer
+
+
+def answering_scripts(inputs: FrozenInputs, gold: GoldSet) -> dict[str, ServerScript]:
+    """One `ServerScript` per timed, unconstrained and contended launch, attempts 1 to 3: each single gets its perfect
+    extraction and each cap session 12 claims on the request's own segments, enough for one call and its retry.
+    Probes and warm-ups keep the default answers, and pre-runs keep the default script."""
+    answers: dict[str, str] = {}
+    for frozen in inputs.singles:
+        output = perfect_output(gold, frozen.item_id)
+        answers[frozen.item_id] = _wire((claim.text, claim.segment_ids) for claim in output.claims)
+    for frozen in inputs.cap_sessions:
+        ids = sorted(frozen.ids)
+        answers[frozen.item_id] = _wire(("synthetic claim", (ids[n % len(ids)],)) for n in range(12))
+    keys = [
+        RunKey(candidate, phase, run, attempt)
+        for candidate in CANDIDATE_IDS
+        for phase, run in [*(("timed_run", run) for run in RUNS), ("unconstrained", None), ("contended", None)]
+        for attempt in (1, 2, 3)
+    ]
+    return {
+        unit_of(key): ServerScript(chat={item: [_answer(text)] * 2 for item, text in answers.items()}) for key in keys
+    }

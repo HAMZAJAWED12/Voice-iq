@@ -1,17 +1,23 @@
-"""The bake-off's report and void commands (bake-off harness H4a).
+"""The bake-off's entry point: the schedule's deps, and the report and void commands (bake-off harness H4a and H4b).
 
-This is the one module that orchestrates the H4 steps over a stored run directory, and the only one that sets scored
-markers. `main` alone builds the real tools, the real sync and the real clock; everything below it takes them as
-arguments. Output goes through `sys.stdout.write` and `sys.stderr.write`, never `print`.
+This is the one module that orchestrates the H4 steps, and the only one that sets scored markers. `main` alone builds
+the real tools, the real sync and the real clock; everything below it takes them as arguments. Output goes through
+`sys.stdout.write` and `sys.stderr.write`, never `print`.
 
 Implements, from the signed D6 criteria note S2:
 
+- S2 §3.13, §3.2 and §11 item 5, the schedule: `build_deps` and `run_bakeoff` start a schedule with the real machine
+  hooks and never score. Scoring is always a separate `report` call ("logged before its scores are computed"), so the
+  operator can void an attempt before any marker exists. `load_entry_config` refuses run-condition checks that are not
+  exactly "passed", and operator values that do not parse, before any directory exists. Until H5, a schedule starts
+  only from Python (AMB-140).
 - S2 §3.12, frozen inputs and outputs: the run directory is resolved and refused when it is under OneDrive before
   anything is read, the gold set is checked against the manifest (and against the recorded freeze, when the operator
   gives it) before any marker exists, and the report pair is new, never overwritten.
-- S2 §3.13, runs: a schedule that did not complete gets a records-only report and no marker. Otherwise every counted
-  unit is marked before any of its scores is computed ("logged before its scores are computed"), and the operator may
-  void a recorded, unmarked attempt with `void` before the first report.
+- S2 §3.13, runs: a schedule that did not complete gets a records-only report and no marker. Otherwise each hooked
+  attempt's machine evidence is read through `machine.load_evidence`, and then every counted unit is marked before any
+  of its scores is computed ("logged before its scores are computed"); the operator may void a recorded, unmarked
+  attempt with `void` before the first report.
 - S2 §3.2 and §11 item 5, pre-run checks: a manifest whose run-condition checks are not exactly "passed" gets a
   records-only report naming them.
 - S2 §9, report: `report-<n>.json` is the report of record; the Markdown file of each pair is a fixed placeholder
@@ -29,28 +35,34 @@ import hashlib
 import os
 import re
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from fractions import Fraction
 from types import MappingProxyType
+from typing import Any
 
-from . import decision, gates, report, runner, stats
-from .evidence import AttemptEvidence, EvidenceLoader
+from . import decision, gates, machine, report, runner, stats
+from .client import ModelServerClient
+from .evidence import EvidenceLoader
 from .gold import GoldSetError, load_gold_set
-from .launch import LaunchTools
+from .inputs import FrozenInputs
+from .launch import Candidate, ConfigError, LaunchTools, RunConditions, validate_candidates
+from .machine import MachineConfig, MachineHooks, MachineTools
 from .records import (
     _RUN_NAME,
     MAX_FAULT_DETAIL,
+    OPERATOR_FIELDS,
     FaultRecord,
     RunKey,
     RunStore,
     RunView,
     StoreError,
+    _exact,
     _unit_name,
     load_run,
-    machine_log_name,
     parse_unit_name,
+    record_loads,
     refuse_onedrive,
     report_numbers,
     write_report,
@@ -76,6 +88,11 @@ _AFTER_WRITE = MappingProxyType(
         "void": "the operator fault may be logged without its void; the next report lists it as a fault with no void",
     }
 )
+# The private entry config: one JSON object in ASCII with exactly these keys at each level (AMB-132, AMB-140).
+_CONFIG_KEYS = ("store_parent", "run_name", "conditions", "candidates", "operator", "machine")
+_CONDITION_KEYS = ("binary_path", "home", "port", "context", "kv_type")
+_CANDIDATE_KEYS = ("candidate_id", "gguf_path", "gguf_sha256", "source_revision", "quantization_commands")
+_MACHINE_KEYS = ("nvidia_smi_path", "contention_argv", "contention_env", "contention_lead_sec")
 
 
 class _AfterWriteError(Exception):
@@ -100,16 +117,193 @@ class ReportOutcome:
     pinned: str | None
 
 
-def _no_machine_evidence(run_dir: str, key: RunKey, read_bytes: Callable[[str], bytes]) -> AttemptEvidence | None:
-    """The H4a evidence loader. No attempt has evidence, so gate M is not measured (G4-17, G4-22); a host record that
-    is present is refused, because this build cannot read it (H4b brings the loader)."""
+@dataclass(frozen=True, slots=True)
+class EntryConfig:
+    """What one schedule needs from the operator. Only the types are checked here, so a check script can build one
+    with placeholder operator values; `load_entry_config` applies the run-condition and operator-value rules."""
+
+    store_parent: str
+    run_name: str
+    conditions: RunConditions
+    candidates: tuple[Candidate, ...]
+    operator: Mapping[str, str]
+    machine: MachineConfig
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.store_parent, str) or not isinstance(self.run_name, str):
+            raise ConfigError("EntryConfig.store_parent and EntryConfig.run_name must be str")
+        if not isinstance(self.conditions, RunConditions):
+            raise ConfigError("EntryConfig.conditions must be a RunConditions")
+        validate_candidates(self.candidates)
+        operator = self.operator
+        if not isinstance(operator, Mapping) or not all(
+            isinstance(name, str) and isinstance(value, str) for name, value in operator.items()
+        ):
+            raise ConfigError("EntryConfig.operator must map str to str")
+        if not isinstance(self.machine, MachineConfig):
+            raise ConfigError("EntryConfig.machine must be a MachineConfig")
+        object.__setattr__(self, "operator", MappingProxyType(dict(operator)))
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduleOutcome:
+    """How `run_bakeoff` ended: the run directory, and None, "pre_run_stopped" or "runs_exhausted: <unit>"."""
+
+    run_dir: str
+    stopped: str | None
+
+
+def _config_object(raw: bytes) -> object:
     try:
-        read_bytes(f"{run_dir}/{machine_log_name(key, 'host')}")
-    except FileNotFoundError:
-        return None
-    raise gates.ReportError(
-        f"machine evidence present for {_unit_name(key)}; this H4a build has no evidence loader (H4b)"
+        return record_loads(raw)
+    except StoreError as exc:
+        raise gates.ReportError(f"the entry config is not one JSON object in ASCII: {exc}") from None
+
+
+def _fields(value: object, names: tuple[str, ...], where: str) -> dict[str, Any]:
+    try:
+        return _exact(value, names, where)
+    except StoreError as exc:
+        raise gates.ReportError(f"the entry config is refused: {exc}") from None
+
+
+def _machine_config(value: object) -> MachineConfig:
+    """The `machine` object, with exactly its four keys. An audio key is refused until H5 adds the audio tools."""
+    fields = _fields(value, _MACHINE_KEYS, "machine")
+    argv = fields["contention_argv"]
+    if not isinstance(argv, list):
+        raise gates.ReportError("the entry config is refused: machine.contention_argv must be a list of str")
+    try:
+        return MachineConfig(
+            fields["nvidia_smi_path"],
+            tuple(argv),
+            fields["contention_env"],
+            fields["contention_lead_sec"],
+        )
+    except (ConfigError, TypeError) as exc:
+        raise gates.ReportError(f"the entry config is refused: machine: {exc}") from None
+
+
+def _conditions(value: object) -> RunConditions:
+    fields = _fields(value, _CONDITION_KEYS, "conditions")
+    try:
+        return RunConditions(**fields)
+    except (ConfigError, TypeError) as exc:
+        raise gates.ReportError(f"the entry config is refused: conditions: {exc}") from None
+
+
+def _candidates(value: object) -> tuple[Candidate, ...]:
+    if not isinstance(value, list) or len(value) != 3:
+        raise gates.ReportError("the entry config is refused: candidates must be a list of exactly 3 objects (S2 §1)")
+    try:
+        candidates = tuple(
+            Candidate(**_fields(entry, _CANDIDATE_KEYS, f"candidates[{index}]")) for index, entry in enumerate(value)
+        )
+        return validate_candidates(candidates)
+    except (ConfigError, TypeError) as exc:
+        raise gates.ReportError(f"the entry config is refused: candidates: {exc}") from None
+
+
+def _operator(value: object) -> dict[str, str]:
+    fields = _fields(value, OPERATOR_FIELDS, "operator")
+    for name, text in fields.items():
+        if not isinstance(text, str):
+            raise gates.ReportError(f"the entry config is refused: operator.{name} must be a string")
+    return fields
+
+
+def load_entry_config(path: str, read_bytes: Callable[[str], bytes]) -> EntryConfig:
+    """The operator's entry config, read only through `read_bytes` (S2 §3.1, §3.2, §11 item 5; AMB-132). Every refusal
+    of its content is a `ReportError` naming the key, and nothing is created; an `OSError` from the read propagates.
+    The run conditions must be exactly "passed" and the operator values must parse, so a bad value never starts a
+    schedule. `store_parent` gets no path check here: `build_deps` refuses one under OneDrive."""
+    top = _fields(_config_object(read_bytes(path)), _CONFIG_KEYS, "the entry config")
+    store_parent = top["store_parent"]
+    if not isinstance(store_parent, str) or not store_parent.strip():
+        raise gates.ReportError("the entry config is refused: store_parent must be a non-blank string")
+    run_name = top["run_name"]
+    if not isinstance(run_name, str) or _RUN_NAME.fullmatch(run_name) is None:
+        raise gates.ReportError(f"the entry config is refused: run_name must match {_RUN_NAME.pattern}")
+    conditions = _conditions(top["conditions"])
+    candidates = _candidates(top["candidates"])
+    operator = _operator(top["operator"])
+    machine_config = _machine_config(top["machine"])
+    failed = gates.failed_run_conditions(operator)
+    if failed:
+        raise gates.ReportError(
+            f"run-condition checks not exactly 'passed': {', '.join(failed)} (S2 §3.1, §3.2, §11 item 5; AMB-132)"
+        )
+    gates.OperatorValues.from_manifest(operator)
+    try:
+        return EntryConfig(store_parent, run_name, conditions, candidates, operator, machine_config)
+    except (ConfigError, TypeError) as exc:
+        raise gates.ReportError(f"the entry config is refused: {exc}") from None
+
+
+def load_machine_config(path: str, read_bytes: Callable[[str], bytes]) -> MachineConfig:
+    """The `machine` object of the same file, alone (AMB-138). Every other top-level key is ignored, an absent or
+    placeholder `operator` included; its refusals are `ReportError`."""
+    data = _config_object(read_bytes(path))
+    if not isinstance(data, dict) or "machine" not in data:
+        raise gates.ReportError("the entry config is refused: it must be an object holding a machine object")
+    return _machine_config(data["machine"])
+
+
+def _loopback_client(url: str, n_ctx: int) -> ModelServerClient:
+    """The real client for one launch, on the loopback URL the runner gives (S2 §3.2)."""
+    return ModelServerClient(url, n_ctx=n_ctx)
+
+
+def build_deps(
+    config: EntryConfig,
+    *,
+    tools: LaunchTools,
+    machine_tools: MachineTools,
+    fsync: Callable[[int], None],
+    now: Callable[[], datetime],
+    client_factory: Callable[[str, int], ModelServerClient] | None = None,
+) -> tuple[runner.ScheduleConfig, runner.RunnerDeps]:
+    """The schedule and its deps, with the real machine hooks. The run directory is resolved and refused under
+    OneDrive here (S2 §3.12), with the same realpath `RunStore.create` uses, so the hooks write beside the store.
+    Every tool, the sync and the clock are passed in and passed on; nothing here builds or calls one."""
+    run_dir = refuse_onedrive(f"{config.store_parent}/{config.run_name}", realpath=tools.realpath)
+    hooks = MachineHooks(config.machine, run_dir, config.conditions, config.candidates, machine_tools, fsync)
+    schedule = runner.ScheduleConfig(
+        config.candidates, config.conditions, config.operator, config.store_parent, config.run_name
     )
+    deps = runner.RunnerDeps(
+        hooks=hooks,
+        client_factory=client_factory if client_factory is not None else _loopback_client,
+        tools=tools,
+        now=now,
+        fsync=fsync,
+    )
+    return schedule, deps
+
+
+def run_bakeoff(
+    config: EntryConfig, inputs: FrozenInputs, schedule: runner.ScheduleConfig, deps: runner.RunnerDeps
+) -> ScheduleOutcome:
+    """Run one schedule and say where it is (S2 §3.13). It never scores: the report is a separate `report` call, so the
+    operator can void before any marker exists. A stopped schedule is reported, not raised; a server that will not
+    stop, and every other error, propagates with no line written."""
+    # NEEDS-OWNER(AMB-140): the entry point is this function; the run CLI and frozen-input loader are H5's
+    if (schedule.store_parent, schedule.run_name) != (config.store_parent, config.run_name):
+        raise gates.ReportError("the schedule's store parent and run name differ from the entry config's")
+    stopped: str | None
+    try:
+        result = runner.run_schedule(inputs, schedule, deps)
+        run_dir, stopped = result.run_dir, None
+    except runner.PreRunStopped as exc:
+        run_dir, stopped = exc.run_dir, "pre_run_stopped"
+    except runner.RunsExhausted as exc:
+        # NEEDS-OWNER(AMB-69): a stopped schedule gets a records-only report; the owner rules what follows
+        run_dir, stopped = exc.run_dir, f"runs_exhausted: {_unit_name(exc.key)}"
+    sys.stdout.write(
+        f"run {config.run_name}: {run_dir}; stopped: {stopped or 'no'}; "
+        f"next: report --run-dir {run_dir} --gold-dir <the v1.0 gold directory>\n"
+    )
+    return ScheduleOutcome(run_dir, stopped)
 
 
 def _hooked_keys(view: RunView) -> tuple[RunKey, ...]:
@@ -352,7 +546,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             tools=tools,
             now=lambda: datetime.now(timezone.utc),
             fsync=os.fsync,
-            load_evidence=_no_machine_evidence,
+            load_evidence=machine.load_evidence,
         )
     except _AfterWriteError as exc:
         cause = exc.cause
