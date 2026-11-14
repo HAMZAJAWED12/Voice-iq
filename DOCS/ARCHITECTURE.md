@@ -1,12 +1,12 @@
-Last verified: 2026-11-14, 7f91130
+Last verified: 2026-11-14, efb1f03
 # Architecture
 
-This document describes the code structure of VoiceIQ at commit `7f91130`
-(branch `sprint7/phase1-harness`, which adds milestone H4b of the D6
-bake-off harness under `app/evaluation/` and is not yet merged; `main` is
-`b7ec04f`, after pull request #11, with H1 to H4a). It shows how the packages
-fit together, how data moves between them, where faults are contained, what
-is stored, and how to extend the system without breaking it.
+This document describes the code structure of VoiceIQ at commit `efb1f03`
+(`main` after pull request #12, which merged milestone H4b of the D6
+bake-off harness under `app/evaluation/`, so `main` has H1 to H4b). It
+shows how the packages fit together, how data moves between them, where
+faults are contained, what is stored, and how to extend the system without
+breaking it.
 
 [02-architecture.md](02-architecture.md) is the historical Sprint 1–4 view.
 It was written before the fact-check engine, the Agent Brain and the
@@ -93,9 +93,9 @@ Three parts sit outside the request path:
   H4a, merged by pull request #10), and the machine sampler and the
   schedule entry point (`machine`, and `EntryConfig`, `ScheduleOutcome`,
   `load_entry_config`, `load_machine_config`, `build_deps` and
-  `run_bakeoff` in `entry`; H4b, committed in `7f91130` on
-  `sprint7/phase1-harness` and not yet on `main`). The package
-  docstring (`app/evaluation/bakeoff/__init__.py`) lists the modules and
+  `run_bakeoff` in `entry`; H4b, committed in `7f91130` and merged
+  by pull request #12). The package docstring
+  (`app/evaluation/bakeoff/__init__.py`) lists the modules and
   gives the import direction and the I/O boundaries: only `client` talks
   to the network, and only to `http://127.0.0.1:<port>`; only `launch`
   starts a process, and `machine` starts its own (`nvidia-smi` and the
@@ -611,7 +611,7 @@ silent, and missing tables are created.
 ## 9. Sprint 7 fact-check agent — planned, not built
 
 **Everything in this section is planned, not built.** No code of the
-fact-check agent exists at `7f91130`. A search of `app/` at that commit finds
+fact-check agent exists at `efb1f03`. A search of `app/` at that commit finds
 no `/v2` route, no `fact_check_report` key and no `factcheck_agent_*` table.
 The Phase 1 bake-off harness (section 2) is evaluation tooling, and the
 Sprint 7 diarization fixes (`9887e0b`, `670b4de`) change an existing
