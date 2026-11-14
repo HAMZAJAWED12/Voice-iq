@@ -287,7 +287,7 @@ def run_bakeoff(
     """Run one schedule and say where it is (S2 §3.13). It never scores: the report is a separate `report` call, so the
     operator can void before any marker exists. A stopped schedule is reported, not raised; a server that will not
     stop, and every other error, propagates with no line written."""
-    # NEEDS-OWNER(AMB-140): the entry point is this function; the run CLI and frozen-input loader are H5's
+    # NEEDS-OWNER(AMB-140): the entry point is this function, called by `cli run` with inputs from `frozen.load_frozen`
     if (schedule.store_parent, schedule.run_name) != (config.store_parent, config.run_name):
         raise gates.ReportError("the schedule's store parent and run name differ from the entry config's")
     stopped: str | None

@@ -2308,3 +2308,69 @@ def test_h4_write_report_s_defaults_are_the_real_calls() -> None:
     defaults = inspect.signature(write_report).parameters
     assert defaults["fsync"].default is os.fsync
     assert defaults["realpath"].default is os.path.realpath
+
+
+# ---------------------------------------------------------------- R-1 write_new_file (H5)
+
+
+def test_r1_write_new_file_writes_the_bytes_then_syncs_that_file_once(tmp_path: Path) -> None:
+    target = tmp_path / "EXPECTED-FREEZE.json"
+    synced: list[int] = []
+
+    def fsync(file_descriptor: int) -> None:
+        assert os.path.samestat(os.fstat(file_descriptor), os.stat(target))
+        assert os.fstat(file_descriptor).st_size == len(b"data\n")  # written and flushed before the sync
+        synced.append(file_descriptor)
+
+    assert records_module.write_new_file(str(target), b"data\n", fsync=fsync, realpath=as_given) == str(target)
+    assert target.read_bytes() == b"data\n"
+    assert len(synced) == 1
+
+
+def test_r1_write_new_file_returns_and_writes_the_resolved_path(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    resolved = str(real / "INPUTS.sha256")
+    assert records_module.write_new_file(
+        "link/INPUTS.sha256", b"x\n", fsync=no_fsync, realpath=lambda _p: resolved
+    ) == (resolved)
+    assert Path(resolved).read_bytes() == b"x\n"
+
+
+def test_r1_write_new_file_refuses_an_existing_file_and_leaves_it_alone(tmp_path: Path) -> None:
+    target = tmp_path / "INPUTS.sha256"
+    target.write_bytes(b"kept")
+    synced: list[int] = []
+    with pytest.raises(FileExistsError):
+        records_module.write_new_file(str(target), b"new", fsync=synced.append, realpath=as_given)
+    assert target.read_bytes() == b"kept"
+    assert synced == []
+
+
+@pytest.mark.parametrize("resolved", ["/mnt/c/data/OneDrive/frozen/INPUTS.sha256", "/mnt/c/data/ONEDRI~1/x.json"])
+def test_r1_write_new_file_refuses_a_path_under_onedrive(tmp_path: Path, resolved: str) -> None:
+    with pytest.raises(StoreError, match="S2 §3.12"):
+        records_module.write_new_file(str(tmp_path / "x"), b"x", fsync=no_fsync, realpath=lambda _p: resolved)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_r1_write_new_file_refuses_under_a_real_onedrive_folder(tmp_path: Path) -> None:
+    parent = tmp_path / "OneDrive"
+    parent.mkdir()
+    with pytest.raises(StoreError):
+        records_module.write_new_file(str(parent / "x"), b"x", fsync=no_fsync, realpath=as_given)
+    assert list(parent.iterdir()) == []
+
+
+def test_r1_write_new_file_refuses_a_missing_parent(tmp_path: Path) -> None:
+    with pytest.raises(StoreError, match="parent"):
+        records_module.write_new_file(str(tmp_path / "missing" / "x"), b"x", fsync=no_fsync, realpath=as_given)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_r1_write_new_file_s_sync_is_required_and_its_realpath_is_the_real_call() -> None:
+    parameters = inspect.signature(records_module.write_new_file).parameters
+    assert list(parameters) == ["path", "data", "fsync", "realpath"]
+    assert parameters["fsync"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["fsync"].default is inspect.Parameter.empty
+    assert parameters["realpath"].default is os.path.realpath

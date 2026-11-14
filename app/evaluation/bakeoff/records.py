@@ -1016,6 +1016,24 @@ def write_report(
     return str(md_path), str(json_path)
 
 
+def write_new_file(
+    path: str, data: bytes, *, fsync: Callable[[int], None], realpath: Callable[[str], str] = os.path.realpath
+) -> str:
+    """Write `data` to a new file and return its resolved path. H5's hash-bearing files are written here, because only
+    this module writes results. The path is refused under OneDrive (S2 §3.12; AMB-81) and when its parent directory is
+    missing. The file is opened `'xb'`, so one that exists raises `FileExistsError` and is left as it was, and the
+    bytes are flushed and synced before the return."""
+    resolved = refuse_onedrive(path, realpath=realpath)
+    target = Path(resolved)
+    if not target.parent.is_dir():
+        raise StoreError(f"{target.parent} is not a directory: the parent of a new file must exist")
+    with target.open("xb") as file:
+        file.write(data)
+        file.flush()
+        fsync(file.fileno())
+    return resolved
+
+
 def _report_complete(md: bytes | None, raw: bytes | None) -> bool:
     """Report n is complete when its JSON is one whole record line holding every report key, with `record` "report",
     `schema` 1 and the SHA-256 of the Markdown file beside it."""
