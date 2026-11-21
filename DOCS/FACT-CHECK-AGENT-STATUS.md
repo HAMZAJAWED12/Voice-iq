@@ -1,6 +1,6 @@
 # Fact-Check Agent — Live Status
 
-Owner: engineering · Status: **Phase 0 complete; Phase 1 in progress** · Created: 2026-10-11 · Updated: 2026-11-15
+Owner: engineering · Status: **Phase 0 complete; Phase 1 in progress** · Created: 2026-10-11 · Updated: 2026-11-22
 
 The one place that says where Sprint 7 stands. Update it with every
 milestone. Decision status is **not** kept here — it lives only in the
@@ -450,7 +450,9 @@ v0.4 and the bake-off harness has milestones H1 to H4b on `main`
 D5's run deadline was set and the D6 criteria note
 ([D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md): who may win, the gates,
 the margin and the licence check) was signed on 2026-10-28; its launch line
-was revised in S2 ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md)) on 2026-10-30.
+was revised in S2 ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md)) on 2026-10-30,
+and S3 ([D6-CRITERIA-NOTE-S3.md](D6-CRITERIA-NOTE-S3.md)) set the KV cache type
+and the claim-fidelity definitions on 2026-11-22.
 
 **The plan to the first run** (approved by the project owner on
 2026-11-14). By 2026-11-30 it aims to give the first bake-off run under
