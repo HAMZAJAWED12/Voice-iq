@@ -102,9 +102,11 @@ CAVEATS: tuple[str, ...] = (
     "Nothing here bears on the safety of regulated domains.",
     "In a few approved rows, a market professional states a false value (the guide's realism note).",
 )
-# The NEEDS-OWNER readings the harness implements and the owner has still to rule (H1 to H4 specs, section 7). AMB-4
-# was ruled on 2026-11-18, so it is no longer listed.
-OPEN_RULINGS = (*range(1, 4), *range(26, 31), 66, 69, 106, 108, 116, 129, 130, *range(134, 138), 139, 140)
+# The NEEDS-OWNER readings the harness implements and the owner has still to rule (H1 to H4 specs, section 7). AMB-29
+# stays open until the real freeze. AMB-4 was ruled on 2026-11-18, and AMB-1 to AMB-3, AMB-26 to AMB-28, AMB-30,
+# AMB-66, AMB-69, AMB-106, AMB-108, AMB-116, AMB-129, AMB-130, AMB-134 to AMB-137, AMB-139 and AMB-140 were ruled as
+# implemented on 2026-11-21, so they are no longer listed.
+OPEN_RULINGS = (29,)
 BOOTSTRAP_METHOD = "paired percentile bootstrap over conversations, nearest-rank lower bound (H1 AMB-3)"
 # The ruled definitions of S2 §5.2 claim fidelity and per-proposition recall, with their leniencies (AMB-4).
 FIDELITY_METHOD = (
@@ -286,7 +288,7 @@ def refuse_paths(text: str, needles: tuple[str, ...]) -> None:
 
 def _launch_line(argv: Any) -> tuple[str, ...]:
     """The S2 §3.3 form of a launch line: element 0 and the model file named, every other element copied."""
-    # NEEDS-OWNER(AMB-137): the launch line is written in S2 §3.3 form, llama-server -m <file>
+    # AMB-137: the launch line is written in S2 §3.3 form, llama-server -m <file>
     words = tuple(argv)
     if not words or not all(isinstance(word, str) for word in words) or "-m" not in words[1:-1]:
         raise ValueError("a launch line must hold its binary and '-m <file>'")
@@ -580,7 +582,7 @@ def _reopening(
             "detail": fault.detail,
         }
 
-    # NEEDS-OWNER(AMB-136): no before/after claim; the owner judges §8 amendment eligibility
+    # AMB-136: no before/after claim; the owner judges §8 amendment eligibility
     on_scored = tuple({**fault_entry(f), "note": SCORED_FAULT_NOTE} for f in unvoided if view.marked(f.key))
     return {
         "voids": tuple(

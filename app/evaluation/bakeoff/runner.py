@@ -457,7 +457,7 @@ class _Schedule:
         """The attempts of one unit, at once and in place, so the rotation holds and nobody chooses by result. The key
         of the last attempt comes back when none completed, and `None` when one did."""
         key: RunKey | None = None
-        # NEEDS-OWNER(AMB-69): a voided unit repeats at once, 3 attempts at most; a third timed void stops the schedule
+        # AMB-69: a voided unit repeats at once, 3 attempts at most; a third timed void stops the schedule
         for run_attempt in range(1, MAX_RUN_ATTEMPTS + 1):
             key = RunKey(candidate.candidate_id, phase, run, run_attempt)
             if self._run_attempt(key, candidate, work):

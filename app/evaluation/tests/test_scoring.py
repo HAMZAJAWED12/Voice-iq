@@ -783,7 +783,7 @@ def test_conflicting_kinds_use_the_existential_reading(gold_x: GoldSet, gold_f: 
 
 
 def test_conflicting_rows_are_listed_whatever_their_outcome(gold_x: GoldSet) -> None:
-    # L4 pins the current reading of NEEDS-OWNER(AMB-1): a row a claim predicts CHECKABLE is listed too.
+    # L4 pins AMB-1's reading, ruled as implemented on 2026-11-21: a row a claim predicts CHECKABLE is listed too.
     m = score_run(gold_x, x_run(gold_x, [[2]], [("vague", [2]), ("opinion", [2])]))
     assert (route(m, "syn_a", 2), label(m, "syn_a", 2), m.conflicting_non_checkable_rows) == ("correct", "", ("x_01",))
     m = score_run(gold_x, x_run(gold_x, [[3]], [("vague", [3]), ("opinion", [3])]))

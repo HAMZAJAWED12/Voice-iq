@@ -230,8 +230,9 @@ def test_a_scored_report_holds_every_key_but_the_markdown_hash(clean: dict[str, 
     assert (clean["schedule_end"], clean["stop_reason"], clean["run_conditions_met"]) == ("complete", None, True)
     assert clean["caveats"] == list(CAVEATS)
     assert clean["open_rulings"] == list(OPEN_RULINGS)
-    # AMB-4 was ruled on 2026-11-18: it leaves the open rulings, and the "pending" key stays, empty.
-    assert 4 not in clean["open_rulings"] and {136, 137} <= set(clean["open_rulings"])
+    # AMB-4 was ruled on 2026-11-18 and the other open readings except AMB-29 on 2026-11-21, so only AMB-29 stays
+    # open, and the "pending" key stays, empty.
+    assert clean["open_rulings"] == [29]
     assert clean["pending"] == {}
     assert [entry["candidate_id"] for entry in clean["candidates"]] == list(CANDIDATE_IDS)
     assert "stamp" not in set(keys_of(clean))

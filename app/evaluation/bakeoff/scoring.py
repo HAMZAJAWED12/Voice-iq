@@ -129,7 +129,7 @@ class FlaggedGroup:
     claim_ids: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        # NEEDS-OWNER(AMB-2): flags have no source in v0.4/v1.0; repeat = one recall unit
+        # AMB-2: flags have no source in v0.4/v1.0; repeat = one recall unit
         if self.kind not in FLAG_KINDS:
             raise ValueError(f"FlaggedGroup.kind must be one of {FLAG_KINDS}, not {self.kind!r}")
         if not isinstance(self.claim_ids, tuple) or not all(isinstance(cid, str) for cid in self.claim_ids):
@@ -345,7 +345,7 @@ def _units(
     Every group, of either kind, needs 2 or more distinct existing claim_ids, all in one conversation, every row
     in-scope `CHECKABLE` (only those rows count for recall), and a row in at most one group.
     """
-    # NEEDS-OWNER(AMB-2): flags have no source in v0.4/v1.0; repeat = one recall unit
+    # AMB-2: flags have no source in v0.4/v1.0; repeat = one recall unit
     groups = tuple(flagged_groups)
     unit_of: dict[RowKey, _Unit] = {item.key: frozenset({item.key}) for item in gold.in_scope_checkable()}
     owner: dict[str, int] = {}
@@ -475,7 +475,7 @@ def _score(
             labels[item.key] = ""
             routing[item.key] = "correct" if item.reason_kind == "" else "leaked"
         elif kinds:
-            # NEEDS-OWNER(AMB-1): existential reading: a row is correct if any nonCheckable entry carries the gold kind
+            # AMB-1: existential reading: a row is correct if any nonCheckable entry carries the gold kind
             present = item.reason_kind != "" and item.reason_kind in kinds
             routing[item.key] = "correct" if present else "misrouted"
             labels[item.key] = item.reason_kind if present else kinds[0]

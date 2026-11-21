@@ -1454,17 +1454,18 @@ def test_the_core_runs_with_the_network_switched_off(monkeypatch: pytest.MonkeyP
     assert result.observed_difference == 1 - default.f1
 
 
-# The final H4 tuple of NEEDS-OWNER numbers, each with a marked site; H5a adds none, and the AMB-133 marker comes after
-# 2026-11-30 (AMB-153). AMB-4 was ruled on 2026-11-18, and its two markers went with the scoring stubs.
-OWNER_MARKERS = (*range(1, 4), *range(26, 31), 66, 69, 106, 108, 116, 129, 130, 134, 135, 136, 137, 139, 140)
+# The NEEDS-OWNER numbers with a marked site: AMB-29 is the one open reading with a marker. The readings ruled on
+# 2026-11-18 and 2026-11-21 left with their markers, and the AMB-133 marker still comes after 2026-11-30 (AMB-153).
+OWNER_MARKERS = (29,)
+RULED_MARKERS = (1, 2, 3, 4, 26, 27, 28, 30, 52, 66, 69, 106, 108, 116, 129, 130, 134, 135, 136, 137, 139, 140)
 
 
 def test_owner_markers_are_in_the_sources() -> None:
     sources = "\n".join(_source(module) for module in MODULES)
     for number in OWNER_MARKERS:
         assert f"NEEDS-OWNER(AMB-{number})" in sources
-    assert "NEEDS-OWNER(AMB-52)" not in sources
-    assert "NEEDS-OWNER(AMB-4)" not in sources
+    for number in RULED_MARKERS:
+        assert f"NEEDS-OWNER(AMB-{number})" not in sources
 
 
 def test_decimal_is_allowed_for_fidelity_alone() -> None:
@@ -1473,25 +1474,8 @@ def test_decimal_is_allowed_for_fidelity_alone() -> None:
     assert "decimal" in _imports(_source("fidelity"))
 
 
-# The module that holds each H4 marker, with its count there. AMB-66 keeps its H3 site in records beside its gates
-# site, AMB-69 keeps its H3 site in runner beside its entry site, and AMB-106 has two gates sites.
-OWNER_MARKER_SITES = MappingProxyType(
-    {
-        66: (("records", 1), ("gates", 1)),
-        69: (("runner", 1), ("entry", 1)),
-        106: (("gates", 2),),
-        116: (("gates", 1),),
-        135: (("gates", 1),),
-        139: (("gates", 1),),
-        108: (("machine", 1),),
-        140: (("entry", 1),),
-        129: (("decision", 1),),
-        130: (("decision", 1),),
-        134: (("decision", 1),),
-        136: (("report", 1),),
-        137: (("report", 1),),
-    }
-)
+# The module that holds each open marker, with its count there.
+OWNER_MARKER_SITES = MappingProxyType({29: (("client", 1),)})
 
 
 @pytest.mark.parametrize("number", sorted(OWNER_MARKER_SITES))
@@ -1502,28 +1486,8 @@ def test_each_h4_owner_marker_sits_in_its_listed_module(number: int) -> None:
 
 
 def test_a_moved_owner_marker_is_caught() -> None:
-    moved = _source("report").replace("NEEDS-OWNER(AMB-136)", "NEEDS-OWNER(AMB-999)")
-    assert moved.count("NEEDS-OWNER(AMB-136)") != dict(OWNER_MARKER_SITES[136])["report"]
-
-
-# H5a brief section 4.7, item 14 (AMB-155): the AMB-140 marker keeps its form and its site, the first line of
-# `entry.run_bakeoff`'s body after the docstring, and only its text changes.
-_AMB_140_MARKER = (
-    "# NEEDS-OWNER(AMB-140): the entry point is this function, called by `cli run` with inputs from "
-    "`frozen.load_frozen`"
-)
-
-
-def test_the_amb_140_marker_names_the_cli_and_the_loader() -> None:
-    source = _source("entry")
-    lines = [line.strip() for line in source.splitlines()]
-    assert lines.count(_AMB_140_MARKER) == 1
-    function = next(
-        node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == "run_bakeoff"
-    )
-    docstring, first = function.body[0], function.body[1]
-    assert isinstance(docstring, ast.Expr) and isinstance(docstring.value, ast.Constant)
-    assert (docstring.end_lineno or 0) < lines.index(_AMB_140_MARKER) + 1 < first.lineno
+    moved = _source("client").replace("NEEDS-OWNER(AMB-29)", "NEEDS-OWNER(AMB-999)")
+    assert moved.count("NEEDS-OWNER(AMB-29)") != dict(OWNER_MARKER_SITES[29])["client"]
 
 
 _OWNER_MARKER = re.compile(r"NEEDS-OWNER\(AMB-(\d+)\)")
@@ -1547,13 +1511,13 @@ def test_every_owner_marker_is_listed_and_well_formed() -> None:
     ("line", "problem"),
     [
         ("# NEEDS-OWNER(AMB-77): an unlisted reading", "AMB-77 is not listed"),
-        ("# NEEDS-OWNER(AMB-66) no colon", "a marker is not in the form '# NEEDS-OWNER(AMB-n): <text>'"),
-        ("x = 1  # see NEEDS-OWNER(AMB-66)", "a marker is not in the form '# NEEDS-OWNER(AMB-n): <text>'"),
+        ("# NEEDS-OWNER(AMB-29) no colon", "a marker is not in the form '# NEEDS-OWNER(AMB-n): <text>'"),
+        ("x = 1  # see NEEDS-OWNER(AMB-29)", "a marker is not in the form '# NEEDS-OWNER(AMB-n): <text>'"),
     ],
 )
 def test_the_owner_marker_check_catches_each_problem(line: str, problem: str) -> None:
     assert problem in _owner_marker_problems(f"{line}\n")
-    assert _owner_marker_problems("# NEEDS-OWNER(AMB-66): the probe calls of session 1\n") == []
+    assert _owner_marker_problems("# NEEDS-OWNER(AMB-29): the repair size after a cut-off\n") == []
 
 
 def test_the_report_lists_every_open_ruling_that_has_a_site() -> None:

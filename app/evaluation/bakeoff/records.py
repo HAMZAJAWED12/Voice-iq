@@ -337,7 +337,7 @@ class StoredCall:
     key: RunKey
     role: CallRole
     session_id: str | None
-    # NEEDS-OWNER(AMB-66): gates J and C read run 1's first session-run; the tags keep every reading
+    # AMB-66: gates J and C read run 1's first session-run; the tags keep every reading
     session_index: int | None
     position: int | None
     call: CallRecord

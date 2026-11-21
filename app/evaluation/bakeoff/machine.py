@@ -336,7 +336,7 @@ def check_sample_rate(samples: tuple[GpuSample, ...], elapsed_ms: int) -> None:
         raise SampleRateTooLow(f"{rate.samples} samples in {elapsed_ms} ms")
 
 
-# NEEDS-OWNER(AMB-108): the 10 Hz floor on the server sampler is the harness plan's reading; S2 sets it for audio only
+# AMB-108: the 10 Hz floor on the server sampler is the harness plan's reading; S2 sets it for audio only
 def _check_server_rate(samples: tuple[GpuSample, ...], elapsed_ms: int) -> None:
     check_sample_rate(samples, elapsed_ms)
 

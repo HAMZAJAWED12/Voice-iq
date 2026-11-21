@@ -155,7 +155,7 @@ def _check_confidence(confidence: object) -> Fraction:
 def percentile_lower_bound(differences: Sequence[Fraction], confidence: Fraction) -> Fraction:
     """The one-sided lower bound: the k-th smallest difference, counting from 1, with k = ceil(B * (1 - confidence))
     computed exactly (S2 §8). With B = 10,000 and confidence 95/100, k = 500."""
-    # NEEDS-OWNER(AMB-3): percentile method, nearest-rank ceil(0.05·B); record in Annex A
+    # AMB-3: percentile method, nearest-rank ceil(0.05·B); record in Annex A
     _check_confidence(confidence)
     values = list(differences)
     if not values:

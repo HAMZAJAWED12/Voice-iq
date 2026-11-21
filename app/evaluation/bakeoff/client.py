@@ -1172,7 +1172,7 @@ class ModelServerClient:
             )
             check = self._count(repair, label="repair", attempts=attempts)
             if not check.fits:
-                # NEEDS-OWNER(AMB-30): a repair that does not fit stops the call as a run fault, never a model failure
+                # AMB-30: a repair that does not fit stops the call as a run fault, never a model failure
                 raise ContextBudgetExceeded(check, attempts)
             second, output = self._attempt(repair, 2, "repair", validate, bundle)
             attempts, checks = (first, second), (check,)

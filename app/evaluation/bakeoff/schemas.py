@@ -93,13 +93,13 @@ _EXTRACTION_SCHEMA: dict[str, Any] = {
     },
 }
 
-# NEEDS-OWNER(AMB-26): the model writes only verdict, reason and citations[{sourceId}]
+# AMB-26: the model writes only verdict, reason and citations[{sourceId}]
 _PROBE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
     "required": ["citations", "reason", "verdict"],
     "properties": {
-        # NEEDS-OWNER(AMB-27): an empty citations list is valid output and fails gate C only
+        # AMB-27: an empty citations list is valid output and fails gate C only
         "citations": {
             "type": "array",
             "items": {
@@ -136,7 +136,7 @@ def canonical_json(value: object) -> bytes:
     A non-str key or a non-JSON type (set, bytes, mapping proxy) raises `TypeError`, NaN and infinities raise
     `ValueError`, and a lone surrogate raises `UnicodeEncodeError`. Tuples serialize as arrays.
     """
-    # NEEDS-OWNER(AMB-28): sorted keys fix the key order the grammar forces
+    # AMB-28: sorted keys fix the key order the grammar forces
     _check_keys(value)
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return text.encode("utf-8")
