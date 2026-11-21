@@ -77,7 +77,8 @@ def _check_optional_str(owner: str, name: str, value: object) -> None:
 @dataclass(frozen=True, slots=True)
 class ExtractedClaim:
     """One `claims[]` entry. `index` is its position in the array; claims[] order decides duplicates (S2 §5.1).
-    Scoring never reads `text`, `claim_id` or `speaker_id`: spans and claim text are not compared (S2 §5.1)."""
+    `scoring` never reads `text`, `claim_id` or `speaker_id`: spans and claim text are not compared in matching
+    (S2 §5.1). Only `fidelity` reads `text`, for claim fidelity (S2 §5.2, AMB-4)."""
 
     index: int
     text: str

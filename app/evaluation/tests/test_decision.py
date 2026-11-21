@@ -36,6 +36,7 @@ from app.evaluation.bakeoff.decision import (
     revision_setting,
     settings,
 )
+from app.evaluation.bakeoff.fidelity import FidelityFigures, FidelityMetrics
 from app.evaluation.bakeoff.gates import GATES, CandidateResult, Gate, OperatorValues, ReportInputs, evaluate
 from app.evaluation.bakeoff.gold import GoldSet
 from app.evaluation.bakeoff.launch import CANDIDATE_IDS
@@ -57,6 +58,9 @@ Q4B, Q35, Q8B = CANDIDATE_IDS
 SHA = "f" * 64
 NO_INPUTS = ReportInputs(MappingProxyType({}), None, None, None, None, None)
 ZERO_SHARES = {candidate: DeterminismShare(candidate, 0, 1000) for candidate in CANDIDATE_IDS}
+# The decision never reads fidelity (reported only); one synthetic block stands in for every run.
+FIGURES = FidelityFigures(4, 0, 2, 4, Fraction(1, 2), 0, 0, 0, 0, 0, None, 0)
+FIDELITY = FidelityMetrics(4, 0, 2, 4, Fraction(1, 2), 0, 0, 0, 0, 0, None, 0, high_confidence=FIGURES)
 
 
 @pytest.fixture(autouse=True)
@@ -112,13 +116,15 @@ def result(
             state = "fail" if gate in failing else "not_measured" if gate in not_measured else "pass"
         gates[gate] = Gate(gate, state, (), ())
     information_only = ("gate_L",) if not loaded else ("thinking",) if thinking else ()
+    runs = {} if not loaded else dict(metrics or {r: metric(base) for r in (1, 2, 3)})
     return CandidateResult(
         candidate=candidate,
         status=status,
         information_only=information_only,
         thinking_pre_run=None if not loaded else "seen" if thinking else "off",
         thinking_in_runs=MappingProxyType({}),
-        metrics=MappingProxyType({} if not loaded else dict(metrics or {r: metric(base) for r in (1, 2, 3)})),
+        metrics=MappingProxyType(runs),
+        fidelity=MappingProxyType(dict.fromkeys(runs, FIDELITY)),  # keyed as metrics is (AMB4C-7)
         gates=MappingProxyType(gates),
         probe_readings=MappingProxyType({}),
         sessions=(),
@@ -136,6 +142,11 @@ def trio(base: RunMetrics, **per_candidate: dict[str, Any]) -> dict[str, Candida
     """Results for the three candidates; keyword names q4b, q35 and q8b carry each one's options."""
     names = {"q4b": Q4B, "q35": Q35, "q8b": Q8B}
     return {names[key]: result(names[key], base, **per_candidate.get(key, {})) for key in ("q4b", "q35", "q8b")}
+
+
+def test_the_fixture_keys_fidelity_as_metrics(base: RunMetrics) -> None:
+    for built in (*trio(base).values(), result(Q4B, base, metrics={1: base}), result(Q4B, base, status="not_loaded")):
+        assert set(built.fidelity) == set(built.metrics)
 
 
 def fake_margin(holds: bool, *, resamples: int = BOOTSTRAP_RESAMPLES, failing: tuple[int, ...] = ()) -> MarginResult:

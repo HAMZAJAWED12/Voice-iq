@@ -12,6 +12,11 @@ Milestone H1:
 - `scoring`: matching, metrics, failures and rows used, gates A and S (S2 §5.1-§5.3, §6).
 - `stats`: the paired bootstrap, run averaging and the case-1 margin test (S2 §8, §3.13).
 
+Claim fidelity and per-proposition recall (open point AMB-4, ruled before the first run):
+
+- `fidelity`: the value normaliser, compound parts and the two reported-only metrics; the only module that reads
+  claim text (S2 §5.1-§5.3).
+
 Milestone H2:
 
 - `schemas`: the constrained JSON schemas and the canonical-JSON hash helper (S2 §3.8, §3.10, §4).
@@ -51,13 +56,14 @@ Milestone H5a:
   checked fields on the console (S2 §3.12).
 
 `gold`, `extraction`, `schemas` and `stats` import nothing from this package; `scoring` imports `gold`, `extraction`
-and `stats`; `probe` imports `extraction`; `client` imports `extraction`, `probe` and `schemas`; `inputs` imports
-`client`, `gold`, `probe` and `schemas`; `launch` imports `client`; `records` imports `client`, `extraction`, `launch`,
-`probe` and `schemas`; `runner` imports `client`, `inputs`, `launch`, `records` and `schemas`. `evidence` imports
-`records`; `gates` imports `client`, `evidence`, `extraction`, `gold`, `inputs`, `launch`, `records`, `runner` and
-`scoring`; `decision` imports `gates`, `launch`, `runner` and `stats`; `report` imports `decision`, `evidence`,
-`gates`, `launch`, `records`, `runner`, `scoring` and `stats`; `entry` imports `client`, `decision`, `evidence`,
-`gates`, `gold`, `inputs`, `launch`, `machine`, `records`, `report`,
+and `stats`; `fidelity` imports `extraction`, `gold` and `scoring`; `probe` imports `extraction`; `client` imports
+`extraction`, `probe` and `schemas`; `inputs` imports `client`, `gold`, `probe` and `schemas`; `launch` imports
+`client`; `records` imports `client`, `extraction`, `launch`, `probe` and `schemas`; `runner` imports `client`,
+`inputs`, `launch`, `records` and `schemas`. `evidence` imports
+`records`; `gates` imports `client`, `evidence`, `extraction`, `fidelity`, `gold`, `inputs`, `launch`, `records`,
+`runner` and `scoring`; `decision` imports `gates`, `launch`, `runner` and `stats`; `report` imports `decision`,
+`evidence`, `gates`, `launch`, `records`, `runner`, `scoring` and `stats`; `entry` imports `client`, `decision`,
+`evidence`, `gates`, `gold`, `inputs`, `launch`, `machine`, `records`, `report`,
 `runner` and `stats`. No H1 to H3 module imports an H4 module, and `entry` is imported by `cli`
 alone. `machine` imports `evidence`, `launch`, `records` and `schemas`. Only `client` talks to the network, and
 only to http://127.0.0.1:<port> (S2 §3.2, §3.12): gold rows never leave the host. Only `launch` starts a process,

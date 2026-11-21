@@ -1106,6 +1106,7 @@ def test_c17_a_candidate_that_did_not_load(gold: GoldSet, candidate: str) -> Non
     assert loaded.gates["L"].status == "fail"
     assert all(loaded.gates[g].status == "not_measured" for g in GATES[1:])
     assert (dict(loaded.metrics), loaded.memory, loaded.contended) == ({}, None, None)
+    assert dict(loaded.fidelity) == {}
     assert all(r.passes_every_gate for c, r in result.items() if c != candidate)
 
 
@@ -1163,6 +1164,26 @@ def test_g4_23_gates_a_and_s_are_h1_s_gates(base: RunView, gold: GoldSet) -> Non
     assert degraded.metrics[2].recall == 1  # runs 2 and 3 are scored, not gated
 
 
+def test_fidelity_is_scored_for_runs_1_to_3(base: RunView, gold: GoldSet) -> None:
+    """AMB-4 (AMB4-8): claim fidelity and per-proposition recall come from the same single-conversation outputs as
+    `score_run`, for every run. The h4 rows each hold a value, and the perfect output's claims hold none."""
+    result = results(base, gold)[Q4B]
+    assert set(result.fidelity) == set(result.metrics) == {1, 2, 3}
+    for fidelity in result.fidelity.values():
+        assert (fidelity.found_rows, fidelity.rows_not_judgeable, fidelity.rows_judgeable) == (81, 0, 81)
+        assert (fidelity.rows_passing, fidelity.claim_fidelity) == (0, Fraction(0))
+        assert (fidelity.compound_rows, fidelity.per_proposition_recall) == (0, None)
+        assert fidelity.flag_separator_disagreements == 0
+        assert (fidelity.high_confidence.found_rows, fidelity.high_confidence.rows_judgeable) == (81, 81)  # AMB4C-3
+
+    def empty(key: RunKey, role: str, index: int | None, position: int | None, item: str) -> CallRecord | None:
+        return make_call(item, SINGLE) if key == TIMED[0] and role == "single" else None
+
+    degraded = results(make_view(gold, override=empty), gold)[Q4B]
+    assert (degraded.fidelity[1].found_rows, degraded.fidelity[1].claim_fidelity) == (0, None)
+    assert degraded.fidelity[2].found_rows == degraded.fidelity[3].found_rows == 81
+
+
 def test_g4_5_a_single_that_timed_out_scores_as_empty_output(gold: GoldSet) -> None:
     view = make_view(
         gold, override=override_at(TIMED[0], "single", None, 3, lambda item: make_call(item, SINGLE, "timeout"))
@@ -1170,6 +1191,7 @@ def test_g4_5_a_single_that_timed_out_scores_as_empty_output(gold: GoldSet) -> N
     metrics = results(view, gold)[Q4B].metrics[1]
     assert [(f.source_id, f.kind) for f in metrics.failed_conversations] == [("syn_3", "timeout")]
     assert metrics.n_checkable_units == 81 and metrics.found_units == 61
+    assert results(view, gold)[Q4B].fidelity[1].found_rows == 61  # AMB-4: the failed conversation finds no row
 
 
 # ---------------------------------------------------------------- G4-16 to G4-22: gate M

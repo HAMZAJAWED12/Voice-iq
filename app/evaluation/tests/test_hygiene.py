@@ -22,6 +22,7 @@ from types import MappingProxyType
 import pytest
 
 from app.evaluation.bakeoff.extraction import parse_extraction
+from app.evaluation.bakeoff.fidelity import score_fidelity
 from app.evaluation.bakeoff.gold import load_gold_set
 from app.evaluation.bakeoff.report import OPEN_RULINGS
 from app.evaluation.bakeoff.scoring import score_run
@@ -48,7 +49,8 @@ H4_TEST_FILES: tuple[str, ...] = (
 H5_MODULES: tuple[str, ...] = ("frozen", "cli", "wrapper")
 H5_PLANNED = frozenset(H5_MODULES)
 H5_TEST_FILES: tuple[str, ...] = ("test_frozen.py", "test_cli.py", "test_wrapper.py", "test_launch_helper.py")
-EARLIER_MODULES = ("__init__", "gold", "extraction", "scoring", "stats", *H2_MODULES, *H3_MODULES)
+# `fidelity` (AMB-4, ruled 2026-11-18) sits with the scoring core and imports only H1 modules.
+EARLIER_MODULES = ("__init__", "gold", "extraction", "scoring", "fidelity", "stats", *H2_MODULES, *H3_MODULES)
 MODULES = (*EARLIER_MODULES, *H4_MODULES, *H5_MODULES)
 ALLOWED = frozenset(
     {
@@ -83,6 +85,8 @@ EXTRA_ALLOWED = {
     "machine": frozenset({"threading"}),
     "cli": frozenset({"argparse", "sys"}),
     "wrapper": frozenset({"sys", "traceback"}),
+    # AMB-4: values are compared by exact decimal value; no other module gets decimal.
+    "fidelity": frozenset({"decimal"}),
 }
 
 
@@ -757,7 +761,7 @@ def _environment_reads(source: str) -> set[str]:
     return found & _ENVIRONMENT_READS
 
 
-@pytest.mark.parametrize("module", (*H3_MODULES, *H4_MODULES, *H5_MODULES))
+@pytest.mark.parametrize("module", ("fidelity", *H3_MODULES, *H4_MODULES, *H5_MODULES))
 def test_h3_modules_read_no_environment_and_print_nothing(module: str) -> None:
     """H4 spec section 2, hygiene item 10: H4 and H5 modules too, but the scoring and stats ban is for H3 modules
     only."""
@@ -814,7 +818,7 @@ def _default_calls(source: str) -> list[int]:
 
 # Section 2: "No module-level mutable state, no print, no logging, no call in a default argument (ruff B)". The repo's
 # ruff config ignores B008, and no ruff rule checks module-level state, so these two checks stand in.
-@pytest.mark.parametrize("module", (*H3_MODULES, *H4_MODULES, *H5_MODULES))
+@pytest.mark.parametrize("module", ("fidelity", *H3_MODULES, *H4_MODULES, *H5_MODULES))
 def test_h3_modules_keep_no_module_state_and_call_nothing_in_a_default(module: str) -> None:
     source = _source(module)
     assert _module_level_mutables(source) == []
@@ -865,6 +869,7 @@ H4_ALLOWED_IMPORTS: dict[str, frozenset[str]] = {
             "client",
             "evidence",
             "extraction",
+            "fidelity",
             "gold",
             "inputs",
             "launch",
@@ -1410,6 +1415,11 @@ def test_import_direction() -> None:
         f"{PACKAGE}.extraction",
         f"{PACKAGE}.stats",
     }
+    assert {name for name in _imports(_source("fidelity")) if _own(name)} == {
+        f"{PACKAGE}.extraction",
+        f"{PACKAGE}.gold",
+        f"{PACKAGE}.scoring",
+    }
     assert {name for name in _imports(_source("__init__")) if _own(name)} == set()
     assert {name for name in _imports(_source("schemas")) if _own(name)} == set()
     assert {name for name in _imports(_source("probe")) if _own(name)} == {f"{PACKAGE}.extraction"}
@@ -1439,13 +1449,14 @@ def test_the_core_runs_with_the_network_switched_off(monkeypatch: pytest.MonkeyP
     assert parsed.claims[0].segment_ids == ("seg_002",)
     challenger = score_run(gold, run_xp(gold))
     default = score_run(gold, run_xm(gold))
+    assert score_fidelity(gold, run_xp(gold)).found_rows == challenger.found_units
     result = paired_bootstrap(challenger.per_conversation, default.per_conversation, seed=1, resamples=200)
     assert result.observed_difference == 1 - default.f1
 
 
 # The final H4 tuple of NEEDS-OWNER numbers, each with a marked site; H5a adds none, and the AMB-133 marker comes after
-# 2026-11-30 (AMB-153).
-OWNER_MARKERS = (*range(1, 5), *range(26, 31), 66, 69, 106, 108, 116, 129, 130, 134, 135, 136, 137, 139, 140)
+# 2026-11-30 (AMB-153). AMB-4 was ruled on 2026-11-18, and its two markers went with the scoring stubs.
+OWNER_MARKERS = (*range(1, 4), *range(26, 31), 66, 69, 106, 108, 116, 129, 130, 134, 135, 136, 137, 139, 140)
 
 
 def test_owner_markers_are_in_the_sources() -> None:
@@ -1453,6 +1464,13 @@ def test_owner_markers_are_in_the_sources() -> None:
     for number in OWNER_MARKERS:
         assert f"NEEDS-OWNER(AMB-{number})" in sources
     assert "NEEDS-OWNER(AMB-52)" not in sources
+    assert "NEEDS-OWNER(AMB-4)" not in sources
+
+
+def test_decimal_is_allowed_for_fidelity_alone() -> None:
+    assert "decimal" not in ALLOWED
+    assert {module for module, extra in EXTRA_ALLOWED.items() if "decimal" in extra} == {"fidelity"}
+    assert "decimal" in _imports(_source("fidelity"))
 
 
 # The module that holds each H4 marker, with its count there. AMB-66 keeps its H3 site in records beside its gates
@@ -1549,6 +1567,7 @@ def test_the_report_lists_every_open_ruling_that_has_a_site() -> None:
         ("gold", ("§3.12", "§5.1", "§5.2", "§5.3")),
         ("extraction", ("§3.8", "§3.10", "PHASE-0 §2.2", "§5.3")),
         ("scoring", ("§5.1", "§5.2", "§5.3", "§6")),
+        ("fidelity", ("§5.1", "§5.2", "§5.3")),
         ("stats", ("§8", "§3.13")),
         ("schemas", ("§3.8", "§3.10", "§4", "PHASE-0 §2.2")),
         ("probe", ("§3.8", "§4", "§6", "PHASE-0 §2.2")),
@@ -1607,6 +1626,26 @@ def test_scoring_never_reads_unscored_fields(module: str) -> None:
 # The text of a row, a claim, a model answer or an error never reaches the gates, the decision, the report or the
 # evidence: they read ids, counts, hashes and outcomes only (S2 §9; H4 spec section 2, hygiene item 17).
 _TEXT_FIELDS = frozenset({"text", "utterance", "claim_text", "reasoning_content", "error_text"})
+
+
+# AMB-4 (ruled 2026-11-18): `fidelity` alone reads claim text, exactly the gold row's `claim_text` and the model
+# claim's `text`, each at one site; every other G8 field (spans, call date, setting, speakers, timings, ASR
+# confidence) and the utterance stay barred for it.
+def _fidelity_reads(source: str) -> tuple[set[str], tuple[int, int]]:
+    attributes = [n.attr for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Attribute)]
+    return set(attributes) & (_UNREAD | _TEXT_FIELDS), (attributes.count("claim_text"), attributes.count("text"))
+
+
+def test_fidelity_reads_only_the_gold_claim_text_and_the_model_claim_text() -> None:
+    assert _fidelity_reads(_source("fidelity")) == ({"claim_text", "text"}, (1, 1))
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["x = item.span_text", "x = row.utterance", "x = c.call_date", "x = m.start()", "x = entry.text"],
+)
+def test_the_fidelity_read_check_catches_each_extra_read(line: str) -> None:
+    assert _fidelity_reads(_source("fidelity") + f"\n{line}\n") != ({"claim_text", "text"}, (1, 1))
 
 
 def _text_reaches(source: str) -> set[str]:

@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 
 from app.evaluation.bakeoff import records
+from app.evaluation.bakeoff.client import CallRecord
 from app.evaluation.bakeoff.decision import (
     MARGIN_READING,
     MODEL_SETTING,
@@ -33,6 +34,7 @@ from app.evaluation.bakeoff.decision import (
     margin,
     revision_setting,
 )
+from app.evaluation.bakeoff.extraction import ExtractedClaim, Extraction
 from app.evaluation.bakeoff.gates import (
     CandidateResult,
     ExpectedFreeze,
@@ -61,6 +63,7 @@ from app.evaluation.bakeoff.report import (
     BASELINE_LABEL,
     CARD_SETTINGS_LABEL,
     CAVEATS,
+    FIDELITY_METHOD,
     OPEN_RULINGS,
     REPORT_KEYS,
     REPORT_SCHEMA,
@@ -74,7 +77,7 @@ from app.evaluation.bakeoff.report import (
     to_report_value,
 )
 from app.evaluation.bakeoff.runner import MAX_RUN_ATTEMPTS, DeterminismShare, determinism_shares
-from app.evaluation.bakeoff.scoring import FIDELITY_PENDING, RunMetrics
+from app.evaluation.bakeoff.scoring import RunMetrics
 from app.evaluation.tests._client_fixtures import block_sockets
 from app.evaluation.tests._h4_fixtures import (
     PROBE,
@@ -227,21 +230,112 @@ def test_a_scored_report_holds_every_key_but_the_markdown_hash(clean: dict[str, 
     assert (clean["schedule_end"], clean["stop_reason"], clean["run_conditions_met"]) == ("complete", None, True)
     assert clean["caveats"] == list(CAVEATS)
     assert clean["open_rulings"] == list(OPEN_RULINGS)
-    assert {4, 136, 137} <= set(clean["open_rulings"])
-    assert clean["pending"] == {"AMB-4": FIDELITY_PENDING}
+    # AMB-4 was ruled on 2026-11-18: it leaves the open rulings, and the "pending" key stays, empty.
+    assert 4 not in clean["open_rulings"] and {136, 137} <= set(clean["open_rulings"])
+    assert clean["pending"] == {}
     assert [entry["candidate_id"] for entry in clean["candidates"]] == list(CANDIDATE_IDS)
     assert "stamp" not in set(keys_of(clean))
 
 
-def test_claim_fidelity_is_pending_and_run_1_is_the_run_of_record(clean: dict[str, Any]) -> None:
+# The h4 gold's in-scope CHECKABLE rows each hold a number (the claim id) and an ISO date, and every model claim of
+# the perfect output reads "synthetic claim", which holds no value: every row is found and judgeable, and none passes.
+# Every h4 row is high, so the high-confidence figures equal the all-rows ones (AMB4C-3).
+CLEAN_FIGURES = {
+    "found_rows": 81,
+    "rows_not_judgeable": 0,
+    "rows_passing": 0,
+    "rows_judgeable": 81,
+    "claim_fidelity": {"exact": "0/1", "approx": "0.0000"},
+    "compound_rows": 0,
+    "compound_rows_found": 0,
+    "parts_not_judgeable": 0,
+    "parts_found": 0,
+    "parts_judgeable": 0,
+    "per_proposition_recall": None,
+    "flag_separator_disagreements": 0,
+}
+CLEAN_FIDELITY = {**CLEAN_FIGURES, "high_confidence": CLEAN_FIGURES}
+
+
+def test_fidelity_is_reported_per_run_and_run_1_is_the_run_of_record(
+    clean: dict[str, Any], base: RunView, gold: GoldSet
+) -> None:
+    results, _, _ = parts(base, gold)
     for entry in clean["candidates"]:
         assert sorted(entry["metrics"]) == ["1", "2", "3"]
         for run, metrics in entry["metrics"].items():
-            assert metrics["claim_fidelity"] == FIDELITY_PENDING
+            assert "claim_fidelity" not in metrics
+            assert metrics["fidelity"] == to_report_value(results[entry["candidate_id"]].fidelity[int(run)])
+            assert list(metrics["fidelity"].items()) == list(CLEAN_FIDELITY.items())
             assert metrics["run_of_record"] is (run == "1")
             assert "conversation_scores" not in metrics
             names = {field.name for field in dataclasses.fields(RunMetrics)} - {"conversation_scores"}
             assert names <= set(metrics)
+    assert "pending the owner" not in record_json(clean).decode("utf-8")
+
+
+def test_each_run_s_fidelity_sits_under_its_own_run_and_candidate(gold: GoldSet) -> None:
+    """AMB4C-7: in a degraded schedule Q4B's fidelity differs per run (run 1 finds nothing, run 2's claims restate
+    every row's claim text, run 3 is the clean output), and the other candidates stay clean. The report must put each
+    run's block under that run and that candidate."""
+
+    def restating(source_id: str) -> Extraction:
+        rows = [row for row in gold.in_scope_checkable() if row.source_id == source_id]
+        claims = tuple(ExtractedClaim(n, row.claim_text, (row.segment_id,)) for n, row in enumerate(rows))
+        return Extraction(source_id, claims, ())
+
+    def degraded(key: RunKey, role: str, index: int | None, position: int | None, item: str) -> CallRecord | None:
+        if role != "single" or key not in TIMED_Q4B[:2]:
+            return None
+        return make_call(item, SINGLE) if key.run == 1 else make_call(item, SINGLE, output=restating(item))
+
+    view = make_view(gold, override=degraded)
+    results, _, _ = parts(view, gold)
+    blocks = {}
+    for entry in scored(view, gold)["candidates"]:
+        for run, metrics in entry["metrics"].items():
+            assert metrics["fidelity"] == to_report_value(results[entry["candidate_id"]].fidelity[int(run)])
+            blocks[entry["candidate_id"], run] = metrics["fidelity"]
+    q4b = [blocks[Q4B, run] for run in ("1", "2", "3")]
+    assert [(b["found_rows"], b["rows_passing"], b["claim_fidelity"]) for b in q4b] == [
+        (0, 0, None),
+        (81, 81, fraction(Fraction(1))),
+        (81, 0, fraction(Fraction(0))),
+    ]
+    assert [b["high_confidence"]["rows_passing"] for b in q4b] == [0, 81, 0]
+    others = [block for (candidate_id, _), block in blocks.items() if candidate_id != Q4B]
+    assert len(others) == 6 and all(block == CLEAN_FIDELITY for block in others)
+    assert q4b[2] == CLEAN_FIDELITY
+
+
+def test_the_fidelity_method_is_recorded_with_its_leniencies(clean: dict[str, Any], base: RunView) -> None:
+    """AMB-4 (AMB4-9): the ruled definition and its leniencies are fixed text in "recorded", in every report."""
+    assert clean["recorded"]["fidelity_method"] == FIDELITY_METHOD
+    assert records_only(base, "incomplete")["recorded"]["fidelity_method"] == FIDELITY_METHOD
+    for phrase in (
+        "units and signs are not compared",
+        "only ISO dates are ignored",
+        "magnitude words are not converted",
+        "digits of other index names are read as numbers",
+        "extra values in a claim never count",
+        "values are never pooled across claims",
+        "not judgeable",
+        "' | '",
+        "ISO 4217",
+        "AMB-4",
+        # AMB4C-1 to AMB4C-4
+        "whitespace or a hyphen between their words",
+        "FTSE-100 is the FTSE 100; Nasdaq-100 and FTSE-250 are other indexes, whose digits are numbers",
+        "only the ASCII hyphen-minus counts",
+        "a leftover FTSE, Dow or Nasdaq, in any letter case",
+        "confidence_in_label high, beside the all-rows figures",
+        "a row with is_compound no is one part",
+        "single-conversation outputs of runs 1 to 3, run 1 the run of record",
+        "no cap-session output is scored, and a failed conversation counts as empty output",
+        "Crypto names and other index names are not values",
+        "so USD/EUR passes for EUR/USD",
+    ):
+        assert phrase in FIDELITY_METHOD, phrase
 
 
 # ---------------------------------------------------------------- to_report_value

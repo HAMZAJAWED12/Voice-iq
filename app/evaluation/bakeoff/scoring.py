@@ -19,10 +19,9 @@ Implements, from the signed D6 criteria note S2:
   numbers; `deliberately_false` is never used (the gold loader drops it).
 - §6, gates A and S, on exact fractions.
 
-Claim fidelity and per-proposition recall (§5.2, reported only) wait for the owner's definitions (open point AMB-4).
-§9 reports every section 5 metric and the note fixes the scoring before any result exists, so that ruling is needed
-before the first run. Every ratio is an exact `Fraction`; a ratio with a zero denominator is None and fails any check
-on it. Nothing here calls a model or the network (§3.12: gold rows never leave the host, scoring included).
+Claim fidelity and per-proposition recall (§5.2, reported only) are in `fidelity`, which alone reads claim text.
+Every ratio is an exact `Fraction`; a ratio with a zero denominator is None and fails any check on it. Nothing here
+calls a model or the network (§3.12: gold rows never leave the host, scoring included).
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from types import MappingProxyType
-from typing import Literal, NoReturn, TypeAlias, TypeVar
+from typing import Literal, TypeAlias, TypeVar
 
 from app.evaluation.bakeoff.extraction import (
     FAILURE_KINDS,
@@ -96,10 +95,6 @@ SPELLED_NUMBER_WORDS = frozenset(
         "billion",
         "trillion",
     }
-)
-FIDELITY_PENDING = (
-    "claim fidelity / per-proposition recall: definitions pending the owner (criteria note S2 §5.2); "
-    "open point AMB-4"
 )
 
 _DIGIT = re.compile(r"[0-9]")
@@ -340,18 +335,6 @@ def has_spelled_number(text: str) -> bool:
     """S2 §5.3 slice: a spelled number word. Tokens are runs of a-z in the lower-cased text, so hyphens, apostrophes,
     digits and punctuation split words. "one", "oh" and "point" never count on their own (spec AMB-20)."""
     return any(token in SPELLED_NUMBER_WORDS for token in _WORD.findall(text.lower()))
-
-
-def claim_fidelity(*args: object, **kwargs: object) -> NoReturn:
-    """S2 §5.2 claim fidelity (reported only). Not implemented until the owner rules on its definition."""
-    # NEEDS-OWNER(AMB-4): what a "value" is, whose text is normalised, and which dates are ignored are not settled
-    raise NotImplementedError(FIDELITY_PENDING)
-
-
-def per_proposition_recall(*args: object, **kwargs: object) -> NoReturn:
-    """S2 §5.2 per-proposition recall (reported only). Not implemented until the owner rules on claim fidelity."""
-    # NEEDS-OWNER(AMB-4): depends on claim fidelity; whether it covers compound rows only is not settled
-    raise NotImplementedError(FIDELITY_PENDING)
 
 
 def _units(
