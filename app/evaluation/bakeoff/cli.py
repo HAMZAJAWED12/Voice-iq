@@ -400,16 +400,17 @@ def _check_fields(check: ContextCheck) -> tuple[tuple[str, str], ...]:
 
 
 def _request_checks(client: ModelServerClient, inputs: FrozenInputs) -> tuple[list[tuple[str, str]], bool]:
-    """Each frozen request's first-attempt count and its repair bound after a cut-off (S2 §3.5), in request order."""
+    """Each frozen request's first-attempt count and its repair bound after a cut-off (S2 §3.5), in request order, in
+    both forms as the runner's pre-run check counts them: constrained count, constrained repair bound, unconstrained
+    count, unconstrained repair bound. The form is the position in that fixed order, not a label or key, since the
+    wrapper accepts only `request` and `repair_bound` as check_label. `fits` covers both forms."""
     fields: list[tuple[str, str]] = []
     fits = True
     for frozen_request in inputs.all_requests():
-        for check in (
-            client.check_context(frozen_request.request),
-            client.repair_bound(frozen_request.request, inputs.prompts.repair),
-        ):
-            fields += (("check", frozen_request.item_id), *_check_fields(check))
-            fits = fits and check.fits
+        for request in (frozen_request.request, frozen_request.unconstrained):
+            for check in (client.check_context(request), client.repair_bound(request, inputs.prompts.repair)):
+                fields += (("check", frozen_request.item_id), *_check_fields(check))
+                fits = fits and check.fits
     return fields, fits
 
 

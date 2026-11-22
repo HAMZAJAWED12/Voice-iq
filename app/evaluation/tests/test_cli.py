@@ -22,8 +22,9 @@ import httpx
 import pytest
 
 from app.evaluation.bakeoff import cli, entry, frozen, machine, wrapper
-from app.evaluation.bakeoff.client import COUNT_PATH, MAX_TOKENS
+from app.evaluation.bakeoff.client import COUNT_PATH, MAX_TOKENS, repair_request
 from app.evaluation.bakeoff.decision import RULES
+from app.evaluation.bakeoff.extraction import CUT_OFF_TEXT
 from app.evaluation.bakeoff.gates import ReportInputs, parse_expected_freeze, schedule_end
 from app.evaluation.bakeoff.gold import load_gold_set
 from app.evaluation.bakeoff.inputs import FrozenInputs, ProbeItem, ProbeSource, freeze_inputs
@@ -1375,6 +1376,9 @@ def groups(fields: tuple[tuple[str, str], ...], first: str, keys: tuple[str, ...
 CHECK_KEYS = ("check", "check_label", "input_tokens", "uses", "limit", "fits")
 
 
+FORM_LABELS = ("request", "repair_bound", "request", "repair_bound")
+
+
 def test_c9_with_gold_every_frozen_request_is_counted_in_both_forms(tmp_path: Path) -> None:
     host, dirs = context_rig(tmp_path, counts={"syn_2": 11_000})
     result = cli.dispatch(context_argv(tmp_path, dirs, "--gold-dir", str(dirs.gold)), host_env(host), guarded=True)
@@ -1386,7 +1390,7 @@ def test_c9_with_gold_every_frozen_request_is_counted_in_both_forms(tmp_path: Pa
     assert all(set(check) == set(CHECK_KEYS) for check in checks)
     items = [frozen_request.item_id for frozen_request in inputs.all_requests()]
     assert [(check["check"], check["check_label"]) for check in checks] == [
-        (item, label) for item in items for label in ("request", "repair_bound")
+        (item, label) for item in items for label in FORM_LABELS
     ] * 3
     kinds = {frozen_request.item_id: frozen_request.request.kind for frozen_request in inputs.all_requests()}
     for check in checks:
@@ -1398,6 +1402,63 @@ def test_c9_with_gold_every_frozen_request_is_counted_in_both_forms(tmp_path: Pa
         assert (check["uses"], check["limit"]) == (str(uses), str(CONDITIONS.context * 9 // 10))
         assert check["fits"] == ("true" if uses <= CONDITIONS.context * 9 // 10 else "false")
     assert {check["fits"] for check in checks if check["check"] == "syn_2"} == {"false"}
+
+
+def record_counts(host: FakeHost, *, unconstrained: Mapping[str, int] | None = None) -> list[bytes]:
+    """Keep every count body in order; `unconstrained` gives an item's count for its unconstrained form only."""
+    bodies: list[bytes] = []
+    overrides = dict(unconstrained or {})
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path == COUNT_PATH:
+            bodies.append(request.content)
+            body = json.loads(request.content)
+            frozen_request = host.items.get(body["messages"][1]["content"])
+            if frozen_request is not None and "response_format" not in body and frozen_request.item_id in overrides:
+                return input_tokens_response(overrides[frozen_request.item_id])
+        return FakeHost.handle(host, request)
+
+    host.handle = handle  # type: ignore[method-assign]
+    return bodies
+
+
+def test_c_c_each_request_gets_four_checks_in_the_fixed_form_order(tmp_path: Path) -> None:
+    """HB-1, as the runner's pre-run check: constrained count, constrained repair bound, unconstrained count,
+    unconstrained repair bound, by the exact bytes counted."""
+    host, dirs = context_rig(tmp_path)
+    bodies = record_counts(host)
+    result = cli.dispatch(context_argv(tmp_path, dirs, "--gold-dir", str(dirs.gold)), host_env(host), guarded=True)
+    assert result.exit_code == 0 and whitelisted(result)
+    inputs = freeze(dirs.gold)
+    repair = inputs.prompts.repair
+    expected = [
+        body
+        for frozen_request in inputs.all_requests()
+        for request in (frozen_request.request, frozen_request.unconstrained)
+        for body in (
+            request.body_bytes(),
+            repair_request(request, invalid_output="", error_text=CUT_OFF_TEXT, template=repair).body_bytes(),
+        )
+    ]
+    assert bodies == expected * 3
+    assert len(groups(result.fields, "check", CHECK_KEYS)) == 4 * len(inputs.all_requests()) * 3
+    assert ["response_format" in json.loads(body) for body in bodies[:4]] == [True, True, False, False]
+
+
+def test_c_c_an_unconstrained_only_misfit_exits_3(tmp_path: Path) -> None:
+    host, dirs = context_rig(tmp_path)
+    record_counts(host, unconstrained={"syn_2": 11_000})
+    result = cli.dispatch(context_argv(tmp_path, dirs, "--gold-dir", str(dirs.gold)), host_env(host), guarded=True)
+    assert result.exit_code == 3
+    assert whitelisted(result)
+    checks = groups(result.fields, "check", CHECK_KEYS)
+    misfits = [(index % 4, check["check"]) for index, check in enumerate(checks) if check["fits"] == "false"]
+    assert misfits == [(2, "syn_2"), (3, "syn_2")] * 3
+    syn_2_counts = [check["input_tokens"] for check in checks if check["check"] == "syn_2"]
+    assert syn_2_counts == ["100", "100", "11000", "11000"] * 3
+    assert {value for key, value in result.fields if key == "check_label"} == {"request", "repair_bound"}
+    lines = wrapper.render(result)
+    assert len(lines) == 1 + len(result.fields) and not [line for line in lines if line.startswith("withheld")]
 
 
 def test_c9_all_fitting_exits_0_and_the_cap_sessions_are_built_in_memory(tmp_path: Path) -> None:
