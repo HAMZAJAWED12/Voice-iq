@@ -67,10 +67,10 @@ class _WireCitation(_Wire):
 
 
 class _WireProbe(_Wire):
-    # NEEDS-OWNER(AMB-26): the model writes only verdict, reason and citations[{sourceId}]
+    # AMB-26: the model writes only verdict, reason and citations[{sourceId}]
     verdict: Verdict
     reason: str
-    # NEEDS-OWNER(AMB-27): an empty citations list is valid output and fails gate C only
+    # AMB-27: an empty citations list is valid output and fails gate C only
     citations: list[_WireCitation]
 
     @field_validator("reason")

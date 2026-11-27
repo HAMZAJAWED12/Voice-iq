@@ -1501,7 +1501,7 @@ def test_server_rate_goes_through_the_marked_helper(monkeypatch: pytest.MonkeyPa
     rig.hooks.after_timed_run(TIMED)
     assert calls == [3000]
     source = inspect.getsource(machine)
-    marker = "# NEEDS-OWNER(AMB-108): "
+    marker = "# AMB-108: "
     assert source.count(marker) == 1
     assert source.split(marker, 1)[1].split("\n", 2)[1].startswith("def _check_server_rate(")
 

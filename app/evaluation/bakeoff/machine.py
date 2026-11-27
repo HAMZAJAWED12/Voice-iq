@@ -336,7 +336,7 @@ def check_sample_rate(samples: tuple[GpuSample, ...], elapsed_ms: int) -> None:
         raise SampleRateTooLow(f"{rate.samples} samples in {elapsed_ms} ms")
 
 
-# NEEDS-OWNER(AMB-108): the 10 Hz floor on the server sampler is the harness plan's reading; S2 sets it for audio only
+# AMB-108: the 10 Hz floor on the server sampler is the harness plan's reading; S2 sets it for audio only
 def _check_server_rate(samples: tuple[GpuSample, ...], elapsed_ms: int) -> None:
     check_sample_rate(samples, elapsed_ms)
 
@@ -836,9 +836,10 @@ def load_evidence(run_dir: str, key: RunKey, read_bytes: Callable[[str], bytes])
     """The evidence of one hooked attempt, as `evidence.EvidenceLoader`.
 
     None when the attempt left no host.json; then no other log of it is read. The host.json is always read strictly.
-    A missing proc.csv or gpu.csv beside it is a `StoreError`. For an attempt with no problem (a counted one), a
-    malformed log or a gpu.csv with no sample is a `StoreError` too. For a voided attempt (AMB-123), the evidence is
-    given when both logs parse and hold a GPU sample, and None otherwise. Every refusal names the unit, never a path.
+    A missing proc.csv or gpu.csv beside it is a `StoreError`. When host.json records no problem, a malformed log or a
+    gpu.csv with no sample is a `StoreError`. When host.json records a problem (AMB-123), the evidence is given when
+    both logs parse and hold a GPU sample, and None otherwise. The branch keys on host.json's `problem` field, not on
+    whether the attempt was later counted or voided. Every refusal names the unit, never a path.
     """
     unit = _unit_name(key)
     try:

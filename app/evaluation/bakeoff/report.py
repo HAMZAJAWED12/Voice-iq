@@ -16,8 +16,8 @@ Implements, from the signed D6 criteria note S2:
 - S2 §10, re-opening: the deadline and re-run allowance in force are recorded with their source and the manifest
   originals, and the re-opening lists (voids, absent units, abandoned directories, faults without a void, faults on
   scored units, incomplete report numbers, truncated lines) are always given.
-- Annex A, pre-run record: the operator's recorded values, the bootstrap seed and method, and the D5 values beside
-  the values in force.
+- Annex A, pre-run record: the operator's recorded values, the bootstrap seed and method, the fidelity method
+  (AMB-4), and the D5 values beside the values in force.
 
 The Markdown file of each pair is a fixed placeholder here; `report-<n>.json` is the report of record, and the
 rendering is H5's.
@@ -64,7 +64,7 @@ from .records import (
     record_json,
 )
 from .runner import MAX_RUN_ATTEMPTS, DeterminismShare
-from .scoring import FIDELITY_PENDING, RunMetrics
+from .scoring import RunMetrics
 from .stats import MultiRunBootstrap
 
 REPORT_SCHEMA = 1
@@ -102,9 +102,34 @@ CAVEATS: tuple[str, ...] = (
     "Nothing here bears on the safety of regulated domains.",
     "In a few approved rows, a market professional states a false value (the guide's realism note).",
 )
-# The NEEDS-OWNER readings the harness implements and the owner has still to rule (H1 to H4 specs, section 7).
-OPEN_RULINGS = (*range(1, 5), *range(26, 31), 66, 69, 106, 108, 116, 129, 130, *range(134, 138), 139, 140)
+# The NEEDS-OWNER readings the harness implements and the owner has still to rule (H1 to H4 specs, section 7). AMB-29
+# stays open until the real freeze. AMB-4 was ruled on 2026-11-18, and AMB-1 to AMB-3, AMB-26 to AMB-28, AMB-30,
+# AMB-66, AMB-69, AMB-106, AMB-108, AMB-116, AMB-129, AMB-130, AMB-134 to AMB-137, AMB-139 and AMB-140 were ruled as
+# implemented on 2026-11-21, so they are no longer listed.
+OPEN_RULINGS = (29,)
 BOOTSTRAP_METHOD = "paired percentile bootstrap over conversations, nearest-rank lower bound (H1 AMB-3)"
+# The ruled definitions of S2 §5.2 claim fidelity and per-proposition recall, with their leniencies (AMB-4).
+FIDELITY_METHOD = (
+    "claim fidelity and per-proposition recall as ruled before the first run (AMB-4): one normaliser reads values from "
+    "each gold part and each model claim, in this order: ISO dates (YYYY-MM-DD) are removed; FTSE 100, Dow Jones "
+    "Industrial Average and Nasdaq Composite, in any letter case, with whitespace or a hyphen between their words, "
+    "are read as index values and removed, digits included; a leftover FTSE, Dow or Nasdaq, in any letter case, not "
+    "followed by a token starting with a digit is read as the full name, a hyphen before the digit counting like a "
+    "space (FTSE-100 is the FTSE 100; Nasdaq-100 and FTSE-250 are other indexes, whose digits are numbers; only the "
+    "ASCII hyphen-minus counts); a comma between a digit and exactly three digits is removed; whole upper-case runs "
+    "on the ISO 4217 list are currency codes, and a BASE/QUOTE pair counts as its two codes, so USD/EUR passes for "
+    "EUR/USD; digit runs with an optional decimal part are numbers, compared by exact value. Crypto names and other "
+    "index names are not values. A row with is_compound yes splits on ' | ' into trimmed parts; a row with "
+    "is_compound no is one part. A found row passes when one matched claim (finding or duplicate) holds every value "
+    "of the row; a part is found when one matched claim holds every value of the part. Claim fidelity = found rows "
+    "that pass / judgeable found rows; per-proposition recall = judgeable parts found / judgeable parts of in-scope "
+    "CHECKABLE compound rows, found or not. Both are also reported over the rows with confidence_in_label high, "
+    "beside the all-rows figures, with matching unchanged. The outputs scored are the single-conversation outputs of "
+    "runs 1 to 3, run 1 the run of record; no cap-session output is scored, and a failed conversation counts as "
+    "empty output. Leniencies: units and signs are not compared; only ISO dates are ignored; magnitude words are not "
+    "converted; digits of other index names are read as numbers; extra values in a claim never count; values are "
+    "never pooled across claims; rows and parts with no value are not judgeable and are left out of both terms."
+)
 CARD_SETTINGS_LABEL = "recorded, not used (S2 §3.7)"
 SCORED_FAULT_NOTE = "fault on a scored unit: no void possible (H3 refuses void_run once the marker exists)"
 BASELINE_LABEL = "baseline reported beside the idle figure; nothing voids on it (S2 §3.1; AMB-110)"
@@ -263,7 +288,7 @@ def refuse_paths(text: str, needles: tuple[str, ...]) -> None:
 
 def _launch_line(argv: Any) -> tuple[str, ...]:
     """The S2 §3.3 form of a launch line: element 0 and the model file named, every other element copied."""
-    # NEEDS-OWNER(AMB-137): the launch line is written in S2 §3.3 form, llama-server -m <file>
+    # AMB-137: the launch line is written in S2 §3.3 form, llama-server -m <file>
     words = tuple(argv)
     if not words or not all(isinstance(word, str) for word in words) or "-m" not in words[1:-1]:
         raise ValueError("a launch line must hold its binary and '-m <file>'")
@@ -373,6 +398,7 @@ def _recorded(view: RunView, operator: OperatorValues | None, decision: Decision
             "method": BOOTSTRAP_METHOD,
             "python_version": None if first is None else first.python_version,
         },
+        "fidelity_method": FIDELITY_METHOD,
     }
 
 
@@ -457,13 +483,10 @@ def _memory(memory: Mapping[str, Any] | None) -> dict[str, Any] | None:
 
 
 def _metrics(result: CandidateResult) -> dict[str, Any]:
-    """Every encodable `RunMetrics` field for runs 1 to 3; run 1 is the run of record (S2 §3.13; AMB-4)."""
+    """Every encodable `RunMetrics` field for runs 1 to 3, with that run's claim fidelity and per-proposition recall
+    and their high-confidence figures (S2 §5.2, §5.3; AMB-4); run 1 is the run of record (S2 §3.13)."""
     return {
-        str(run): {
-            **_fields(metrics),
-            "run_of_record": run == 1,
-            "claim_fidelity": FIDELITY_PENDING,
-        }
+        str(run): {**_fields(metrics), "run_of_record": run == 1, "fidelity": result.fidelity[run]}
         for run, metrics in sorted(result.metrics.items())
     }
 
@@ -559,7 +582,7 @@ def _reopening(
             "detail": fault.detail,
         }
 
-    # NEEDS-OWNER(AMB-136): no before/after claim; the owner judges §8 amendment eligibility
+    # AMB-136: no before/after claim; the owner judges §8 amendment eligibility
     on_scored = tuple({**fault_entry(f), "note": SCORED_FAULT_NOTE} for f in unvoided if view.marked(f.key))
     return {
         "voids": tuple(
@@ -663,7 +686,7 @@ def build_report(
         "binding_value_inputs": binding,
         "caveats": CAVEATS,
         "open_rulings": OPEN_RULINGS,
-        "pending": {"AMB-4": FIDELITY_PENDING},
+        "pending": {},
     }
     encoded = to_report_value(body)
     _refuse_paths(encoded, path_needles)

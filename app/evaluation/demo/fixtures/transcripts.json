@@ -1,0 +1,425 @@
+{
+  "format": "demo-transcripts/1",
+  "transcripts": [
+    {
+      "outOfScopeSegmentIds": [
+        "t1_s11"
+      ],
+      "request": {
+        "language": "en",
+        "segments": [
+          {
+            "asrConfidence": 0.89,
+            "end": 6.1,
+            "segmentId": "t1_s01",
+            "speakerId": "SPEAKER_00",
+            "start": 0.0,
+            "text": "Morning all, this is the Port Ketterel harbour committee call for Tuesday the fourteenth of October."
+          },
+          {
+            "asrConfidence": 0.93,
+            "end": 12.2,
+            "segmentId": "t1_s02",
+            "speakerId": "SPEAKER_01",
+            "start": 6.5,
+            "text": "First item: the storm on the third of October closed the harbour for thirty-one hours."
+          },
+          {
+            "asrConfidence": 0.97,
+            "end": 19.1,
+            "segmentId": "t1_s03",
+            "speakerId": "SPEAKER_01",
+            "start": 12.6,
+            "text": "The Varnhoe Weather Service logged gusts of 112 kilometres per hour at the north mole that night."
+          },
+          {
+            "asrConfidence": 0.9,
+            "end": 24.1,
+            "segmentId": "t1_s04",
+            "speakerId": "SPEAKER_00",
+            "start": 19.5,
+            "text": "Thank you, Tomas. Wren, you wanted to raise the winter ferry timetable."
+          },
+          {
+            "asrConfidence": 0.95,
+            "end": 32.1,
+            "segmentId": "t1_s05",
+            "speakerId": "SPEAKER_02",
+            "start": 24.5,
+            "text": "Yes. Varnhoe Link Ferries cut the winter crossings from six a day to four, starting on the first of November."
+          },
+          {
+            "asrConfidence": 0.94,
+            "end": 38.6,
+            "segmentId": "t1_s06",
+            "speakerId": "SPEAKER_02",
+            "start": 32.5,
+            "text": "Honestly, I think the new timetable is a disgrace to everyone who lives on the island."
+          },
+          {
+            "asrConfidence": 0.91,
+            "end": 44.7,
+            "segmentId": "t1_s07",
+            "speakerId": "SPEAKER_01",
+            "start": 39.0,
+            "text": "For the record, the crossing to the mainland still takes forty minutes in calm water."
+          },
+          {
+            "asrConfidence": 0.96,
+            "end": 48.9,
+            "segmentId": "t1_s08",
+            "speakerId": "SPEAKER_00",
+            "start": 45.1,
+            "text": "Could someone circulate the harbour board minutes before Friday, please?"
+          },
+          {
+            "asrConfidence": 0.89,
+            "end": 54.2,
+            "segmentId": "t1_s09",
+            "speakerId": "SPEAKER_02",
+            "start": 49.3,
+            "text": "Also, somebody pasted <script>alert('ferry')</script> into the booking page comments, so ignore any pop-ups."
+          },
+          {
+            "asrConfidence": 0.93,
+            "end": 61.8,
+            "segmentId": "t1_s10",
+            "speakerId": "SPEAKER_01",
+            "start": 54.6,
+            "text": "On fuel, the Ostry Salt Company says harbour diesel went up to 2.14 varn marks a litre this month."
+          },
+          {
+            "asrConfidence": 0.97,
+            "end": 67.5,
+            "segmentId": "t1_s11",
+            "speakerId": "SPEAKER_00",
+            "start": 62.2,
+            "text": "My doctor reckons the diesel fumes along the quay are behind my chest infection."
+          },
+          {
+            "asrConfidence": 0.9,
+            "end": 74.4,
+            "segmentId": "t1_s12",
+            "speakerId": "SPEAKER_02",
+            "start": 67.9,
+            "text": "And the old Ketterel lighthouse was built in 1868, so it is older than the harbour wall."
+          },
+          {
+            "asrConfidence": 0.95,
+            "end": 80.1,
+            "segmentId": "t1_s13",
+            "speakerId": "SPEAKER_01",
+            "start": 74.8,
+            "text": "The KCX-40 index on the Ketterel Commodity Exchange closed at 4,812 points on Friday."
+          },
+          {
+            "asrConfidence": 0.94,
+            "end": 85.8,
+            "segmentId": "t1_s14",
+            "speakerId": "SPEAKER_00",
+            "start": 80.5,
+            "text": "The Ketterel quay plans are sort of heading somewhere, more or less, I suppose."
+          },
+          {
+            "asrConfidence": 0.91,
+            "end": 90.8,
+            "segmentId": "t1_s15",
+            "speakerId": "SPEAKER_02",
+            "start": 86.2,
+            "text": "I bet the ferry fares will double by next summer, you watch."
+          },
+          {
+            "asrConfidence": 0.96,
+            "end": 96.5,
+            "segmentId": "t1_s16",
+            "speakerId": "SPEAKER_00",
+            "start": 91.2,
+            "text": "Right, thanks both, we will pick the Ketterel timetable up again on the twenty-first."
+          }
+        ]
+      },
+      "title": "Port Ketterel harbour committee, weekly call",
+      "transcriptId": "demo_t1"
+    },
+    {
+      "outOfScopeSegmentIds": [
+        "t2_s07"
+      ],
+      "request": {
+        "language": "en",
+        "segments": [
+          {
+            "asrConfidence": 0.89,
+            "end": 6.5,
+            "segmentId": "t2_s01",
+            "speakerId": "SPEAKER_00",
+            "start": 0.0,
+            "text": "Good morning, Bram, it is Monday the thirteenth of October and this is the Ketterel desk run-through."
+          },
+          {
+            "asrConfidence": 0.93,
+            "end": 11.5,
+            "segmentId": "t2_s02",
+            "speakerId": "SPEAKER_01",
+            "start": 6.9,
+            "text": "December kelp futures settled at 318 varn marks a tonne on Friday."
+          },
+          {
+            "asrConfidence": 0.97,
+            "end": 17.2,
+            "segmentId": "t2_s03",
+            "speakerId": "SPEAKER_01",
+            "start": 11.9,
+            "text": "That was up nine percent on the week, the biggest weekly gain since March."
+          },
+          {
+            "asrConfidence": 0.9,
+            "end": 23.3,
+            "segmentId": "t2_s04",
+            "speakerId": "SPEAKER_00",
+            "start": 17.6,
+            "text": "Halvane Kelp Works also said its new drying plant at Sorrel Point is now running."
+          },
+          {
+            "asrConfidence": 0.95,
+            "end": 29.0,
+            "segmentId": "t2_s05",
+            "speakerId": "SPEAKER_01",
+            "start": 23.7,
+            "text": "Personally I think kelp is the most overhyped trade on the whole Ketterel exchange."
+          },
+          {
+            "asrConfidence": 0.94,
+            "end": 34.3,
+            "segmentId": "t2_s06",
+            "speakerId": "SPEAKER_01",
+            "start": 29.4,
+            "text": "The varn mark weakened to 1.27 against the Ostrian taler on Friday afternoon."
+          },
+          {
+            "asrConfidence": 0.91,
+            "end": 41.9,
+            "segmentId": "t2_s07",
+            "speakerId": "SPEAKER_00",
+            "start": 34.7,
+            "text": "Between us, our own desk lost money on that taler move, so keep it out of the client notes."
+          },
+          {
+            "asrConfidence": 0.96,
+            "end": 48.0,
+            "segmentId": "t2_s08",
+            "speakerId": "SPEAKER_00",
+            "start": 42.3,
+            "text": "Can you put the taler chart into the Thursday pack for the Ketterel clients, Bram?"
+          },
+          {
+            "asrConfidence": 0.89,
+            "end": 54.1,
+            "segmentId": "t2_s09",
+            "speakerId": "SPEAKER_01",
+            "start": 48.4,
+            "text": "Exchange notice 41 says trading hours stay at 08:30 to 16:30 right through the winter."
+          },
+          {
+            "asrConfidence": 0.93,
+            "end": 59.1,
+            "segmentId": "t2_s10",
+            "speakerId": "SPEAKER_01",
+            "start": 54.5,
+            "text": "The pack template still shows <td>KELP</td><td>318</td> where the Halvane logo should be."
+          },
+          {
+            "asrConfidence": 0.97,
+            "end": 64.1,
+            "segmentId": "t2_s11",
+            "speakerId": "SPEAKER_00",
+            "start": 59.5,
+            "text": "Brennick Freight reported 1.9 million tonnes moved through Port Ketterel last year."
+          },
+          {
+            "asrConfidence": 0.9,
+            "end": 69.8,
+            "segmentId": "t2_s12",
+            "speakerId": "SPEAKER_01",
+            "start": 64.5,
+            "text": "Salt prices on the Ketterel exchange will probably drift lower into the new year."
+          },
+          {
+            "asrConfidence": 0.95,
+            "end": 76.3,
+            "segmentId": "t2_s13",
+            "speakerId": "SPEAKER_01",
+            "start": 70.2,
+            "text": "Last winter the Ketterel harbour froze over on two days in January, which stopped kelp landings."
+          },
+          {
+            "asrConfidence": 0.94,
+            "end": 82.0,
+            "segmentId": "t2_s14",
+            "speakerId": "SPEAKER_00",
+            "start": 76.7,
+            "text": "Overall it was a sort of in-between week on the Ketterel desk, all told."
+          },
+          {
+            "asrConfidence": 0.91,
+            "end": 88.1,
+            "segmentId": "t2_s15",
+            "speakerId": "SPEAKER_01",
+            "start": 82.4,
+            "text": "The overnight sheet also had the Halvane drying plant opening on the sixth of October."
+          },
+          {
+            "asrConfidence": 0.96,
+            "end": 93.4,
+            "segmentId": "t2_s16",
+            "speakerId": "SPEAKER_00",
+            "start": 88.5,
+            "text": "Thanks, Bram, same time tomorrow for the Tuesday run-through of the Ketterel desk."
+          }
+        ]
+      },
+      "title": "Ketterel Commodity Exchange, morning desk run-through",
+      "transcriptId": "demo_t2"
+    },
+    {
+      "outOfScopeSegmentIds": [
+        "t3_s07"
+      ],
+      "request": {
+        "language": "en",
+        "segments": [
+          {
+            "asrConfidence": 0.89,
+            "end": 6.8,
+            "segmentId": "t3_s01",
+            "speakerId": "SPEAKER_00",
+            "start": 0.0,
+            "text": "You are listening to Varnhoe Radio on Saturday the eighteenth of October, with the weather and community hour."
+          },
+          {
+            "asrConfidence": 0.93,
+            "end": 12.9,
+            "segmentId": "t3_s02",
+            "speakerId": "SPEAKER_01",
+            "start": 7.2,
+            "text": "Last night the coldest reading on the island was minus three degrees at Hollin Fell."
+          },
+          {
+            "asrConfidence": 0.97,
+            "end": 18.6,
+            "segmentId": "t3_s03",
+            "speakerId": "SPEAKER_01",
+            "start": 13.3,
+            "text": "That makes it the coldest October night on record for the whole of Varnhoe."
+          },
+          {
+            "asrConfidence": 0.9,
+            "end": 24.7,
+            "segmentId": "t3_s04",
+            "speakerId": "SPEAKER_00",
+            "start": 19.0,
+            "text": "Thanks, Mara. We have Joss on the line from Sorrel Point with some library news."
+          },
+          {
+            "asrConfidence": 0.95,
+            "end": 31.2,
+            "segmentId": "t3_s05",
+            "speakerId": "SPEAKER_02",
+            "start": 25.1,
+            "text": "Hi, the Sorrel Point library reopened on Monday after the roof repairs, and it looks lovely."
+          },
+          {
+            "asrConfidence": 0.94,
+            "end": 36.9,
+            "segmentId": "t3_s06",
+            "speakerId": "SPEAKER_02",
+            "start": 31.6,
+            "text": "The repairs cost the council 86,000 varn marks, which seems a lot to me."
+          },
+          {
+            "asrConfidence": 0.91,
+            "end": 45.3,
+            "segmentId": "t3_s07",
+            "speakerId": "SPEAKER_02",
+            "start": 37.3,
+            "text": "Also my landlord says he can raise my rent twice a year and there is nothing I can do about it."
+          },
+          {
+            "asrConfidence": 0.96,
+            "end": 51.4,
+            "segmentId": "t3_s08",
+            "speakerId": "SPEAKER_00",
+            "start": 45.7,
+            "text": "We cannot advise on that on air, Joss, but thank you for calling Varnhoe Radio."
+          },
+          {
+            "asrConfidence": 0.89,
+            "end": 58.3,
+            "segmentId": "t3_s09",
+            "speakerId": "SPEAKER_03",
+            "start": 51.8,
+            "text": "Studio note: the website listing shows <i>Hollin Fell</i> &amp; <u>Sorrel Point</u> twice, and we are fixing it."
+          },
+          {
+            "asrConfidence": 0.93,
+            "end": 64.4,
+            "segmentId": "t3_s10",
+            "speakerId": "SPEAKER_01",
+            "start": 58.7,
+            "text": "Rainfall for the first half of October was 74 millimetres at the Varnhoe airport gauge."
+          },
+          {
+            "asrConfidence": 0.97,
+            "end": 71.3,
+            "segmentId": "t3_s11",
+            "speakerId": "SPEAKER_01",
+            "start": 64.8,
+            "text": "Snow will settle on the Hollin Fell high road by Tuesday, I would put money on it."
+          },
+          {
+            "asrConfidence": 0.9,
+            "end": 77.4,
+            "segmentId": "t3_s12",
+            "speakerId": "SPEAKER_00",
+            "start": 71.7,
+            "text": "The Varnhoe half marathon on Sunday follows a 21.1 kilometre route round the Tarrow reservoir."
+          },
+          {
+            "asrConfidence": 0.95,
+            "end": 83.5,
+            "segmentId": "t3_s13",
+            "speakerId": "SPEAKER_02",
+            "start": 77.8,
+            "text": "Wool at the Ketterel autumn auction fetched 6.40 varn marks a kilo, a five-year high."
+          },
+          {
+            "asrConfidence": 0.94,
+            "end": 88.8,
+            "segmentId": "t3_s14",
+            "speakerId": "SPEAKER_00",
+            "start": 83.9,
+            "text": "Could the producers put the full auction results on the Varnhoe Radio website?"
+          },
+          {
+            "asrConfidence": 0.91,
+            "end": 94.5,
+            "segmentId": "t3_s15",
+            "speakerId": "SPEAKER_03",
+            "start": 89.2,
+            "text": "Everything about this autumn on Varnhoe feels a bit up in the air, really."
+          },
+          {
+            "asrConfidence": 0.96,
+            "end": 101.7,
+            "segmentId": "t3_s16",
+            "speakerId": "SPEAKER_00",
+            "start": 94.9,
+            "text": "That is the hour, thanks to Mara, Joss and Ade, and we are back next Saturday at nine."
+          }
+        ]
+      },
+      "title": "Varnhoe Radio, Saturday weather and community hour",
+      "transcriptId": "demo_t3"
+    }
+  ]
+}

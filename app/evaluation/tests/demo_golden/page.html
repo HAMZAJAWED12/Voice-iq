@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoiceIQ demo: claims to cited verdicts (no bake-off, no pin)</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;font-size:15px;line-height:1.45;color:#1d232a;background:#f5f6f8}
+.banner{position:sticky;top:0;background:#8a1c1c;color:#fff;padding:10px 24px}
+.label{margin-left:10px;padding:1px 8px;border:1px solid #fff;border-radius:4px}
+header,main,footer{max-width:1080px;margin:0 auto;padding:8px 24px}
+section{background:#fff;border:1px solid #dde1e6;border-radius:6px;padding:4px 18px 14px;margin:18px 0}
+table{border-collapse:collapse;width:100%;margin:6px 0;background:#fff}
+th,td{border:1px solid #dde1e6;padding:4px 8px;text-align:left;vertical-align:top}
+th{background:#eef0f3;font-weight:600}
+code{font-family:ui-monospace,monospace;font-size:13px;word-break:break-all}
+.note{background:#fff7e0;border-left:4px solid #d9a400;padding:8px 12px}
+.claim{border-left:4px solid #9aa4af;padding:2px 12px;margin:12px 0}
+.badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:13px;font-weight:600}
+.v-supported{background:#d6f0dc;color:#14532d}
+.v-contradicted{background:#fadad7;color:#7f1d1d}
+.v-partially_supported{background:#fdecc8;color:#7a4a00}
+.v-insufficient_evidence{background:#e3e7ec;color:#334155}
+.s-no_verdict{background:#ececec;color:#444;border:1px dashed #888}
+.s-leaked{background:#ffe2c2;color:#7a3300}
+.s-no_evidence_fixture{background:#eef2ff;color:#3730a3}
+.scope{font-size:12px;color:#7a3300;border:1px solid #e0a070;border-radius:4px;padding:0 4px}
+.source{white-space:pre-wrap;background:#f8fafc;border:1px solid #e2e8f0;padding:6px 8px;margin:4px 0}
+</style>
+</head>
+<body>
+<div class="banner"><strong>Synthetic data. Fictional sources. Verdict quality not measured. No D6 standing. Not advice.</strong><span class="label">no bake-off, no pin; scripted render: no model ran (MockTransport)</span></div>
+<header>
+<h1>Claims to cited verdicts</h1>
+<table class="run">
+<tr><th>Run</th><td><code>scripted render: no model ran (MockTransport)</code></td></tr>
+<tr><th>Model</th><td><code>Qwen/Qwen3-4B</code></td></tr>
+<tr><th>Pin</th><td><code>not pinned</code></td></tr>
+<tr><th>Source revision</th><td><code>none: scripted render, no model ran (no source revision)</code></td></tr>
+<tr><th>GGUF SHA-256</th><td><code>none: scripted render, no model ran (no model file)</code></td></tr>
+<tr><th>Prompt-and-retry hash</th><td><code>be3d211b7ae55e64c55dc2eb96cdd042c23fbba876a5c7e6c2a016430adf942c</code></td></tr>
+<tr><th>Fixture SHA-256</th><td><code>bundles.json d8f72d1e6585964e82e661ed211acac07bf227e3dec8220cb36f0e1f99217a1b; transcripts.json 40d7670b974a9e9fa7b47f447e169cded3d169f6872c9fd538d58e6fcc922f1a</code></td></tr>
+<tr><th>llama.cpp build</th><td><code>none: scripted render, no model ran (no server build)</code></td></tr>
+<tr><th>Launch line</th><td><code>none: scripted render, no model ran (nothing launched)</code></td></tr>
+<tr><th>Date</th><td><code>2026-11-27T12:00:00Z</code></td></tr>
+</table>
+<p class="note">A call that failed, or whose output stayed invalid after its one repair, shows no verdict and its fault kind. That is not the v2 contract&#x27;s INSUFFICIENT_EVIDENCE fallback (PHASE-0 section 2.2, invariant 4): the demo shows the failure as it happened.</p>
+</header>
+<main>
+<section id="demo_t1">
+<h2>Port Ketterel harbour committee, weekly call <small>demo_t1</small></h2>
+<h3>Segments</h3>
+<table class="segments">
+<tr><th>Segment</th><th>Speaker</th><th>Time (s)</th><th>Text</th></tr>
+<tr id="demo_t1-t1_s01"><td>t1_s01</td><td>SPEAKER_00</td><td>0.0-6.1</td><td>Morning all, this is the Port Ketterel harbour committee call for Tuesday the fourteenth of October.</td></tr>
+<tr id="demo_t1-t1_s02"><td>t1_s02</td><td>SPEAKER_01</td><td>6.5-12.2</td><td>First item: the storm on the third of October closed the harbour for thirty-one hours.</td></tr>
+<tr id="demo_t1-t1_s03"><td>t1_s03</td><td>SPEAKER_01</td><td>12.6-19.1</td><td>The Varnhoe Weather Service logged gusts of 112 kilometres per hour at the north mole that night.</td></tr>
+<tr id="demo_t1-t1_s04"><td>t1_s04</td><td>SPEAKER_00</td><td>19.5-24.1</td><td>Thank you, Tomas. Wren, you wanted to raise the winter ferry timetable.</td></tr>
+<tr id="demo_t1-t1_s05"><td>t1_s05</td><td>SPEAKER_02</td><td>24.5-32.1</td><td>Yes. Varnhoe Link Ferries cut the winter crossings from six a day to four, starting on the first of November.</td></tr>
+<tr id="demo_t1-t1_s06"><td>t1_s06</td><td>SPEAKER_02</td><td>32.5-38.6</td><td>Honestly, I think the new timetable is a disgrace to everyone who lives on the island.</td></tr>
+<tr id="demo_t1-t1_s07"><td>t1_s07</td><td>SPEAKER_01</td><td>39.0-44.7</td><td>For the record, the crossing to the mainland still takes forty minutes in calm water.</td></tr>
+<tr id="demo_t1-t1_s08"><td>t1_s08</td><td>SPEAKER_00</td><td>45.1-48.9</td><td>Could someone circulate the harbour board minutes before Friday, please?</td></tr>
+<tr id="demo_t1-t1_s09"><td>t1_s09</td><td>SPEAKER_02</td><td>49.3-54.2</td><td>Also, somebody pasted &lt;script&gt;alert(&#x27;ferry&#x27;)&lt;/script&gt; into the booking page comments, so ignore any pop-ups.</td></tr>
+<tr id="demo_t1-t1_s10"><td>t1_s10</td><td>SPEAKER_01</td><td>54.6-61.8</td><td>On fuel, the Ostry Salt Company says harbour diesel went up to 2.14 varn marks a litre this month.</td></tr>
+<tr id="demo_t1-t1_s11"><td>t1_s11</td><td>SPEAKER_00</td><td>62.2-67.5</td><td>My doctor reckons the diesel fumes along the quay are behind my chest infection. <span class="scope">out of scope</span></td></tr>
+<tr id="demo_t1-t1_s12"><td>t1_s12</td><td>SPEAKER_02</td><td>67.9-74.4</td><td>And the old Ketterel lighthouse was built in 1868, so it is older than the harbour wall.</td></tr>
+<tr id="demo_t1-t1_s13"><td>t1_s13</td><td>SPEAKER_01</td><td>74.8-80.1</td><td>The KCX-40 index on the Ketterel Commodity Exchange closed at 4,812 points on Friday.</td></tr>
+<tr id="demo_t1-t1_s14"><td>t1_s14</td><td>SPEAKER_00</td><td>80.5-85.8</td><td>The Ketterel quay plans are sort of heading somewhere, more or less, I suppose.</td></tr>
+<tr id="demo_t1-t1_s15"><td>t1_s15</td><td>SPEAKER_02</td><td>86.2-90.8</td><td>I bet the ferry fares will double by next summer, you watch.</td></tr>
+<tr id="demo_t1-t1_s16"><td>t1_s16</td><td>SPEAKER_00</td><td>91.2-96.5</td><td>Right, thanks both, we will pick the Ketterel timetable up again on the twenty-first.</td></tr>
+</table>
+<h3>Claims</h3>
+<div class="claim" id="demo_t1.c01">
+<p><span class="badge v-contradicted">CONTRADICTED</span> The 3 October storm closed Port Ketterel harbour for thirty-one hours.</p>
+<p>Segments: <a href="#demo_t1-t1_s02">t1_s02</a>; bundle t1_b1</p>
+<p>Reason: The Harbour Board notice gives a closure of 26 hours, not 31.</p>
+<p>Cited sources:</p>
+<ul>
+<li><strong>src_1</strong> Ketterel Harbour Board, incident notice 2031-19
+<div class="source">[Synthetic, fictional source. Not advice.] Ketterel Harbour Board incident notice 2031-19, issued on 5 October 2031. The harbour was closed to all vessel movements from 21:00 on 3 October until 23:00 on 4 October 2031, a closure of 26 hours, after a storm passed over the Isle of Varnhoe. The closure was ordered by the harbour master under the board&#x27;s heavy-weather rule. No vessels were damaged inside the harbour. Two pontoons on the east quay lost their fenders and were repaired on 6 October. The ferry service to the mainland was suspended for the same 26 hours and resumed with the 23:15 sailing on 4 October. The board thanks the pilots and the lifeboat crew for their work during the storm.</div></li>
+</ul>
+<p>Not cited: src_2 (Varnhoe Weather Service, north mole station log, 3 to 4 October 2031); src_3 (Varnhoe Courier, &#x27;Storm shuts Port Ketterel&#x27;, 4 October 2031)</p>
+</div>
+<div class="claim" id="demo_t1.c02">
+<p><span class="badge v-supported">SUPPORTED</span> The Varnhoe Weather Service logged gusts of 112 km/h at the north mole that night.</p>
+<p>Segments: <a href="#demo_t1-t1_s03">t1_s03</a>; bundle t1_b1</p>
+<p>Reason: The station log records a 112 km/h gust at the north mole.</p>
+<p>Cited sources:</p>
+<ul>
+<li><strong>src_2</strong> Varnhoe Weather Service, north mole station log, 3 to 4 October 2031
+<div class="source">[Synthetic, fictional source. Not advice.] Varnhoe Weather Service automatic station log for the north mole at Port Ketterel, covering the night of 3 to 4 October 2031. Mean wind speeds rose from 38 kilometres per hour at 18:00 to 71 kilometres per hour at 23:00. The highest gust of the night, 112 kilometres per hour, was recorded at 23:40 on 3 October. Gusts stayed above 90 kilometres per hour until 03:20 on 4 October. Pressure fell to 968 hectopascals at 00:10. Rainfall for the night totalled 31 millimetres. The station was checked by a technician on 6 October and found to be working normally.</div></li>
+<li><strong>src_3</strong> Varnhoe Courier, &#x27;Storm shuts Port Ketterel&#x27;, 4 October 2031
+<div class="source">[Synthetic, fictional source. Not advice.] Varnhoe Courier news report, published on the evening of 4 October 2031. A storm shut Port Ketterel for just over a day, the harbour board said, with gusts of more than 100 kilometres per hour battering the north mole overnight. Residents on the seafront reported loose roof tiles and a fallen fence on Mole Street. The Link ferries stayed in port until late on Saturday evening. A spokesperson for the harbour board said the closure was a precaution and that the harbour would reopen as soon as the swell dropped. The Courier will publish photographs sent in by readers in next week&#x27;s edition.</div></li>
+</ul>
+<p>Not cited: src_1 (Ketterel Harbour Board, incident notice 2031-19)</p>
+</div>
+<div class="claim" id="demo_t1.c03">
+<p><span class="badge v-partially_supported">PARTIALLY_SUPPORTED</span> Varnhoe Link Ferries cut winter crossings from six a day to four from 1 November.</p>
+<p>Segments: <a href="#demo_t1-t1_s05">t1_s05</a>; bundle t1_b2</p>
+<p>Reason: The cut starts on 1 November, but to five crossings a day.</p>
+<p>Cited sources:</p>
+<ul>
+<li><strong>src_1</strong> Varnhoe Link Ferries, winter timetable notice, 2031 to 2032
+<div class="source">[Synthetic, fictional source. Not advice.] Varnhoe Link Ferries winter timetable notice, published on 20 September 2031. From 1 November 2031 until 31 March 2032 the company will run five return crossings a day between Port Ketterel and the mainland, down from six in the summer timetable. The first sailing will leave Port Ketterel at 06:40 and the last will return at 19:10. The 13:00 sailing is withdrawn for the winter because of low passenger numbers. Fares are unchanged. Season ticket holders will receive a credit of one month on renewal. The company will review the winter timetable with the harbour committee in February 2032.</div></li>
+</ul>
+<p>Not cited: src_2 (Varnhoe Link Ferries, MV Ketterel Star fact sheet)</p>
+</div>
+<div class="claim" id="demo_t1.c04">
+<p><span class="badge s-leaked">leaked, no verdict</span> Diesel fumes along the quay cause chest infections.</p>
+<p>Segments: <a href="#demo_t1-t1_s11">t1_s11</a></p>
+<p>Nothing was sent: the claim sits on an out-of-scope segment.</p>
+</div>
+<div class="claim" id="demo_t1.c05">
+<p><span class="badge s-no_evidence_fixture">no evidence fixture</span> The old Ketterel lighthouse was built in 1868.</p>
+<p>Segments: <a href="#demo_t1-t1_s12">t1_s12</a></p>
+<p>Nothing was sent: no bundle anchors these segments.</p>
+</div>
+<div class="claim" id="demo_t1.c06">
+<p><span class="badge v-contradicted">CONTRADICTED</span> The KCX-40 index closed at 4,812 points on Friday.</p>
+<p>Segments: <a href="#demo_t1-t1_s13">t1_s13</a>; bundle t1_b3</p>
+<p>Reason: The weekly bulletin gives a Friday close of 4,790.5 points.</p>
+<p>Cited sources:</p>
+<ul>
+<li><strong>src_1</strong> Ketterel Commodity Exchange, weekly bulletin, 10 October 2031
+<div class="source">[Synthetic, fictional source. Not advice.] Ketterel Commodity Exchange weekly bulletin for the week ending Friday 10 October 2031. The KCX-40 index closed the week at 4,790.5 points, down 0.8 percent on the previous Friday. Kelp contracts led the gains, while salt and wool contracts fell. Trading volume was 12 percent above the four-week average. Harbour diesel for prompt delivery was quoted at 2.09 varn marks a litre at the Friday close, compared with 2.02 a week earlier. The exchange reminds members that the winter trading hours will be announced in a separate notice, and that the bulletin is a summary for members only.</div></li>
+</ul>
+<p>Not cited: src_2 (Ostry Salt Company, customer notice on harbour diesel)</p>
+</div>
+<h3>Not checkable</h3>
+<ul>
+<li><strong>opinion</strong> on <a href="#demo_t1-t1_s06">t1_s06</a></li>
+<li><strong>request</strong> on <a href="#demo_t1-t1_s08">t1_s08</a></li>
+<li><strong>vague</strong> on <a href="#demo_t1-t1_s14">t1_s14</a></li>
+<li><strong>prediction</strong> on <a href="#demo_t1-t1_s15">t1_s15</a>: I bet the ferry fares will double by next summer.</li>
+</ul>
+</section>
+<section id="demo_t2">
+<h2>Ketterel Commodity Exchange, morning desk run-through <small>demo_t2</small></h2>
+<h3>Segments</h3>
+<table class="segments">
+<tr><th>Segment</th><th>Speaker</th><th>Time (s)</th><th>Text</th></tr>
+<tr id="demo_t2-t2_s01"><td>t2_s01</td><td>SPEAKER_00</td><td>0.0-6.5</td><td>Good morning, Bram, it is Monday the thirteenth of October and this is the Ketterel desk run-through.</td></tr>
+<tr id="demo_t2-t2_s02"><td>t2_s02</td><td>SPEAKER_01</td><td>6.9-11.5</td><td>December kelp futures settled at 318 varn marks a tonne on Friday.</td></tr>
+<tr id="demo_t2-t2_s03"><td>t2_s03</td><td>SPEAKER_01</td><td>11.9-17.2</td><td>That was up nine percent on the week, the biggest weekly gain since March.</td></tr>
+<tr id="demo_t2-t2_s04"><td>t2_s04</td><td>SPEAKER_00</td><td>17.6-23.3</td><td>Halvane Kelp Works also said its new drying plant at Sorrel Point is now running.</td></tr>
+<tr id="demo_t2-t2_s05"><td>t2_s05</td><td>SPEAKER_01</td><td>23.7-29.0</td><td>Personally I think kelp is the most overhyped trade on the whole Ketterel exchange.</td></tr>
+<tr id="demo_t2-t2_s06"><td>t2_s06</td><td>SPEAKER_01</td><td>29.4-34.3</td><td>The varn mark weakened to 1.27 against the Ostrian taler on Friday afternoon.</td></tr>
+<tr id="demo_t2-t2_s07"><td>t2_s07</td><td>SPEAKER_00</td><td>34.7-41.9</td><td>Between us, our own desk lost money on that taler move, so keep it out of the client notes. <span class="scope">out of scope</span></td></tr>
+<tr id="demo_t2-t2_s08"><td>t2_s08</td><td>SPEAKER_00</td><td>42.3-48.0</td><td>Can you put the taler chart into the Thursday pack for the Ketterel clients, Bram?</td></tr>
+<tr id="demo_t2-t2_s09"><td>t2_s09</td><td>SPEAKER_01</td><td>48.4-54.1</td><td>Exchange notice 41 says trading hours stay at 08:30 to 16:30 right through the winter.</td></tr>
+<tr id="demo_t2-t2_s10"><td>t2_s10</td><td>SPEAKER_01</td><td>54.5-59.1</td><td>The pack template still shows &lt;td&gt;KELP&lt;/td&gt;&lt;td&gt;318&lt;/td&gt; where the Halvane logo should be.</td></tr>
+<tr id="demo_t2-t2_s11"><td>t2_s11</td><td>SPEAKER_00</td><td>59.5-64.1</td><td>Brennick Freight reported 1.9 million tonnes moved through Port Ketterel last year.</td></tr>
+<tr id="demo_t2-t2_s12"><td>t2_s12</td><td>SPEAKER_01</td><td>64.5-69.8</td><td>Salt prices on the Ketterel exchange will probably drift lower into the new year.</td></tr>
+<tr id="demo_t2-t2_s13"><td>t2_s13</td><td>SPEAKER_01</td><td>70.2-76.3</td><td>Last winter the Ketterel harbour froze over on two days in January, which stopped kelp landings.</td></tr>
+<tr id="demo_t2-t2_s14"><td>t2_s14</td><td>SPEAKER_00</td><td>76.7-82.0</td><td>Overall it was a sort of in-between week on the Ketterel desk, all told.</td></tr>
+<tr id="demo_t2-t2_s15"><td>t2_s15</td><td>SPEAKER_01</td><td>82.4-88.1</td><td>The overnight sheet also had the Halvane drying plant opening on the sixth of October.</td></tr>
+<tr id="demo_t2-t2_s16"><td>t2_s16</td><td>SPEAKER_00</td><td>88.5-93.4</td><td>Thanks, Bram, same time tomorrow for the Tuesday run-through of the Ketterel desk.</td></tr>
+</table>
+<h3>Claims</h3>
+<div class="claim" id="demo_t2.c01">
+<p><span class="badge v-supported">SUPPORTED</span> December kelp futures settled at 318 varn marks a tonne on Friday.</p>
+<p>Segments: <a href="#demo_t2-t2_s02">t2_s02</a>; bundle t2_b1</p>
+<p>Reason: The daily settlement report gives 318 varn marks a tonne.</p>
+<p>Cited sources:</p>
+<ul>
+<li><strong>src_1</strong> Ketterel Commodity Exchange, daily settlement report, 10 October 2031
+<div class="source">[Synthetic, fictional source. Not advice.] Ketterel Commodity Exchange daily settlement report for Friday 10 October 2031. December kelp futures settled at 318 varn marks a tonne, up 6 varn marks on the day. March kelp settled at 322 varn marks and June kelp at 309 varn marks. Open interest in the December contract rose to 4,410 lots. Salt futures for December settled at 57.5 varn marks a tonne. Wool futures for December settled at 6.15 varn marks a kilo. Settlement prices are set by the exchange from trades in the final ten minutes of the session, and the report is published within an hour of the close.</div></li>
+</ul>
+<p>Not cited: src_2 (Ketterel Commodity Exchange, weekly market wrap, 10 October 2031); src_3 (Ketterel Harbour Board, winter log 2030 to 2031)</p>
+</div>
+<div class="claim" id="demo_t2.c02">
+<p><span class="badge v-partially_supported">PARTIALLY_SUPPORTED</span> Kelp rose nine percent on the week, its biggest weekly gain since March.</p>
+<p>Segments: <a href="#demo_t2-t2_s03">t2_s03</a>; bundle t2_b1</p>
+<p>Reason: Up 9.0 percent, but the biggest gain since January.</p>
+<p>Cited sources:</p>
+<ul>
+<li><strong>src_2</strong> Ketterel Commodity Exchange, weekly market wrap, 10 October 2031
+<div class="source">[Synthetic, fictional source. Not advice.] Ketterel Commodity Exchange weekly market wrap, published after the close on Friday 10 October 2031. December kelp rose 9.0 percent over the week, its biggest weekly gain since January 2031, as buyers returned after the storm closed the harbour and held up landings. Salt fell 2.1 percent on the week and wool was unchanged. The varn mark ended the week weaker against the Ostrian taler. Analysts at the exchange said kelp prices could stay volatile until landings return to normal. The wrap is a summary for members and is not a trading recommendation.</div></li>
+</ul>
+<p>Not cited: src_1 (Ketterel Commodity Exchange, daily settlement report, 10 October 2031); src_3 (Ketterel Harbour Board, winter log 2030 to 2031)</p>
+</div>
+<div class="claim" id="demo_t2.c03">
+<p><span class="badge v-contradicted">CONTRADICTED</span> The varn mark weakened to 1.27 against the Ostrian taler on Friday afternoon.</p>
+<p>Segments: <a href="#demo_t2-t2_s06">t2_s06</a>; bundle t2_b3</p>
+<p>Reason: The afternoon fixing gives 1.24 talers per varn mark.</p>
+<p>Cited sources:</p>
+<ul>
+<li><strong>src_1</strong> Ketterel Commodity Exchange, currency fixing table, 10 October 2031
+<div class="source">[Synthetic, fictional source. Not advice.] Ketterel Commodity Exchange currency fixing table for Friday 10 October 2031, taken at 16:00. One varn mark bought 1.24 Ostrian talers at the afternoon fixing, against 1.29 at the morning fixing and 1.31 at the previous Friday&#x27;s afternoon fixing. The exchange uses the fixings to value margin held in talers. The varn mark against the Brisk crown was fixed at 3.05 in the afternoon. Fixings are calculated from bank quotes collected in the five minutes before the fixing time, and they are published within ten minutes of it.</div></li>
+</ul>
+<p>Not cited: src_2 (Varnhoe Courier, business column, 11 October 2031)</p>
+</div>
+<div class="claim" id="demo_t2.c04">
+<p><span class="badge v-insufficient_evidence">INSUFFICIENT_EVIDENCE</span> Exchange notice 41 keeps trading hours at 08:30 to 16:30 through the winter.</p>
+<p>Segments: <a href="#demo_t2-t2_s09">t2_s09</a>; bundle t2_b2</p>
+<p>Reason: Notice 41 keeps the hours only until a review ends.</p>
+<p>Cited sources: none.</p>
+<p>Not cited: src_1 (Halvane Kelp Works, press note, 7 October 2031); src_2 (Ketterel Commodity Exchange, notice 41 on trading hours)</p>
+</div>
+<div class="claim" id="demo_t2.c05">
+<p><span class="badge s-no_evidence_fixture">no evidence fixture</span> Brennick Freight moved 1.9 million tonnes through Port Ketterel last year.</p>
+<p>Segments: <a href="#demo_t2-t2_s11">t2_s11</a></p>
+<p>Nothing was sent: no bundle anchors these segments.</p>
+</div>
+<h3>Not checkable</h3>
+<ul>
+<li><strong>opinion</strong> on <a href="#demo_t2-t2_s05">t2_s05</a></li>
+<li><strong>outOfScope</strong> on <a href="#demo_t2-t2_s07">t2_s07</a></li>
+<li><strong>request</strong> on <a href="#demo_t2-t2_s08">t2_s08</a></li>
+<li><strong>prediction</strong> on <a href="#demo_t2-t2_s12">t2_s12</a></li>
+<li><strong>vague</strong> on <a href="#demo_t2-t2_s14">t2_s14</a></li>
+</ul>
+</section>
+<section id="demo_t3">
+<h2>Varnhoe Radio, Saturday weather and community hour <small>demo_t3</small></h2>
+<h3>Segments</h3>
+<table class="segments">
+<tr><th>Segment</th><th>Speaker</th><th>Time (s)</th><th>Text</th></tr>
+<tr id="demo_t3-t3_s01"><td>t3_s01</td><td>SPEAKER_00</td><td>0.0-6.8</td><td>You are listening to Varnhoe Radio on Saturday the eighteenth of October, with the weather and community hour.</td></tr>
+<tr id="demo_t3-t3_s02"><td>t3_s02</td><td>SPEAKER_01</td><td>7.2-12.9</td><td>Last night the coldest reading on the island was minus three degrees at Hollin Fell.</td></tr>
+<tr id="demo_t3-t3_s03"><td>t3_s03</td><td>SPEAKER_01</td><td>13.3-18.6</td><td>That makes it the coldest October night on record for the whole of Varnhoe.</td></tr>
+<tr id="demo_t3-t3_s04"><td>t3_s04</td><td>SPEAKER_00</td><td>19.0-24.7</td><td>Thanks, Mara. We have Joss on the line from Sorrel Point with some library news.</td></tr>
+<tr id="demo_t3-t3_s05"><td>t3_s05</td><td>SPEAKER_02</td><td>25.1-31.2</td><td>Hi, the Sorrel Point library reopened on Monday after the roof repairs, and it looks lovely.</td></tr>
+<tr id="demo_t3-t3_s06"><td>t3_s06</td><td>SPEAKER_02</td><td>31.6-36.9</td><td>The repairs cost the council 86,000 varn marks, which seems a lot to me.</td></tr>
+<tr id="demo_t3-t3_s07"><td>t3_s07</td><td>SPEAKER_02</td><td>37.3-45.3</td><td>Also my landlord says he can raise my rent twice a year and there is nothing I can do about it. <span class="scope">out of scope</span></td></tr>
+<tr id="demo_t3-t3_s08"><td>t3_s08</td><td>SPEAKER_00</td><td>45.7-51.4</td><td>We cannot advise on that on air, Joss, but thank you for calling Varnhoe Radio.</td></tr>
+<tr id="demo_t3-t3_s09"><td>t3_s09</td><td>SPEAKER_03</td><td>51.8-58.3</td><td>Studio note: the website listing shows &lt;i&gt;Hollin Fell&lt;/i&gt; &amp;amp; &lt;u&gt;Sorrel Point&lt;/u&gt; twice, and we are fixing it.</td></tr>
+<tr id="demo_t3-t3_s10"><td>t3_s10</td><td>SPEAKER_01</td><td>58.7-64.4</td><td>Rainfall for the first half of October was 74 millimetres at the Varnhoe airport gauge.</td></tr>
+<tr id="demo_t3-t3_s11"><td>t3_s11</td><td>SPEAKER_01</td><td>64.8-71.3</td><td>Snow will settle on the Hollin Fell high road by Tuesday, I would put money on it.</td></tr>
+<tr id="demo_t3-t3_s12"><td>t3_s12</td><td>SPEAKER_00</td><td>71.7-77.4</td><td>The Varnhoe half marathon on Sunday follows a 21.1 kilometre route round the Tarrow reservoir.</td></tr>
+<tr id="demo_t3-t3_s13"><td>t3_s13</td><td>SPEAKER_02</td><td>77.8-83.5</td><td>Wool at the Ketterel autumn auction fetched 6.40 varn marks a kilo, a five-year high.</td></tr>
+<tr id="demo_t3-t3_s14"><td>t3_s14</td><td>SPEAKER_00</td><td>83.9-88.8</td><td>Could the producers put the full auction results on the Varnhoe Radio website?</td></tr>
+<tr id="demo_t3-t3_s15"><td>t3_s15</td><td>SPEAKER_03</td><td>89.2-94.5</td><td>Everything about this autumn on Varnhoe feels a bit up in the air, really.</td></tr>
+<tr id="demo_t3-t3_s16"><td>t3_s16</td><td>SPEAKER_00</td><td>94.9-101.7</td><td>That is the hour, thanks to Mara, Joss and Ade, and we are back next Saturday at nine.</td></tr>
+</table>
+<h3>Claims</h3>
+<div class="claim" id="demo_t3.c01">
+<p><span class="badge v-supported">SUPPORTED</span> The coldest reading on Varnhoe last night was minus three degrees at Hollin Fell.</p>
+<p>Segments: <a href="#demo_t3-t3_s02">t3_s02</a>; bundle t3_b1</p>
+<p>Reason: The overnight table gives minus 3.0 degrees at Hollin Fell.</p>
+<p>Cited sources:</p>
+<ul>
+<li><strong>src_1</strong> Varnhoe Weather Service, overnight minimum temperatures, 17 to 18 October 2031
+<div class="source">[Synthetic, fictional source. Not advice.] Varnhoe Weather Service table of overnight minimum temperatures for the night of 17 to 18 October 2031. Hollin Fell recorded minus 3.0 degrees, the lowest reading on the island. The airport recorded minus 0.5 degrees, Port Ketterel plus 1.5 degrees and Sorrel Point plus 2.0 degrees. Frost formed on the high road above Hollin Fell, and the road was gritted at 05:00. Skies were clear for most of the night, with light winds from the north. The next table will be published on the morning of 19 October, after the readings have been checked.</div></li>
+</ul>
+<p>Not cited: src_2 (Varnhoe Weather Service, climate records for October); src_3 (Varnhoe Weather Service, mid-month rainfall note, 13 October 2031)</p>
+</div>
+<div class="claim" id="demo_t3.c02">
+<p><span class="badge s-no_verdict">no verdict (call failed: cut_off)</span> Last night was the coldest October night on record for Varnhoe.</p>
+<p>Segments: <a href="#demo_t3-t3_s03">t3_s03</a>; bundle t3_b1</p>
+<p>Not cited: src_1 (Varnhoe Weather Service, overnight minimum temperatures, 17 to 18 October 2031); src_2 (Varnhoe Weather Service, climate records for October); src_3 (Varnhoe Weather Service, mid-month rainfall note, 13 October 2031)</p>
+</div>
+<div class="claim" id="demo_t3.c03">
+<p><span class="badge s-no_verdict">no verdict (call failed: invalid_output)</span> The Sorrel Point library reopened on Monday after roof repairs.</p>
+<p>Segments: <a href="#demo_t3-t3_s05">t3_s05</a>; bundle t3_b2</p>
+<p>Not cited: src_1 (Varnhoe Council, press notice on Sorrel Point library); src_2 (Varnhoe Courier, &#x27;Library back in business&#x27;, 16 October 2031)</p>
+</div>
+<div class="claim" id="demo_t3.c04">
+<p><span class="badge v-partially_supported">PARTIALLY_SUPPORTED</span> Wool at the Ketterel autumn auction fetched 6.40 varn marks a kilo, a five-year high.</p>
+<p>Segments: <a href="#demo_t3-t3_s13">t3_s13</a>; bundle t3_b3</p>
+<p>Reason: 6.40 a kilo is right; it is the highest since 2029.</p>
+<p>Cited sources:</p>
+<ul>
+<li><strong>src_1</strong> Ketterel autumn wool auction, results summary, 16 October 2031
+<div class="source">[Synthetic, fictional source. Not advice.] Results summary of the Ketterel autumn wool auction, held on 16 October 2031. The average price for fleece wool was 6.40 varn marks a kilo, up from 5.95 at the spring auction. This was the highest average price since the autumn auction of 2029, when wool fetched 6.55 varn marks a kilo. A total of 38 tonnes of wool was sold by 64 farms. Buyers from the mainland took about two thirds of the lots. The next auction will be held in April 2032 at the same market hall in Port Ketterel.</div></li>
+</ul>
+<p>Not cited: src_2 (Varnhoe Farmers&#x27; Newsletter, October 2031)</p>
+</div>
+<div class="claim" id="demo_t3.c05">
+<p><span class="badge v-insufficient_evidence">INSUFFICIENT_EVIDENCE</span> Rainfall for the first half of October was 74 mm at the Varnhoe airport gauge.</p>
+<p>Segments: <a href="#demo_t3-t3_s10">t3_s10</a>; bundle t3_b1</p>
+<p>Reason: The note covers 1 to 12 October only.</p>
+<p>Cited sources:</p>
+<ul>
+<li><strong>src_3</strong> Varnhoe Weather Service, mid-month rainfall note, 13 October 2031
+<div class="source">[Synthetic, fictional source. Not advice.] Varnhoe Weather Service rainfall note, issued on 13 October 2031. Rainfall at the airport gauge from 1 to 12 October 2031 totalled 61 millimetres, which is close to the long-term average for that part of the month. The wettest day was 3 October, the day of the storm, with 29 millimetres. Figures for the full first half of the month will be issued with the monthly summary. Readings from the Hollin Fell and Port Ketterel gauges are still being checked and are not included in this note.</div></li>
+</ul>
+<p>Not cited: src_1 (Varnhoe Weather Service, overnight minimum temperatures, 17 to 18 October 2031); src_2 (Varnhoe Weather Service, climate records for October)</p>
+</div>
+<h3>Not checkable</h3>
+<ul>
+<li><strong>outOfScope</strong> on <a href="#demo_t3-t3_s07">t3_s07</a></li>
+<li><strong>prediction</strong> on <a href="#demo_t3-t3_s11">t3_s11</a></li>
+<li><strong>request</strong> on <a href="#demo_t3-t3_s14">t3_s14</a></li>
+<li><strong>vague</strong> on <a href="#demo_t3-t3_s15">t3_s15</a></li>
+</ul>
+</section>
+</main>
+<footer>
+<h2>Calls</h2>
+<p>Time is the client&#x27;s wall time for the call, both attempts added (S2 section 3.8).</p>
+<table class="calls">
+<tr><th>Call</th><th>Kind</th><th>Outcome</th><th>Attempts</th><th>Repairs</th><th>Same-request retries</th><th>Attempt results</th><th>Time (ms)</th></tr>
+<tr><td>demo_t1</td><td>extraction</td><td>valid</td><td>1</td><td>0</td><td>0</td><td>valid</td><td>1840.0</td></tr>
+<tr><td>demo_t1.c01</td><td>probe</td><td>valid</td><td>1</td><td>0</td><td>0</td><td>valid</td><td>655.0</td></tr>
+<tr><td>demo_t1.c02</td><td>probe</td><td>valid</td><td>1</td><td>0</td><td>0</td><td>valid</td><td>2970.0</td></tr>
+<tr><td>demo_t1.c03</td><td>probe</td><td>valid</td><td>1</td><td>0</td><td>0</td><td>valid</td><td>1840.0</td></tr>
+<tr><td>demo_t1.c06</td><td>probe</td><td>valid</td><td>2</td><td>1</td><td>0</td><td>invalid_output, valid</td><td>2495.0</td></tr>
+<tr><td>demo_t2</td><td>extraction</td><td>valid</td><td>2</td><td>1</td><td>0</td><td>cut_off, valid</td><td>2495.0</td></tr>
+<tr><td>demo_t2.c01</td><td>probe</td><td>valid</td><td>1</td><td>0</td><td>0</td><td>valid</td><td>655.0</td></tr>
+<tr><td>demo_t2.c02</td><td>probe</td><td>valid</td><td>1</td><td>0</td><td>0</td><td>valid</td><td>2970.0</td></tr>
+<tr><td>demo_t2.c03</td><td>probe</td><td>valid</td><td>2</td><td>0</td><td>1</td><td>timeout, valid</td><td>2495.0</td></tr>
+<tr><td>demo_t2.c04</td><td>probe</td><td>valid</td><td>1</td><td>0</td><td>0</td><td>valid</td><td>2970.0</td></tr>
+<tr><td>demo_t3</td><td>extraction</td><td>valid</td><td>1</td><td>0</td><td>0</td><td>valid</td><td>1840.0</td></tr>
+<tr><td>demo_t3.c01</td><td>probe</td><td>valid</td><td>1</td><td>0</td><td>0</td><td>valid</td><td>655.0</td></tr>
+<tr><td>demo_t3.c02</td><td>probe</td><td>cut_off</td><td>2</td><td>1</td><td>0</td><td>cut_off, cut_off</td><td>3625.0</td></tr>
+<tr><td>demo_t3.c03</td><td>probe</td><td>invalid_output</td><td>2</td><td>1</td><td>0</td><td>invalid_output, invalid_output</td><td>3625.0</td></tr>
+<tr><td>demo_t3.c04</td><td>probe</td><td>valid</td><td>1</td><td>0</td><td>0</td><td>valid</td><td>2970.0</td></tr>
+<tr><td>demo_t3.c05</td><td>probe</td><td>valid</td><td>1</td><td>0</td><td>0</td><td>valid</td><td>1840.0</td></tr>
+</table>
+</footer>
+</body>
+</html>

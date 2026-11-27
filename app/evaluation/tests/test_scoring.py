@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from app.evaluation.bakeoff import scoring
 from app.evaluation.bakeoff.extraction import (
     ExtractedClaim,
     Extraction,
@@ -22,19 +23,16 @@ from app.evaluation.bakeoff.extraction import (
 )
 from app.evaluation.bakeoff.gold import OUT_OF_SCOPE_BUCKETS, GoldSet, load_gold_set
 from app.evaluation.bakeoff.scoring import (
-    FIDELITY_PENDING,
     SPELLED_NUMBER_WORDS,
     FailedConversation,
     FlaggedGroup,
     FlaggedGroupStatus,
     RunMetrics,
     SliceRecall,
-    claim_fidelity,
     gate_a,
     gate_s,
     has_digits,
     has_spelled_number,
-    per_proposition_recall,
     score_conversation,
     score_run,
 )
@@ -785,7 +783,7 @@ def test_conflicting_kinds_use_the_existential_reading(gold_x: GoldSet, gold_f: 
 
 
 def test_conflicting_rows_are_listed_whatever_their_outcome(gold_x: GoldSet) -> None:
-    # L4 pins the current reading of NEEDS-OWNER(AMB-1): a row a claim predicts CHECKABLE is listed too.
+    # L4 pins AMB-1's reading, ruled as implemented on 2026-11-21: a row a claim predicts CHECKABLE is listed too.
     m = score_run(gold_x, x_run(gold_x, [[2]], [("vague", [2]), ("opinion", [2])]))
     assert (route(m, "syn_a", 2), label(m, "syn_a", 2), m.conflicting_non_checkable_rows) == ("correct", "", ("x_01",))
     m = score_run(gold_x, x_run(gold_x, [[3]], [("vague", [3]), ("opinion", [3])]))
@@ -1172,13 +1170,10 @@ def test_claim_ids_speaker_ids_and_id_order_are_never_read(gold_f: GoldSet) -> N
 # ---------------------------------------------------------------- stubs, summary, records
 
 
-def test_fidelity_stubs_raise() -> None:
-    for stub in (claim_fidelity, per_proposition_recall):
-        with pytest.raises(NotImplementedError, match="AMB-4"):
-            stub()
-        with pytest.raises(NotImplementedError) as caught:
-            stub("claim", gold="row")
-        assert str(caught.value) == FIDELITY_PENDING
+def test_the_fidelity_stubs_are_gone_and_run_metrics_hold_no_fidelity_field() -> None:
+    # AMB-4 (ruled 2026-11-18): the metrics live in `fidelity`; scoring keeps no stub, constant or field for them.
+    for name in ("claim_fidelity", "per_proposition_recall", "FIDELITY_PENDING"):
+        assert not hasattr(scoring, name), name
     names = [field.name for field in dataclasses.fields(RunMetrics)]
     assert not [name for name in names if "fidelity" in name or "proposition" in name]
 

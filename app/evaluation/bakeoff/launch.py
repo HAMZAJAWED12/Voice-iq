@@ -711,3 +711,72 @@ def check_loopback_only(tools: LaunchTools) -> tuple[str, ...]:
     if names != ("lo",):
         raise LaunchCheckFailed("interfaces", f"found: {', '.join(names) or 'none'}")
     return names
+
+
+class LaunchedServer:
+    """One checked server around a `with` block, for callers outside the runner: the free checks, the start on the
+    frozen line in an environment built from nothing, the ready wait and every start-up check (S2 §3.2, §3.3, §11 item
+    5). The loopback and model-file checks run before any process starts. Once the process exists it is stopped on
+    every way out, `KeyboardInterrupt` included, and the client is closed first. A failed stop raises
+    `ServerStopFailed`. The runner keeps its own launch."""
+
+    client: ModelServerClient
+    props: ServerProps
+    ready_sec: float
+    startup: StartupLog
+    model_sha256: str
+
+    def __init__(
+        self,
+        conditions: RunConditions,
+        candidate: Candidate,
+        *,
+        mode: LaunchMode,
+        log_path: str,
+        tools: LaunchTools,
+        client_factory: Callable[[str, int], ModelServerClient],
+    ) -> None:
+        """`log_path` is required: the start-up checks read the server log, so a server without one could never pass
+        them. It is refused here, before anything is read or started."""
+        if not isinstance(log_path, str) or not log_path:
+            raise ValueError("LaunchedServer.log_path must be a non-empty path: the start-up checks read the log")
+        _check_mode(mode)
+        self._conditions = conditions
+        self._candidate = candidate
+        self._mode = mode
+        self._log_path = log_path
+        self._tools = tools
+        self._client_factory = client_factory
+        self._process: ServerProcess | None = None
+
+    def __enter__(self) -> LaunchedServer:
+        conditions, candidate, tools = self._conditions, self._candidate, self._tools
+        check_loopback_only(tools)
+        self.model_sha256 = check_model_file(candidate, tools)
+        process = ServerProcess(
+            frozen_argv(conditions, candidate), server_environment(conditions, self._mode), self._log_path, tools
+        )
+        client: ModelServerClient | None = None
+        try:
+            client = self._client_factory(base_url(conditions), conditions.context)
+            self.props, self.ready_sec = wait_ready(process, client, conditions, tools)
+            self.startup = verify_launch(process, self.props, conditions, candidate, self._mode, tools)
+        except BaseException:
+            try:
+                if client is not None:
+                    client.close()
+            finally:
+                process.stop()
+            raise
+        self.client = client
+        self._process = process
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        process = self._process
+        if process is None:
+            return
+        try:
+            self.client.close()
+        finally:
+            process.stop()

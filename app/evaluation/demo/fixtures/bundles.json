@@ -1,0 +1,201 @@
+{
+  "bundles": [
+    {
+      "anchors": [
+        "t1_s02",
+        "t1_s03"
+      ],
+      "bundleId": "t1_b1",
+      "sources": [
+        {
+          "sourceId": "src_1",
+          "text": "[Synthetic, fictional source. Not advice.] Ketterel Harbour Board incident notice 2031-19, issued on 5 October 2031. The harbour was closed to all vessel movements from 21:00 on 3 October until 23:00 on 4 October 2031, a closure of 26 hours, after a storm passed over the Isle of Varnhoe. The closure was ordered by the harbour master under the board's heavy-weather rule. No vessels were damaged inside the harbour. Two pontoons on the east quay lost their fenders and were repaired on 6 October. The ferry service to the mainland was suspended for the same 26 hours and resumed with the 23:15 sailing on 4 October. The board thanks the pilots and the lifeboat crew for their work during the storm.",
+          "title": "Ketterel Harbour Board, incident notice 2031-19"
+        },
+        {
+          "sourceId": "src_2",
+          "text": "[Synthetic, fictional source. Not advice.] Varnhoe Weather Service automatic station log for the north mole at Port Ketterel, covering the night of 3 to 4 October 2031. Mean wind speeds rose from 38 kilometres per hour at 18:00 to 71 kilometres per hour at 23:00. The highest gust of the night, 112 kilometres per hour, was recorded at 23:40 on 3 October. Gusts stayed above 90 kilometres per hour until 03:20 on 4 October. Pressure fell to 968 hectopascals at 00:10. Rainfall for the night totalled 31 millimetres. The station was checked by a technician on 6 October and found to be working normally.",
+          "title": "Varnhoe Weather Service, north mole station log, 3 to 4 October 2031"
+        },
+        {
+          "sourceId": "src_3",
+          "text": "[Synthetic, fictional source. Not advice.] Varnhoe Courier news report, published on the evening of 4 October 2031. A storm shut Port Ketterel for just over a day, the harbour board said, with gusts of more than 100 kilometres per hour battering the north mole overnight. Residents on the seafront reported loose roof tiles and a fallen fence on Mole Street. The Link ferries stayed in port until late on Saturday evening. A spokesperson for the harbour board said the closure was a precaution and that the harbour would reopen as soon as the swell dropped. The Courier will publish photographs sent in by readers in next week's edition.",
+          "title": "Varnhoe Courier, 'Storm shuts Port Ketterel', 4 October 2031"
+        }
+      ],
+      "transcriptId": "demo_t1"
+    },
+    {
+      "anchors": [
+        "t1_s05",
+        "t1_s07"
+      ],
+      "bundleId": "t1_b2",
+      "sources": [
+        {
+          "sourceId": "src_1",
+          "text": "[Synthetic, fictional source. Not advice.] Varnhoe Link Ferries winter timetable notice, published on 20 September 2031. From 1 November 2031 until 31 March 2032 the company will run five return crossings a day between Port Ketterel and the mainland, down from six in the summer timetable. The first sailing will leave Port Ketterel at 06:40 and the last will return at 19:10. The 13:00 sailing is withdrawn for the winter because of low passenger numbers. Fares are unchanged. Season ticket holders will receive a credit of one month on renewal. The company will review the winter timetable with the harbour committee in February 2032.",
+          "title": "Varnhoe Link Ferries, winter timetable notice, 2031 to 2032"
+        },
+        {
+          "sourceId": "src_2",
+          "text": "[Synthetic, fictional source. Not advice.] Varnhoe Link Ferries fact sheet for the MV Ketterel Star, the company's main vessel, revised in August 2031. The ship carries up to 240 passengers and 38 cars. Her service speed is 14 knots. In calm water the crossing between Port Ketterel and the mainland terminal takes about forty minutes; in a strong westerly it can take up to an hour. The ship was refitted in the spring of 2030, when new engines and a lift to the passenger deck were installed. A second, smaller vessel, the MV Hollin, covers the route during maintenance periods and on the busiest summer weekends.",
+          "title": "Varnhoe Link Ferries, MV Ketterel Star fact sheet"
+        }
+      ],
+      "transcriptId": "demo_t1"
+    },
+    {
+      "anchors": [
+        "t1_s10",
+        "t1_s13"
+      ],
+      "bundleId": "t1_b3",
+      "sources": [
+        {
+          "sourceId": "src_1",
+          "text": "[Synthetic, fictional source. Not advice.] Ketterel Commodity Exchange weekly bulletin for the week ending Friday 10 October 2031. The KCX-40 index closed the week at 4,790.5 points, down 0.8 percent on the previous Friday. Kelp contracts led the gains, while salt and wool contracts fell. Trading volume was 12 percent above the four-week average. Harbour diesel for prompt delivery was quoted at 2.09 varn marks a litre at the Friday close, compared with 2.02 a week earlier. The exchange reminds members that the winter trading hours will be announced in a separate notice, and that the bulletin is a summary for members only.",
+          "title": "Ketterel Commodity Exchange, weekly bulletin, 10 October 2031"
+        },
+        {
+          "sourceId": "src_2",
+          "text": "[Synthetic, fictional source. Not advice.] Ostry Salt Company customer notice, dated 1 October 2031. The company sells marine diesel from its fuel berth on the west quay of Port Ketterel. From 1 October 2031 the price of harbour diesel at the berth rises to 2.14 varn marks a litre, from 1.98 varn marks in September. The company says the rise follows higher prices on the Ketterel Commodity Exchange and the cost of a new storage tank. Account customers who buy more than 2,000 litres a month keep their discount of four percent. The berth is open from 07:00 to 18:00 on weekdays and from 08:00 to 12:00 on Saturdays.",
+          "title": "Ostry Salt Company, customer notice on harbour diesel"
+        }
+      ],
+      "transcriptId": "demo_t1"
+    },
+    {
+      "anchors": [
+        "t2_s02",
+        "t2_s03",
+        "t2_s13"
+      ],
+      "bundleId": "t2_b1",
+      "sources": [
+        {
+          "sourceId": "src_1",
+          "text": "[Synthetic, fictional source. Not advice.] Ketterel Commodity Exchange daily settlement report for Friday 10 October 2031. December kelp futures settled at 318 varn marks a tonne, up 6 varn marks on the day. March kelp settled at 322 varn marks and June kelp at 309 varn marks. Open interest in the December contract rose to 4,410 lots. Salt futures for December settled at 57.5 varn marks a tonne. Wool futures for December settled at 6.15 varn marks a kilo. Settlement prices are set by the exchange from trades in the final ten minutes of the session, and the report is published within an hour of the close.",
+          "title": "Ketterel Commodity Exchange, daily settlement report, 10 October 2031"
+        },
+        {
+          "sourceId": "src_2",
+          "text": "[Synthetic, fictional source. Not advice.] Ketterel Commodity Exchange weekly market wrap, published after the close on Friday 10 October 2031. December kelp rose 9.0 percent over the week, its biggest weekly gain since January 2031, as buyers returned after the storm closed the harbour and held up landings. Salt fell 2.1 percent on the week and wool was unchanged. The varn mark ended the week weaker against the Ostrian taler. Analysts at the exchange said kelp prices could stay volatile until landings return to normal. The wrap is a summary for members and is not a trading recommendation.",
+          "title": "Ketterel Commodity Exchange, weekly market wrap, 10 October 2031"
+        },
+        {
+          "sourceId": "src_3",
+          "text": "[Synthetic, fictional source. Not advice.] Ketterel Harbour Board winter log for the season from November 2030 to March 2031. The inner harbour froze over on three days in January 2031, on 14, 15 and 21 January, and kelp boats could not land their catch on those days. Ice was broken by the harbour tug on each of those mornings. The board recorded 19 days on which the ferry service was delayed by weather, and four days on which it was cancelled. The lowest air temperature on the quay was minus nine degrees on 15 January 2031. The log is kept for the board's annual report to the island council.",
+          "title": "Ketterel Harbour Board, winter log 2030 to 2031"
+        }
+      ],
+      "transcriptId": "demo_t2"
+    },
+    {
+      "anchors": [
+        "t2_s04",
+        "t2_s09",
+        "t2_s15"
+      ],
+      "bundleId": "t2_b2",
+      "sources": [
+        {
+          "sourceId": "src_1",
+          "text": "[Synthetic, fictional source. Not advice.] Halvane Kelp Works press note, issued on 7 October 2031. The company's new drying plant at Sorrel Point began full operation on 6 October 2031, after three weeks of trial runs. The plant can dry up to 60 tonnes of fresh kelp a day, which the company says doubles its drying capacity on the Isle of Varnhoe. Twenty-two new jobs have been created at the site. The plant runs on heat recovered from the Sorrel Point salt pans. The company will hold an open day for residents on 25 October 2031, with tours of the drying halls every hour.",
+          "title": "Halvane Kelp Works, press note, 7 October 2031"
+        },
+        {
+          "sourceId": "src_2",
+          "text": "[Synthetic, fictional source. Not advice.] Ketterel Commodity Exchange notice 41, issued on 2 October 2031 to all members. The exchange board is reviewing trading hours for the winter season. Until the review ends, the current hours of 08:30 to 16:30 stay in place. Members have been asked to send comments on a proposal to close at 16:00 from December by 24 October 2031. The board will announce its decision in a further notice. Settlement times and the closing auction are not affected by this notice. Questions about this notice should go to the members' office, which is open on weekdays from 08:00.",
+          "title": "Ketterel Commodity Exchange, notice 41 on trading hours"
+        }
+      ],
+      "transcriptId": "demo_t2"
+    },
+    {
+      "anchors": [
+        "t2_s06"
+      ],
+      "bundleId": "t2_b3",
+      "sources": [
+        {
+          "sourceId": "src_1",
+          "text": "[Synthetic, fictional source. Not advice.] Ketterel Commodity Exchange currency fixing table for Friday 10 October 2031, taken at 16:00. One varn mark bought 1.24 Ostrian talers at the afternoon fixing, against 1.29 at the morning fixing and 1.31 at the previous Friday's afternoon fixing. The exchange uses the fixings to value margin held in talers. The varn mark against the Brisk crown was fixed at 3.05 in the afternoon. Fixings are calculated from bank quotes collected in the five minutes before the fixing time, and they are published within ten minutes of it.",
+          "title": "Ketterel Commodity Exchange, currency fixing table, 10 October 2031"
+        },
+        {
+          "sourceId": "src_2",
+          "text": "[Synthetic, fictional source. Not advice.] Varnhoe Courier business column, published on Saturday 11 October 2031. The varn mark had a poor week, falling to its weakest level against the Ostrian taler since the spring, as traders worried about the storm damage to kelp landings and the cost of the harbour repairs. Shops in Port Ketterel that import goods priced in talers said they expect to raise some prices before the winter. The column notes that the currency has recovered from similar falls in past years, but it gives no forecast. Readers can send questions to the business desk.",
+          "title": "Varnhoe Courier, business column, 11 October 2031"
+        }
+      ],
+      "transcriptId": "demo_t2"
+    },
+    {
+      "anchors": [
+        "t3_s02",
+        "t3_s03",
+        "t3_s10"
+      ],
+      "bundleId": "t3_b1",
+      "sources": [
+        {
+          "sourceId": "src_1",
+          "text": "[Synthetic, fictional source. Not advice.] Varnhoe Weather Service table of overnight minimum temperatures for the night of 17 to 18 October 2031. Hollin Fell recorded minus 3.0 degrees, the lowest reading on the island. The airport recorded minus 0.5 degrees, Port Ketterel plus 1.5 degrees and Sorrel Point plus 2.0 degrees. Frost formed on the high road above Hollin Fell, and the road was gritted at 05:00. Skies were clear for most of the night, with light winds from the north. The next table will be published on the morning of 19 October, after the readings have been checked.",
+          "title": "Varnhoe Weather Service, overnight minimum temperatures, 17 to 18 October 2031"
+        },
+        {
+          "sourceId": "src_2",
+          "text": "[Synthetic, fictional source. Not advice.] Varnhoe Weather Service climate records for the month of October, covering every year since records began on the island in 1951. The lowest October temperature on record is minus 4.6 degrees, measured at Hollin Fell on 29 October 2019. The highest is 21.4 degrees, measured at the airport in 1997. The wettest October was in 2006, with 212 millimetres of rain at the airport gauge. The service updates this page at the end of each month, once the readings from every station have been checked and approved.",
+          "title": "Varnhoe Weather Service, climate records for October"
+        },
+        {
+          "sourceId": "src_3",
+          "text": "[Synthetic, fictional source. Not advice.] Varnhoe Weather Service rainfall note, issued on 13 October 2031. Rainfall at the airport gauge from 1 to 12 October 2031 totalled 61 millimetres, which is close to the long-term average for that part of the month. The wettest day was 3 October, the day of the storm, with 29 millimetres. Figures for the full first half of the month will be issued with the monthly summary. Readings from the Hollin Fell and Port Ketterel gauges are still being checked and are not included in this note.",
+          "title": "Varnhoe Weather Service, mid-month rainfall note, 13 October 2031"
+        }
+      ],
+      "transcriptId": "demo_t3"
+    },
+    {
+      "anchors": [
+        "t3_s05",
+        "t3_s06"
+      ],
+      "bundleId": "t3_b2",
+      "sources": [
+        {
+          "sourceId": "src_1",
+          "text": "[Synthetic, fictional source. Not advice.] Varnhoe Council press notice, issued on 10 October 2031. Sorrel Point library will reopen to the public on Tuesday 14 October 2031 after repairs to its roof. The work replaced the slate roof and the gutters, and added insulation to the reading room ceiling. The repairs cost the council 86,000 varn marks, which was within the budget agreed in March. Opening hours are unchanged: 09:30 to 17:00 from Tuesday to Saturday. The council thanks library users for their patience during the four months of work.",
+          "title": "Varnhoe Council, press notice on Sorrel Point library"
+        },
+        {
+          "sourceId": "src_2",
+          "text": "[Synthetic, fictional source. Not advice.] Varnhoe Courier community news, published on 16 October 2031. Sorrel Point library is back in business this week after its long closure for roof repairs. Regular visitors said the reading room is warmer and quieter than before. The library's children's club will restart on Saturday mornings in November. A volunteer said the book sale held during the closure raised more than 1,200 varn marks for new large-print books. The library is also looking for volunteers to help with its local history archive.",
+          "title": "Varnhoe Courier, 'Library back in business', 16 October 2031"
+        }
+      ],
+      "transcriptId": "demo_t3"
+    },
+    {
+      "anchors": [
+        "t3_s13"
+      ],
+      "bundleId": "t3_b3",
+      "sources": [
+        {
+          "sourceId": "src_1",
+          "text": "[Synthetic, fictional source. Not advice.] Results summary of the Ketterel autumn wool auction, held on 16 October 2031. The average price for fleece wool was 6.40 varn marks a kilo, up from 5.95 at the spring auction. This was the highest average price since the autumn auction of 2029, when wool fetched 6.55 varn marks a kilo. A total of 38 tonnes of wool was sold by 64 farms. Buyers from the mainland took about two thirds of the lots. The next auction will be held in April 2032 at the same market hall in Port Ketterel.",
+          "title": "Ketterel autumn wool auction, results summary, 16 October 2031"
+        },
+        {
+          "sourceId": "src_2",
+          "text": "[Synthetic, fictional source. Not advice.] Varnhoe Farmers' Newsletter for October 2031. Farmers are reminded that the winter feed subsidy scheme closes on 31 October. The newsletter reports a good autumn wool auction in Port Ketterel, with strong demand from mainland buyers and prices well up on the spring sale. Sheep numbers on the island are steady at about 11,000. The newsletter also lists the dates of the winter livestock markets and a new course on fence repair at the agricultural college. Members can collect their copy from the cooperative office.",
+          "title": "Varnhoe Farmers' Newsletter, October 2031"
+        }
+      ],
+      "transcriptId": "demo_t3"
+    }
+  ],
+  "format": "demo-bundles/1"
+}

@@ -79,7 +79,7 @@ class Decision:
 
 def revision_setting(source_revision: str, gguf_sha256: str) -> str:
     """The one `FACTCHECK_LLM_REVISION` string for the winner's source revision and GGUF SHA-256 (S2 §1)."""
-    # NEEDS-OWNER(AMB-134): FACTCHECK_LLM_REVISION = <source_revision>@sha256:<gguf_sha256>
+    # AMB-134: FACTCHECK_LLM_REVISION = <source_revision>@sha256:<gguf_sha256>
     if not isinstance(source_revision, str) or not source_revision.strip():
         raise ValueError("the source revision must contain a non-whitespace character")
     if not isinstance(gguf_sha256, str) or not _SHA256.fullmatch(gguf_sha256):
@@ -141,7 +141,7 @@ def margin(
     """
     missing = _not_loaded(results)
     if missing is not None:
-        # NEEDS-OWNER(AMB-130): no Qwen3-4B scores means no margin, so the challenger cannot win
+        # AMB-130: no Qwen3-4B scores means no margin, so the challenger cannot win
         return None, None, f"{missing} did not load"
     if DEFAULT not in shares or CHALLENGER not in shares:
         return None, None, NO_SHARE_NOTE
@@ -259,7 +259,7 @@ def decide(
         rule = "rule 2"
         pinned = DEFAULT
     else:
-        # NEEDS-OWNER(AMB-129): an ineligible Qwen3-4B takes rule 4 as if it failed a gate
+        # AMB-129: an ineligible Qwen3-4B takes rule 4 as if it failed a gate
         steps.append(f"rule 4: {DEFAULT} is not pinnable; {THIRD} {'is' if pinnable[THIRD] else 'is not'} pinnable")
         rule = "rule 4 (Qwen3-8B)" if pinnable[THIRD] else "rule 5"
         pinned = THIRD if pinnable[THIRD] else None

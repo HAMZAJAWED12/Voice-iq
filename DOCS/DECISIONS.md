@@ -76,6 +76,7 @@ process is in [WORKFLOW.md](WORKFLOW.md), the change history is in
 | 53 | Diarization uses pyannote 3.1 under the weights-only loader | 2026-10-24 | `9887e0b` |
 | 54 | D5 run deadline set; D6 criteria note signed | 2026-10-28 | — (owner) |
 | 55 | D6 criteria note S2: launch line | 2026-10-30 | — (owner) |
+| 56 | D6 criteria note S3: KV cache type and claim-fidelity definitions | 2026-11-22 | — (owner) |
 
 ---
 
@@ -1048,6 +1049,20 @@ not repeat it.
   out the prompt cache, so all three candidates run under the same conditions. S1 stays as the
   record of the first signature.
 - **Date:** 2026-10-30 · **Commit:** — (owner)
+
+### 56. D6 criteria note S3: KV cache type and claim-fidelity definitions
+
+- **Context:** At a context that holds the cap sessions, Qwen3-4B's memory rise with an f16 KV
+  cache would probably not fit under the gate M budget (section 3.5). Section 5.2's two sentences
+  did not fix how the two metrics are computed (open point AMB-4, to be ruled before the first run).
+- **Decision:** The project owner signed S3, [D6-CRITERIA-NOTE-S3.md](D6-CRITERIA-NOTE-S3.md), on 2026-11-22
+  in the senior sponsor role, before any bake-off run. The KV cache is q8_0 for K and V for every
+  candidate (section 3.5 and section 12 row 5). Section 5.2 states the definitions of the two
+  metrics under its two signed sentences, which stay unchanged, and section 10's re-opening
+  trigger also covers the production KV type. Nothing else changes.
+- **Consequence:** Qwen3-4B fits gate M at q8_0 on the dry-run measurements, and the harness
+  computes both metrics as defined. S1 and S2 stay as the record of the earlier signatures.
+- **Date:** 2026-11-22 · **Commit:** — (owner)
 
 ---
 

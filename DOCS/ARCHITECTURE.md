@@ -1,12 +1,15 @@
-Last verified: 2026-11-14, efb1f03
+Last verified: 2026-11-27, 1f6d793
 # Architecture
 
-This document describes the code structure of VoiceIQ at commit `efb1f03`
-(`main` after pull request #12, which merged milestone H4b of the D6
-bake-off harness under `app/evaluation/`, so `main` has H1 to H4b). It
-shows how the packages fit together, how data moves between them, where
-faults are contained, what is stored, and how to extend the system without
-breaking it.
+This document describes the code structure of VoiceIQ at commit `1f6d793`
+on `sprint7/demo`, which is not pushed. `origin/main` is at `631e658`
+(after pull request #13) and has milestones H1 to H4b of the D6
+bake-off harness under `app/evaluation/`; the branch adds H5a's code,
+the claim-fidelity metrics, a first part of H5b and the fact-check demo, all under
+`app/evaluation/`. Outside `app/evaluation/`, `app/` is the same as on
+`main`. It shows how the packages fit together, how data moves between
+them, where faults are contained, what is stored, and how to extend the
+system without breaking it.
 
 [02-architecture.md](02-architecture.md) is the historical Sprint 1–4 view.
 It was written before the fact-check engine, the Agent Brain and the
@@ -75,7 +78,7 @@ app/utils     per-job workspace, logging, audio helpers, upload and fact-check g
 | `app/security` | API-key check, Content-Length cap, rate limits, and the middleware that runs the key and size checks before a body is read | `api_key.py`, `payload_size.py`, `rate_limit.py`, `request_guard.py` |
 | `app/utils` | `JobIO` per-job workspace, logging setup (`configure_logging` applies `VOICEIQ_LOG_LEVEL` at startup), ffmpeg normalisation and the audio length limit, audio-quality check, magic-byte sniff, upload filename check, fact-check opt-in gate, the retention sweep for job folders and stored records (`sweep`, `run_retention`), the `/readyz` checks, and whole-word keyword matching for the flag, intent and email-draft rules (`contains_phrase`, `starts_with_phrase`) | `job_io.py`, `logger.py`, `audio_utils.py`, `audio_quality.py`, `audio_sniff.py`, `upload.py`, `factcheck_gate.py`, `retention.py`, `readiness.py`, `text_match.py` |
 
-Three parts sit outside the request path:
+Four parts sit outside the request path:
 
 - `app/evaluation/evaluator.py` is used by the repository-root script
   `run_eval_dev.py` (line 8).
@@ -83,18 +86,22 @@ Three parts sit outside the request path:
 - `app/evaluation/bakeoff/` is the D6 bake-off harness: Sprint 7 Phase 1
   evaluation tooling, not application code
   ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9).
-  Only its own modules and its tests in `app/evaluation/tests/` import it,
-  and CI runs neither those tests nor mypy over it. It holds the scoring
+  Only its own modules, the demo package (below) and the tests in
+  `app/evaluation/tests/` import it, and CI runs neither those tests nor
+  mypy over it. It holds the scoring
   core (`gold`, `extraction`, `scoring`, `stats`; milestone H1), the
   model-server client (`schemas`, `probe`, `client`; H2), the runner
   with its inputs, launch checks and records (`inputs`, `launch`,
   `records`, `runner`; H3), the scoring of a stored run directory
   with its report (`evidence`, `gates`, `decision`, `report`, `entry`;
-  H4a, merged by pull request #10), and the machine sampler and the
+  H4a, merged by pull request #10), the machine sampler and the
   schedule entry point (`machine`, and `EntryConfig`, `ScheduleOutcome`,
   `load_entry_config`, `load_machine_config`, `build_deps` and
   `run_bakeoff` in `entry`; H4b, committed in `7f91130` and merged
-  by pull request #12). The package docstring
+  by pull request #12), the claim-fidelity metrics (`fidelity`, the
+  only harness module that reads claim text; `b69e580`), and the frozen-input
+  loader, the run command line and the wrapper (`frozen`, `cli`,
+  `wrapper`; H5a's code, `feee39a`). The package docstring
   (`app/evaluation/bakeoff/__init__.py`) lists the modules and
   gives the import direction and the I/O boundaries: only `client` talks
   to the network, and only to `http://127.0.0.1:<port>`; only `launch`
@@ -102,24 +109,66 @@ Three parts sit outside the request path:
   contention command) only through `launch`'s `ServerProcess`; only
   `records` writes results and reports, outside OneDrive, and `machine`
   writes only its own logs (`gpu.csv`, `apps.txt`, `proc.csv` and
-  `host.json`) beside the server log; `machine` alone imports
+  `host.json`) beside the server log; `wrapper` writes only its log on
+  the host, through the launch tools; `frozen` reads files only through
+  an injected reader; `machine` alone imports
   `threading`; `evidence`, `gates`, `decision` and `report` read no file,
   start nothing and read no clock. No H1 to H3 module imports an H4
-  module, and no other module in the package imports `entry`. `machine`
-  imports `evidence`, `launch`, `records` and `schemas`.
-  `entry.main(argv)` runs the `report` and `void` commands as a Python
-  function; there is no command-line wiring yet (no `__main__` and no
-  console script). `entry.run_bakeoff` runs one schedule with the
-  machine hooks and never scores; until H5 adds the run command, a
-  schedule starts only from Python (AMB-140). The `report` command reads
+  module, no H1 to H4 module imports an H5 module, and `cli` alone
+  imports `entry`. `machine` imports `evidence`, `launch`, `records` and
+  `schemas`; `wrapper` imports `cli`, `launch` and `records`.
+  `cli` and `wrapper` are the package's command lines (each has a
+  `__main__` block; there is no console script). `cli` runs `freeze
+  inputs`, `freeze gold`, `run` and `context`, and hands `report` and
+  `void` to `entry.main(argv)` unchanged; `freeze inputs` and `freeze
+  gold` write their files (`INPUTS.sha256`; the cap-session list and
+  `EXPECTED-FREEZE.json`) only through `records.write_new_file`, an
+  exclusive create with fsync, refused under OneDrive. Run directly,
+  `cli` runs only the steps that read no gold; every step that reads
+  gold or a run directory runs only through
+  `wrapper`, which sends all output to its log and shows only checked
+  `key: value` fields on the console (AMB-159). `run` starts a schedule
+  through `entry.run_bakeoff`, which runs it with the machine hooks and
+  never scores; `context` starts each candidate's server through
+  `launch.LaunchedServer` and asks it only for token counts, counting
+  each request in both forms (`ef8b556`). The `report` command reads
   each timed and contended attempt's machine evidence through
   `machine.load_evidence`, so gate M is measured. No model, server or
   `nvidia-smi` has run through the H4a or H4b code, and no bake-off has
-  run. The package holds no prompt text yet.
+  run. The frozen inputs, the prompt text among them, are to live in
+  `app/evaluation/frozen/`, which `frozen` reads; that folder is not in
+  the repository yet, so the repository holds none of the frozen prompt
+  wording (the tests use synthetic stand-ins).
   `gold` loads any gold-set version directory, such as those in
   `app/evaluation/gold/` (`v0.1` to `v0.4`, each with `conversations.jsonl`,
   `items.csv`, `items.jsonl` and a `MANIFEST.sha256`), but `inputs` builds
   a run's requests only from v1.0, which is not in the repository yet.
+- `app/evaluation/demo/` is the fact-check demo (`1f6d793`), also
+  evaluation tooling outside CI's pytest and mypy paths. It shows
+  claims, then verdicts that cite synthetic fixture sources, on three
+  synthetic transcripts with fictional source bundles
+  (`demo/fixtures/`), on Qwen/Qwen3-4B, which is not pinned. `pipeline`
+  loads the fixtures and the prompts (through
+  `frozen.load_draft_inputs`, which checks `INPUTS.sha256` first), sends
+  one extraction call per transcript and one reasoning-probe call per
+  claim on in-scope segments that a bundle anchors, and marks the rest
+  leaked or without an evidence fixture; `render` builds one
+  self-contained HTML page, every text escaped and the banner and the
+  label "no bake-off, no pin" on it, and one JSON record in the run store's form; `__main__` is the
+  command line (`python -m app.evaluation.demo`). It reuses the
+  harness's `client`, `extraction`, `probe`, `inputs`, `frozen`,
+  `launch` and `records` modules. Its I/O boundaries (package docstring,
+  pinned by `app/evaluation/tests/test_demo_hygiene.py`): only the
+  harness client talks to the network, and only to
+  `http://127.0.0.1:<port>`; only `launch.LaunchedServer` starts the
+  model server, after the loopback-only and model-file checks; the page,
+  the record and the server log are created new through the launch
+  tools and `records.write_new_file`, in a directory outside OneDrive
+  and `/mnt`; nothing reads the environment. It imports nothing from
+  `app.insights` and none of `gold`, `gates`, `report`, `entry`, `cli`,
+  `wrapper`, `runner` or `machine` directly (the `frozen` it reuses
+  does load the code of `gold`, `gates` and `runner`), and it calls no
+  gold loader. Nothing outside the demo and its tests imports it.
 
 ## 3. Routes
 
@@ -611,11 +660,13 @@ silent, and missing tables are created.
 ## 9. Sprint 7 fact-check agent — planned, not built
 
 **Everything in this section is planned, not built.** No code of the
-fact-check agent exists at `efb1f03`. A search of `app/` at that commit finds
-no `/v2` route, no `fact_check_report` key and no `factcheck_agent_*` table.
-The Phase 1 bake-off harness (section 2) is evaluation tooling, and the
-Sprint 7 diarization fixes (`9887e0b`, `670b4de`) change an existing
-service; neither is part of the agent.
+fact-check agent exists at `1f6d793`. A search of `app/` at `efb1f03` found
+no `/v2` route, no `fact_check_report` key and no `factcheck_agent_*` table;
+since then only `app/evaluation/` has changed, and its `bakeoff/` and `demo/`
+hold none of them at `1f6d793`.
+The Phase 1 bake-off harness and the demo (section 2) are evaluation
+tooling, and the Sprint 7 diarization fixes (`9887e0b`, `670b4de`) change
+an existing service; none of them is part of the agent.
 For progress and the next milestone, see
 [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md). For each
 decision and its status, see the

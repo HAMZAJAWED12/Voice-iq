@@ -337,7 +337,7 @@ class StoredCall:
     key: RunKey
     role: CallRole
     session_id: str | None
-    # NEEDS-OWNER(AMB-66): gates J and C read run 1's first session-run; the tags keep every reading
+    # AMB-66: gates J and C read run 1's first session-run; the tags keep every reading
     session_index: int | None
     position: int | None
     call: CallRecord
@@ -1014,6 +1014,24 @@ def write_report(
             file.flush()
             fsync(file.fileno())
     return str(md_path), str(json_path)
+
+
+def write_new_file(
+    path: str, data: bytes, *, fsync: Callable[[int], None], realpath: Callable[[str], str] = os.path.realpath
+) -> str:
+    """Write `data` to a new file and return its resolved path. H5's hash-bearing files are written here, because only
+    this module writes results. The path is refused under OneDrive (S2 §3.12; AMB-81) and when its parent directory is
+    missing. The file is opened `'xb'`, so one that exists raises `FileExistsError` and is left as it was, and the
+    bytes are flushed and synced before the return."""
+    resolved = refuse_onedrive(path, realpath=realpath)
+    target = Path(resolved)
+    if not target.parent.is_dir():
+        raise StoreError(f"{target.parent} is not a directory: the parent of a new file must exist")
+    with target.open("xb") as file:
+        file.write(data)
+        file.flush()
+        fsync(file.fileno())
+    return resolved
 
 
 def _report_complete(md: bytes | None, raw: bytes | None) -> bool:

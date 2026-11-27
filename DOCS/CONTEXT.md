@@ -1,4 +1,4 @@
-Last verified: 2026-11-14, efb1f03
+Last verified: 2026-11-27, 1f6d793
 # Project Context
 
 Background for people joining, reviewing or sponsoring VoiceIQ: what the
@@ -58,7 +58,7 @@ team and the N4b native-speaker reviewers are outside that.
 | Role | Part in the project | Where the docs say so |
 |---|---|---|
 | Engineering (this repo's team) | Writes and maintains the Python service and the planning docs. | "Owner: engineering" headers in [FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md), [FACTCHECK-AGENT-PHASE-0.md](FACTCHECK-AGENT-PHASE-0.md), [TIER-N-PLAN.md](TIER-N-PLAN.md) |
-| Project owner | Sets the working rules and makes the owner decisions outside the register, such as the currency-rate provider and the limits on the service (2026-10-17); holds every Phase 0 role, signed the Phase 0 decisions and owns register rows D3b, D10-T and U1–U10 (2026-10-19). | [DECISIONS.md](DECISIONS.md) (#26, #27, #33 to #55); register rows D3b, D10-T, U1–U10 |
+| Project owner | Sets the working rules and makes the owner decisions outside the register, such as the currency-rate provider and the limits on the service (2026-10-17); holds every Phase 0 role, signed the Phase 0 decisions and owns register rows D3b, D10-T and U1–U10 (2026-10-19). | [DECISIONS.md](DECISIONS.md) (#26, #27, #33 to #56); register rows D3b, D10-T, U1–U10 |
 | Senior sponsor | Decides register questions on open-source scope and on the model choice. | Register rows D4 and D6 |
 | Tech lead | Decides the persistence and re-run questions and co-decides execution mode with product; confirmed the Phase 0 wording changes, together with the engineering manager (2026-10-19); decides several N4b questions. | Register rows D1, D2, D10; [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register) (W1) and §8 (W1–W3); [DECISIONS.md](DECISIONS.md) #51; [N4B-MULTILINGUAL-STRATEGY.md](N4B-MULTILINGUAL-STRATEGY.md) §7 (L2-L5) |
 | Engineering manager | Decides who owns and resources the gold set; co-confirmed the Phase 0 wording changes (2026-10-19). | Register row D3; [D3-GOLD-SET-BRIEF.md](D3-GOLD-SET-BRIEF.md); [PHASE-0 §1](FACTCHECK-AGENT-PHASE-0.md#1-decision-register) (W1) and §8 (W1–W3); [DECISIONS.md](DECISIONS.md) #51 |
@@ -110,6 +110,7 @@ are commit dates; some ranges overlap.
 | 2026-07-25 to 09-20 | Tier N: callback v2 spec (N1), lazy ML imports (N2), alignment tests and speed-up (N3), deadline phrases (N4a), language wiring for Urdu and Arabic (N4b-1 Phase 1), and the Agent Brain wired into the pipeline (L5). | `36697fd` to `17606d6` |
 | 2026-09-04 to 10-19 | Sprint 7, Phase 0: contract and decision register, gold-set scoping brief, documentation sync, prerequisite fixes M1-M6, security and reliability fixes, the fixes the owner decided on 2026-10-17, the tech-debt milestone M7, the pull-request review fix round, the merge into `main` (pull request #1) and the Phase 0 sign-off. | `c6284b6`, `8fd3972`, `ace45e4` to `e4398b1` |
 | 2026-10-20 to 11-14 | Sprint 7 after the Phase 0 sign-off: its merge into `main` (pull request #2); the diarization fix and the removal of its Hugging Face login (#3, #7); and Phase 1 so far: the gold set v0.1 to v0.4 with its labelling guide (#4), D5's run deadline and the signed D6 criteria note S1 and S2 (#5), the record of the bake-off model-weight downloads (#6), the scoring, model-server client and runner of the bake-off harness (#8) and the docs that record them (#9), the harness's gates, decision and report (#10) and the docs that record them (#11), and the harness's machine sampler and schedule entry point, with the docs that record them (#12). | `415dd88` to `efb1f03` |
+| 2026-11-14 to 11-27 | The docs that record pull request #12 (#13); the plan to the first bake-off run; the harness's frozen-input loader, run command line and wrapper (H5a's code), its claim-fidelity metrics and a fix to its context check; the signed D6 criteria note S3; and a demo on synthetic transcripts, on a model that is not pinned. Everything after pull request #13 is on local branches, not pushed. | `144fd66` to `1f6d793` |
 
 Sprint and tier labels come from commit subjects and from the sprint table
 that CLAUDE.md held until `0ea4ddd`. The historical Sprint 1-4 view is
@@ -171,9 +172,19 @@ evaluation tooling rather than application code
 scoring, its model-server client and its runner, and it can score a stored run
 and write its report (`ad6b79e`, merged by pull request #10). It also reads
 the machine evidence that gate M needs and can start a schedule from Python
-(`7f91130`, merged by pull request #12). No model or server has yet run
+(`7f91130`, merged by pull request #12). Not yet pushed: the loader for the
+frozen inputs, the run command line and a wrapper that keeps gold data on
+the host (`feee39a`, the code of milestone H5a, whose frozen inputs are not
+committed yet), the claim-fidelity metrics (`b69e580`) and the signed D6
+criteria note S3 (`0ed28b3`). No model or server has yet run
 through the report code (`ad6b79e`) or the machine code (`7f91130`), and no
-bake-off has run. Some values are still open
+bake-off has run. Gold v1.0 was not frozen in time for 2026-11-30, so the
+project owner chose the plan's fallback on 2026-11-27: the deliverable for
+that date is a demo alone, on synthetic transcripts and fictional sources,
+on a model that is not pinned and labelled "no bake-off, no pin"
+(`1f6d793`, also evaluation tooling, not pushed). The first bake-off run
+has no date yet ([FACT-CHECK-AGENT-STATUS.md](FACT-CHECK-AGENT-STATUS.md),
+*Next milestone*). Some values are still open
 ([FACTCHECK-AGENT-PHASE-0.md §8](FACTCHECK-AGENT-PHASE-0.md#8-exit-checklist)).
 
 For live progress, the next milestone and its acceptance checks, read

@@ -10,7 +10,8 @@ Implements, from the signed D6 criteria note S2:
   report. `check_records` refuses a run whose records are not the frozen plan before any marker exists. "Gate M uses
   the peak over all runs"; gates A, S, J and C and the quality metric of record use run 1; voided runs are listed and
   never counted. `evaluate` refuses any unit whose scored marker is missing.
-- S2 §5, metrics: runs 1 to 3 are scored with H1's `score_run` on the counted single-conversation calls.
+- S2 §5, metrics: runs 1 to 3 are scored with H1's `score_run`, and with `fidelity.score_fidelity` for claim fidelity
+  and per-proposition recall (AMB-4), on the counted single-conversation calls.
 - S2 §6, gates: L, M, J, C, T, A and S, as the note and its owner rows fix them. Gate M reads machine evidence through
   the pure `evidence` types and never the `machine` module.
 - S2 §3.6, thinking: the pre-run verdict decides eligibility; thinking seen in run calls is counted and reported.
@@ -32,6 +33,7 @@ from typing import Any, Literal, cast
 from .client import REQUEST_KINDS, CallRecord
 from .evidence import MIN_SAMPLES_PER_SEC, AttemptEvidence
 from .extraction import FAILURE_KINDS, Extraction
+from .fidelity import FidelityMetrics, score_fidelity
 from .gold import GoldSet
 from .inputs import CAP_SESSION_COUNT, CAP_SESSION_ROWS, GOLD_VERSION, PROBE_ITEM_COUNT
 from .launch import CANDIDATE_IDS, CANDIDATE_SLUGS
@@ -234,7 +236,7 @@ class OperatorValues:
         if min_per_sec < MIN_SAMPLES_PER_SEC:
             raise ReportError(f"operator.audio_vram_min_per_sec must be at least {MIN_SAMPLES_PER_SEC} (S2 §6)")
         _filled(operator, "cuda_process_check")
-        # NEEDS-OWNER(AMB-135): the prompt-development models come from an operator field, not the freeze manifest
+        # AMB-135: the prompt-development models come from an operator field, not the freeze manifest
         models = _models(_text(operator, "prompt_development_models"))
         return cls(
             idle_free_mib=idle,
@@ -517,7 +519,7 @@ def check_records(view: RunView, gold: GoldSet, expected: ExpectedFreeze | None)
         raise ReportError(f"the manifest's gold version is {manifest['gold_version']!r}, not {GOLD_VERSION} (S2 §3.12)")
     if gold.version != manifest["gold_version"] or dict(gold.manifest) != manifest["gold_manifest"]:
         raise ReportError("the gold set differs from the manifest's gold version or gold manifest")
-    # NEEDS-OWNER(AMB-139): no expected-freeze file -> gold_manifest_checked false, decision provisional
+    # AMB-139: no expected-freeze file -> gold_manifest_checked false, decision provisional
     if expected is not None:
         if expected.gold_version != GOLD_VERSION:
             raise ReportError(f"the recorded freeze is {expected.gold_version!r}, not {GOLD_VERSION}")
@@ -686,7 +688,7 @@ def gate_m(
     if missing:
         notes.append(f"no host evidence for {', '.join(missing)}: not measured")
     measured = [evidence for evidence in timed.values() if evidence is not None]
-    # NEEDS-OWNER(AMB-106): the gate reads the uncontended runs' rise; the contended rise is reported only
+    # AMB-106: the gate reads the uncontended runs' rise; the contended rise is reported only
     rise = max(evidence.rise_mib for evidence in measured) if measured and not missing else None
     startup = None if pre_run_launch is None else pre_run_launch.startup
     layers = (None, None) if startup is None else (startup.layers_offloaded, startup.layers_total)
@@ -739,7 +741,7 @@ def gate_m(
 def _no_together_session(checks: list[Check], notes: list[str], present: bool) -> None:
     """G4-22: the contended unit is absent after MAX_RUN_ATTEMPTS voids, or its counted attempt left no host
     evidence."""
-    # NEEDS-OWNER(AMB-106): absent or evidence-less together session -> swap/RAM not_measured, M not passed (see AMB-69)
+    # AMB-106: absent or evidence-less together session -> swap/RAM not_measured, M not passed (see AMB-69)
     checks.append(_check("together_session.rss_anon_bytes", None, RAM_CAP_BYTES, "<="))
     checks.append(_check("together_session.swap_delta", None, 0, "=="))
     cause = "without host evidence" if present else "absent"
@@ -1027,7 +1029,8 @@ def _memory(
 
 @dataclass(frozen=True, slots=True)
 class CandidateResult:
-    """Everything the decision and the report read about one candidate (S2 §1, §6, §9)."""
+    """Everything the decision and the report read about one candidate (S2 §1, §5, §6, §9); `fidelity` is claim
+    fidelity and per-proposition recall per run (S2 §5.2, AMB-4)."""
 
     candidate: str
     status: Literal["ran", "not_loaded"]
@@ -1035,6 +1038,7 @@ class CandidateResult:
     thinking_pre_run: ThinkingVerdict | None
     thinking_in_runs: Mapping[str, int]
     metrics: Mapping[int, RunMetrics]
+    fidelity: Mapping[int, FidelityMetrics]
     gates: Mapping[GateName, Gate]
     probe_readings: Mapping[ProbeReading, tuple[bool, bool]]
     sessions: tuple[SessionRun, ...]
@@ -1074,6 +1078,7 @@ def _not_loaded(candidate: str, pre_run: PreRunRecord, operator: OperatorValues)
         thinking_pre_run=pre_run.thinking,
         thinking_in_runs=MappingProxyType({}),
         metrics=MappingProxyType({}),
+        fidelity=MappingProxyType({}),
         gates=MappingProxyType(gates),
         probe_readings=MappingProxyType({}),
         sessions=(),
@@ -1108,10 +1113,12 @@ def _ran(
             raise ReportError(f"{_unit_name(key)} is not marked as scored: scores come after the marker (S2 §3.13)")
     calls = {run: view.counted_calls(candidate, run) for run in RUNS}
     singles = {run: tuple(s for s in calls[run] if s.role == "single") for run in RUNS}
-    metrics = {run: score_run(gold, {s.call.item_id: s.call.extraction_result() for s in singles[run]}) for run in RUNS}
+    outputs = {run: {s.call.item_id: s.call.extraction_result() for s in singles[run]} for run in RUNS}
+    metrics = {run: score_run(gold, outputs[run]) for run in RUNS}
+    fidelity = {run: score_fidelity(gold, outputs[run]) for run in RUNS}
     sessions = tuple(session for run in RUNS for session in session_runs(calls[run], run))
     run1 = tuple(session for session in sessions if session.run == 1)
-    # NEEDS-OWNER(AMB-66): gates J and C read run 1's first session-run; the other readings are reported
+    # AMB-66: gates J and C read run 1's first session-run; the other readings are reported
     gated_probes = tuple(
         s for s in calls[1] if s.role == "probe" and s.session_index == 1 and 1 <= (s.position or 0) <= PROBE_ITEM_COUNT
     )
@@ -1141,7 +1148,7 @@ def _ran(
         "S": _wrap(gate_s(metrics[1])),
     }
     information_only = ["gate_L"] if gates["L"].status != "pass" else []
-    # NEEDS-OWNER(AMB-116): the pre-run verdict alone decides eligibility; thinking in runs is counted and reported
+    # AMB-116: the pre-run verdict alone decides eligibility; thinking in runs is counted and reported
     if pre_run.thinking == "seen":
         information_only.append("thinking")
     unconstrained_calls = () if unconstrained_key is None else _unit_calls(view, unconstrained_key)
@@ -1158,6 +1165,7 @@ def _ran(
         thinking_pre_run=pre_run.thinking,
         thinking_in_runs=MappingProxyType(thinking),
         metrics=MappingProxyType(metrics),
+        fidelity=MappingProxyType(fidelity),
         gates=MappingProxyType(gates),
         probe_readings=MappingProxyType(readings),
         sessions=sessions,

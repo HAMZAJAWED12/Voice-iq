@@ -19,10 +19,9 @@ Implements, from the signed D6 criteria note S2:
   numbers; `deliberately_false` is never used (the gold loader drops it).
 - §6, gates A and S, on exact fractions.
 
-Claim fidelity and per-proposition recall (§5.2, reported only) wait for the owner's definitions (open point AMB-4).
-§9 reports every section 5 metric and the note fixes the scoring before any result exists, so that ruling is needed
-before the first run. Every ratio is an exact `Fraction`; a ratio with a zero denominator is None and fails any check
-on it. Nothing here calls a model or the network (§3.12: gold rows never leave the host, scoring included).
+Claim fidelity and per-proposition recall (§5.2, reported only) are in `fidelity`, which alone reads claim text.
+Every ratio is an exact `Fraction`; a ratio with a zero denominator is None and fails any check on it. Nothing here
+calls a model or the network (§3.12: gold rows never leave the host, scoring included).
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from types import MappingProxyType
-from typing import Literal, NoReturn, TypeAlias, TypeVar
+from typing import Literal, TypeAlias, TypeVar
 
 from app.evaluation.bakeoff.extraction import (
     FAILURE_KINDS,
@@ -97,10 +96,6 @@ SPELLED_NUMBER_WORDS = frozenset(
         "trillion",
     }
 )
-FIDELITY_PENDING = (
-    "claim fidelity / per-proposition recall: definitions pending the owner (criteria note S2 §5.2); "
-    "open point AMB-4"
-)
 
 _DIGIT = re.compile(r"[0-9]")
 _WORD = re.compile(r"[a-z]+")
@@ -134,7 +129,7 @@ class FlaggedGroup:
     claim_ids: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        # NEEDS-OWNER(AMB-2): flags have no source in v0.4/v1.0; repeat = one recall unit
+        # AMB-2: flags have no source in v0.4/v1.0; repeat = one recall unit
         if self.kind not in FLAG_KINDS:
             raise ValueError(f"FlaggedGroup.kind must be one of {FLAG_KINDS}, not {self.kind!r}")
         if not isinstance(self.claim_ids, tuple) or not all(isinstance(cid, str) for cid in self.claim_ids):
@@ -342,18 +337,6 @@ def has_spelled_number(text: str) -> bool:
     return any(token in SPELLED_NUMBER_WORDS for token in _WORD.findall(text.lower()))
 
 
-def claim_fidelity(*args: object, **kwargs: object) -> NoReturn:
-    """S2 §5.2 claim fidelity (reported only). Not implemented until the owner rules on its definition."""
-    # NEEDS-OWNER(AMB-4): what a "value" is, whose text is normalised, and which dates are ignored are not settled
-    raise NotImplementedError(FIDELITY_PENDING)
-
-
-def per_proposition_recall(*args: object, **kwargs: object) -> NoReturn:
-    """S2 §5.2 per-proposition recall (reported only). Not implemented until the owner rules on claim fidelity."""
-    # NEEDS-OWNER(AMB-4): depends on claim fidelity; whether it covers compound rows only is not settled
-    raise NotImplementedError(FIDELITY_PENDING)
-
-
 def _units(
     gold: GoldSet, flagged_groups: Iterable[FlaggedGroup]
 ) -> tuple[dict[RowKey, _Unit], tuple[FlaggedGroup, ...]]:
@@ -362,7 +345,7 @@ def _units(
     Every group, of either kind, needs 2 or more distinct existing claim_ids, all in one conversation, every row
     in-scope `CHECKABLE` (only those rows count for recall), and a row in at most one group.
     """
-    # NEEDS-OWNER(AMB-2): flags have no source in v0.4/v1.0; repeat = one recall unit
+    # AMB-2: flags have no source in v0.4/v1.0; repeat = one recall unit
     groups = tuple(flagged_groups)
     unit_of: dict[RowKey, _Unit] = {item.key: frozenset({item.key}) for item in gold.in_scope_checkable()}
     owner: dict[str, int] = {}
@@ -492,7 +475,7 @@ def _score(
             labels[item.key] = ""
             routing[item.key] = "correct" if item.reason_kind == "" else "leaked"
         elif kinds:
-            # NEEDS-OWNER(AMB-1): existential reading: a row is correct if any nonCheckable entry carries the gold kind
+            # AMB-1: existential reading: a row is correct if any nonCheckable entry carries the gold kind
             present = item.reason_kind != "" and item.reason_kind in kinds
             routing[item.key] = "correct" if present else "misrouted"
             labels[item.key] = item.reason_kind if present else kinds[0]

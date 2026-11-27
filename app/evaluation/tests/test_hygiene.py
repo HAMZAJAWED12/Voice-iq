@@ -22,6 +22,7 @@ from types import MappingProxyType
 import pytest
 
 from app.evaluation.bakeoff.extraction import parse_extraction
+from app.evaluation.bakeoff.fidelity import score_fidelity
 from app.evaluation.bakeoff.gold import load_gold_set
 from app.evaluation.bakeoff.report import OPEN_RULINGS
 from app.evaluation.bakeoff.scoring import score_run
@@ -44,8 +45,13 @@ H4_TEST_FILES: tuple[str, ...] = (
     "test_entry.py",
     "test_machine.py",
 )
-EARLIER_MODULES = ("__init__", "gold", "extraction", "scoring", "stats", *H2_MODULES, *H3_MODULES)
-MODULES = (*EARLIER_MODULES, *H4_MODULES)
+# H5a brief section 4.7, items 1 and 11: the H5 modules and their test modules; every check over MODULES covers them.
+H5_MODULES: tuple[str, ...] = ("frozen", "cli", "wrapper")
+H5_PLANNED = frozenset(H5_MODULES)
+H5_TEST_FILES: tuple[str, ...] = ("test_frozen.py", "test_cli.py", "test_wrapper.py", "test_launch_helper.py")
+# `fidelity` (AMB-4, ruled 2026-11-18) sits with the scoring core and imports only H1 modules.
+EARLIER_MODULES = ("__init__", "gold", "extraction", "scoring", "fidelity", "stats", *H2_MODULES, *H3_MODULES)
+MODULES = (*EARLIER_MODULES, *H4_MODULES, *H5_MODULES)
 ALLOWED = frozenset(
     {
         "__future__",
@@ -70,12 +76,17 @@ ALLOWED = frozenset(
     }
 )
 # H4 spec section 2, hygiene item 2: the entry point parses its command line and writes to stdout and stderr, and
-# machine runs the /proc thread.
+# machine runs the /proc thread. H5a brief section 4.7, item 4: the run CLI does as the entry point does, and the
+# wrapper writes to the saved console and puts a traceback in its log.
 EXTRA_ALLOWED = {
     "client": frozenset({"httpx", "time"}),
     "launch": frozenset({"subprocess", "time"}),
     "entry": frozenset({"argparse", "sys"}),
     "machine": frozenset({"threading"}),
+    "cli": frozenset({"argparse", "sys"}),
+    "wrapper": frozenset({"sys", "traceback"}),
+    # AMB-4: values are compared by exact decimal value; no other module gets decimal.
+    "fidelity": frozenset({"decimal"}),
 }
 
 
@@ -331,10 +342,90 @@ def test_the_entry_sets_the_scored_markers() -> None:
     assert "mark_scored" not in _attributes("marked = view.marked(key)\n")
 
 
-@pytest.mark.parametrize("module", [module for module in MODULES if module != "entry"])
-def test_only_the_entry_may_import_argparse_and_sys(module: str) -> None:
-    """Hygiene item 2: the allowlist refuses argparse and sys everywhere but in `entry`."""
-    assert _disallowed_for(module, _source(module) + "\nimport argparse\nimport sys\n") == {"argparse", "sys"}
+# Hygiene item 2, widened by the H5a brief section 4.7, item 4: argparse only in `entry` and `cli`; sys only in those
+# and `wrapper`; traceback only in `wrapper`.
+@pytest.mark.parametrize("module", [module for module in MODULES if module not in ("entry", "cli")])
+def test_only_the_entry_and_the_cli_may_import_argparse(module: str) -> None:
+    assert _disallowed_for(module, _source(module) + "\nimport argparse\n") == {"argparse"}
+
+
+@pytest.mark.parametrize("module", [module for module in MODULES if module not in ("entry", "cli", "wrapper")])
+def test_only_the_entry_the_cli_and_the_wrapper_may_import_sys(module: str) -> None:
+    assert _disallowed_for(module, _source(module) + "\nimport sys\n") == {"sys"}
+
+
+@pytest.mark.parametrize("module", [module for module in MODULES if module != "wrapper"])
+def test_only_the_wrapper_may_import_traceback(module: str) -> None:
+    assert _disallowed_for(module, _source(module) + "\nimport traceback\n") == {"traceback"}
+
+
+def test_the_cli_source_passes_with_argparse_and_sys() -> None:
+    source = _source("cli")
+    assert {"argparse", "sys"} <= _imports(source)
+    assert _disallowed_for("cli", source) == set()
+    assert _disallowed_for("cli", source + "\nimport subprocess\nimport threading\n") == {"subprocess", "threading"}
+
+
+def test_the_wrapper_source_passes_with_sys_and_traceback() -> None:
+    source = _source("wrapper")
+    assert {"sys", "traceback"} <= _imports(source)
+    assert _disallowed_for("wrapper", source) == set()
+    assert _disallowed_for("wrapper", source + "\nimport argparse\nimport subprocess\n") == {"argparse", "subprocess"}
+
+
+def _os_attributes(source: str) -> set[str]:
+    """The names a source reaches as `os.<name>`, or through an alias of an `import os` or `import os.x`, or imports
+    with `from os import`. Two markers stand for the forms that hide a name: `<os alias>` for such an alias, and
+    `<bare os>` for any use of the module name other than `os.<name>`, such as `getattr(os, ...)`, `f(os)` or
+    `x = os`. A pinned set holds neither."""
+    tree = ast.parse(source)
+    names = {"os"}
+    reached: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if (alias.name == "os" or alias.name.startswith("os.")) and alias.asname:
+                    names.add(alias.asname)
+                    reached.add("<os alias>")
+    attribute_values = {id(node.value) for node in ast.walk(tree) if isinstance(node, ast.Attribute)}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in names:
+            reached.add(node.attr)
+        elif isinstance(node, ast.Name) and node.id in names and id(node) not in attribute_values:
+            reached.add("<bare os>")
+    return reached | {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and not node.level and node.module == "os"
+        for alias in node.names
+    }
+
+
+def test_the_os_attributes_of_the_h5_modules_are_pinned() -> None:
+    """H5a brief section 4.7, item 4: `cli` reaches `os` for `fsync` alone, `wrapper` for the descriptor calls of its
+    redirect alone, and `frozen` does not import it."""
+    assert _os_attributes(_source("cli")) == {"fsync"}
+    assert _os_attributes(_source("wrapper")) == {"dup", "dup2", "close", "write"}
+    assert "os" not in {name.split(".")[0] for name in _imports(_source("frozen"))}
+    assert _os_attributes(_source("frozen")) == set()
+
+
+@pytest.mark.parametrize(
+    ("snippet", "name"),
+    [
+        ("os.path.realpath(p)\n", "path"),
+        ("os.getcwd()\n", "getcwd"),
+        ("from os import fsync, sep\n", "sep"),
+        ("import os as _os\n_os.unlink(p)\n", "unlink"),
+        ("import os as _os\n_os.unlink(p)\n", "<os alias>"),
+        ("import os.path as osp\nosp.join(a, b)\n", "<os alias>"),
+        ("getattr(os, 'unlink')(p)\n", "<bare os>"),
+        ("tool = os\n", "<bare os>"),
+        ("call(os)\n", "<bare os>"),
+    ],
+)
+def test_the_os_attribute_check_catches_each_form(snippet: str, name: str) -> None:
+    assert name in _os_attributes(_source("cli") + "\n" + snippet)
 
 
 def test_the_entry_source_passes_with_argparse_and_sys() -> None:
@@ -670,9 +761,10 @@ def _environment_reads(source: str) -> set[str]:
     return found & _ENVIRONMENT_READS
 
 
-@pytest.mark.parametrize("module", (*H3_MODULES, *H4_MODULES))
+@pytest.mark.parametrize("module", ("fidelity", *H3_MODULES, *H4_MODULES, *H5_MODULES))
 def test_h3_modules_read_no_environment_and_print_nothing(module: str) -> None:
-    """H4 spec section 2, hygiene item 10: H4 modules too, but the scoring and stats ban is for H3 modules only."""
+    """H4 spec section 2, hygiene item 10: H4 and H5 modules too, but the scoring and stats ban is for H3 modules
+    only."""
     source = _source(module)
     assert _environment_reads(source) == set()
     assert "logging" not in _imports(source)
@@ -726,7 +818,7 @@ def _default_calls(source: str) -> list[int]:
 
 # Section 2: "No module-level mutable state, no print, no logging, no call in a default argument (ruff B)". The repo's
 # ruff config ignores B008, and no ruff rule checks module-level state, so these two checks stand in.
-@pytest.mark.parametrize("module", (*H3_MODULES, *H4_MODULES))
+@pytest.mark.parametrize("module", ("fidelity", *H3_MODULES, *H4_MODULES, *H5_MODULES))
 def test_h3_modules_keep_no_module_state_and_call_nothing_in_a_default(module: str) -> None:
     source = _source(module)
     assert _module_level_mutables(source) == []
@@ -777,6 +869,7 @@ H4_ALLOWED_IMPORTS: dict[str, frozenset[str]] = {
             "client",
             "evidence",
             "extraction",
+            "fidelity",
             "gold",
             "inputs",
             "launch",
@@ -844,7 +937,8 @@ def test_h4_import_direction() -> None:
     for module in EARLIER_MODULES:
         assert not _own_modules(_source(module)) & H4_PLANNED, module
     for module in MODULES:
-        assert "entry" not in _own_modules(_source(module)), module
+        # H5a brief section 4.7, item 3: "nothing imports entry" became "only cli imports entry".
+        assert ("entry" in _own_modules(_source(module))) is (module == "cli"), module
     for module, allowed in H4_ALLOWED_IMPORTS.items():
         assert _own_modules(_source(module)) <= allowed, module
         if module in H4_EXACT_IMPORTS:
@@ -1076,6 +1170,31 @@ def test_the_own_module_check_reads_every_import_form(snippet: str, names: set[s
     assert _own_modules(snippet) == names
 
 
+_ENTRY_IMPORT_FORMS = (
+    "from . import entry",
+    "from . import gates, entry as e",
+    "from .entry import main",
+    "from .entry import load_entry_config as load",
+    f"from {PACKAGE}.entry import run_bakeoff",
+    f"from {PACKAGE} import entry",
+    f"import {PACKAGE}.entry",
+    f"import {PACKAGE}.entry as entry_module",
+    "def f():\n    from . import entry\n",
+)
+
+
+@pytest.mark.parametrize("line", _ENTRY_IMPORT_FORMS)
+@pytest.mark.parametrize("module", [module for module in MODULES if module != "cli"])
+def test_only_the_cli_imports_the_entry_in_any_form(module: str, line: str) -> None:
+    """H5a brief section 4.7, item 3: each import form `_own_modules` reads is caught outside `cli`."""
+    assert "entry" not in _own_modules(_source(module))
+    assert "entry" in _own_modules(_source(module) + f"\n{line}\n")
+
+
+def test_the_cli_imports_the_entry() -> None:
+    assert "entry" in _own_modules(_source("cli"))
+
+
 @pytest.mark.parametrize("line", ["from . import gates", "from .report import build_report", "from . import entry"])
 def test_the_h4_direction_check_catches_an_earlier_module_importing_h4(line: str) -> None:
     assert _own_modules(_source("runner") + f"\n{line}\n") & H4_PLANNED
@@ -1106,7 +1225,17 @@ def test_the_package_docstring_states_every_module_and_its_imports() -> None:
     for module in MODULES[1:]:
         assert f"- `{module}`: " in docstring, module
     assert _stated_imports(docstring) == {module: _own_modules(_source(module)) for module in MODULES[1:]}
-    assert "No H1 to H3 module imports an H4 module, and nothing imports\n`entry`." in docstring
+    # H5a brief section 4.7, item 3: "imported by" is not read as an import statement, as "imports" would be.
+    assert "No H1 to H3 module imports an H4 module, and `entry` is imported by `cli`\nalone." in docstring
+
+
+def test_the_package_docstring_check_catches_a_sentence_saying_only_cli_imports_entry() -> None:
+    """H5a brief section 4.7, item 3: "`cli` imports `entry`." alone would state cli's imports as {entry}."""
+    docstring = ast.get_docstring(ast.parse(_source("__init__"))) or ""
+    actual = {module: _own_modules(_source(module)) for module in MODULES[1:]}
+    assert _stated_imports(docstring) == actual
+    assert _stated_imports(docstring + "\n`cli` imports `entry`.\n") != actual
+    assert _stated_imports(docstring + "\n`entry` is imported by `cli` alone.\n") == actual
 
 
 @pytest.mark.parametrize(
@@ -1122,6 +1251,15 @@ def test_the_package_docstring_states_every_module_and_its_imports() -> None:
             "`machine` imports `evidence`, `launch`, `records` and `schemas`",
             "`machine` imports `launch`, `records` and `schemas`",
         ),
+        (
+            "`frozen` imports `client`, `gates`, `gold`, `inputs`, `records` and `schemas`",
+            "`frozen` imports `client`, `gold`, `inputs`, `records` and `schemas`",
+        ),
+        ("`entry`, `frozen`, `gates`, `gold`", "`frozen`, `gates`, `gold`"),
+        (
+            "`wrapper` imports `cli`,\n`launch` and `records`",
+            "`wrapper` imports `cli`,\n`launch`, `records` and `entry`",
+        ),
     ],
 )
 def test_the_package_docstring_check_catches_a_drifted_sentence(old: str, new: str) -> None:
@@ -1129,6 +1267,17 @@ def test_the_package_docstring_check_catches_a_drifted_sentence(old: str, new: s
     assert old in docstring
     actual = {module: _own_modules(_source(module)) for module in MODULES[1:]}
     assert _stated_imports(docstring.replace(old, new)) != actual
+
+
+def test_the_package_docstring_says_where_the_prompt_text_lives() -> None:
+    """H5a brief section 4.7, item 9: the prompt text is in the frozen folder and read by `frozen`, the wrapper writes
+    only its log, and the milestone list names H5a."""
+    docstring = ast.get_docstring(ast.parse(_source("__init__"))) or ""
+    flat = " ".join(docstring.split())
+    assert "Prompt text lives in app/evaluation/frozen/ and is read by `frozen`." in flat
+    assert "H5 supplies it" not in flat
+    assert "`wrapper` writes only its host-only log, through the launch tools." in flat
+    assert "(milestone H5a)" in " ".join(docstring.split("\n\n")[0].split())
 
 
 def _machine_paths(text: str) -> list[str]:
@@ -1143,8 +1292,9 @@ def _machine_paths(text: str) -> list[str]:
 @pytest.mark.parametrize(
     "path",
     [
-        *(BAKEOFF / f"{module}.py" for module in (*H3_MODULES, *H4_MODULES)),
+        *(BAKEOFF / f"{module}.py" for module in (*H3_MODULES, *H4_MODULES, *H5_MODULES)),
         *(Path(__file__).parent / name for name in (*H4_TEST_FILES, "_h4_fixtures.py")),
+        *(Path(__file__).parent / name for name in (*H5_TEST_FILES, "_h5_fixtures.py")),
         *(
             Path(__file__).parent / name
             for name in (
@@ -1206,6 +1356,53 @@ def test_every_h4_test_module_refuses_sockets_and_processes(name: str) -> None:
     assert _NO_SOCKETS_OR_PROCESSES in (Path(__file__).parent / name).read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize("name", H5_TEST_FILES)
+def test_every_h5_test_module_refuses_sockets_and_processes(name: str) -> None:
+    assert _NO_SOCKETS_OR_PROCESSES in (Path(__file__).parent / name).read_text(encoding="utf-8")
+
+
+# H5a brief section 4.7, item 12: no test names a gold version path or the gold drafts folder; guard tests build
+# fake paths instead. The needles are built so that this file never matches itself.
+_GOLD_VERSION_PATH = re.compile("go" + "ld" + r"[/\\]+v(?:0\.4|1\.0)", flags=re.IGNORECASE)
+_GOLD_DRAFTS = "gold-set" + "-drafts"
+
+
+def _gold_path_names(text: str) -> list[str]:
+    found = _GOLD_VERSION_PATH.findall(text)
+    return found + ([_GOLD_DRAFTS] if _GOLD_DRAFTS in text.lower() else [])
+
+
+@pytest.mark.parametrize("path", sorted(Path(__file__).parent.glob("*.py")), ids=lambda path: path.name)
+def test_no_test_file_names_a_gold_path(path: Path) -> None:
+    assert _gold_path_names(path.read_text(encoding="utf-8")) == []
+
+
+def test_the_gold_path_check_does_not_match_itself() -> None:
+    assert Path(__file__) in set(Path(__file__).parent.glob("*.py"))
+    assert _gold_path_names(Path(__file__).read_text(encoding="utf-8")) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "go" + "ld/v0.4",
+        "go" + "ld/v1.0/items.csv",
+        "app/evaluation/go" + "ld//v1.0",
+        "go" + "ld" + chr(92) + "v0.4",
+        "GO" + "LD" + chr(92) * 2 + "V1.0",
+        "GOLD-SET" + "-DRAFTS",
+        "../gold-set" + "-drafts/x",
+    ],
+)
+def test_the_gold_path_check_catches_each_form(text: str) -> None:
+    assert _gold_path_names(text)
+
+
+@pytest.mark.parametrize("text", ["gold v1.0", "gold_v1.0", "golden/v1.0", "go" + "ld/v0.5", "synthetic_gold(root)"])
+def test_the_gold_path_check_passes_other_text(text: str) -> None:
+    assert _gold_path_names(text) == []
+
+
 def test_the_socket_check_catches_a_module_without_the_fixture() -> None:
     assert _NO_SOCKETS_OR_PROCESSES not in _NO_SOCKETS_OR_PROCESSES.replace("    block_processes(monkeypatch)\n", "")
 
@@ -1217,6 +1414,11 @@ def test_import_direction() -> None:
         f"{PACKAGE}.gold",
         f"{PACKAGE}.extraction",
         f"{PACKAGE}.stats",
+    }
+    assert {name for name in _imports(_source("fidelity")) if _own(name)} == {
+        f"{PACKAGE}.extraction",
+        f"{PACKAGE}.gold",
+        f"{PACKAGE}.scoring",
     }
     assert {name for name in _imports(_source("__init__")) if _own(name)} == set()
     assert {name for name in _imports(_source("schemas")) if _own(name)} == set()
@@ -1247,40 +1449,33 @@ def test_the_core_runs_with_the_network_switched_off(monkeypatch: pytest.MonkeyP
     assert parsed.claims[0].segment_ids == ("seg_002",)
     challenger = score_run(gold, run_xp(gold))
     default = score_run(gold, run_xm(gold))
+    assert score_fidelity(gold, run_xp(gold)).found_rows == challenger.found_units
     result = paired_bootstrap(challenger.per_conversation, default.per_conversation, seed=1, resamples=200)
     assert result.observed_difference == 1 - default.f1
 
 
-# The final H4 tuple of NEEDS-OWNER numbers, each with a marked site; H5 adds 133.
-OWNER_MARKERS = (*range(1, 5), *range(26, 31), 66, 69, 106, 108, 116, 129, 130, 134, 135, 136, 137, 139, 140)
+# The NEEDS-OWNER numbers with a marked site: AMB-29 is the one open reading with a marker. The readings ruled on
+# 2026-11-18 and 2026-11-21 left with their markers, and the AMB-133 marker still comes after 2026-11-30 (AMB-153).
+OWNER_MARKERS = (29,)
+RULED_MARKERS = (1, 2, 3, 4, 26, 27, 28, 30, 52, 66, 69, 106, 108, 116, 129, 130, 134, 135, 136, 137, 139, 140)
 
 
 def test_owner_markers_are_in_the_sources() -> None:
     sources = "\n".join(_source(module) for module in MODULES)
     for number in OWNER_MARKERS:
         assert f"NEEDS-OWNER(AMB-{number})" in sources
-    assert "NEEDS-OWNER(AMB-52)" not in sources
+    for number in RULED_MARKERS:
+        assert f"NEEDS-OWNER(AMB-{number})" not in sources
 
 
-# The module that holds each H4 marker, with its count there. AMB-66 keeps its H3 site in records beside its gates
-# site, AMB-69 keeps its H3 site in runner beside its entry site, and AMB-106 has two gates sites.
-OWNER_MARKER_SITES = MappingProxyType(
-    {
-        66: (("records", 1), ("gates", 1)),
-        69: (("runner", 1), ("entry", 1)),
-        106: (("gates", 2),),
-        116: (("gates", 1),),
-        135: (("gates", 1),),
-        139: (("gates", 1),),
-        108: (("machine", 1),),
-        140: (("entry", 1),),
-        129: (("decision", 1),),
-        130: (("decision", 1),),
-        134: (("decision", 1),),
-        136: (("report", 1),),
-        137: (("report", 1),),
-    }
-)
+def test_decimal_is_allowed_for_fidelity_alone() -> None:
+    assert "decimal" not in ALLOWED
+    assert {module for module, extra in EXTRA_ALLOWED.items() if "decimal" in extra} == {"fidelity"}
+    assert "decimal" in _imports(_source("fidelity"))
+
+
+# The module that holds each open marker, with its count there.
+OWNER_MARKER_SITES = MappingProxyType({29: (("client", 1),)})
 
 
 @pytest.mark.parametrize("number", sorted(OWNER_MARKER_SITES))
@@ -1291,8 +1486,8 @@ def test_each_h4_owner_marker_sits_in_its_listed_module(number: int) -> None:
 
 
 def test_a_moved_owner_marker_is_caught() -> None:
-    moved = _source("report").replace("NEEDS-OWNER(AMB-136)", "NEEDS-OWNER(AMB-999)")
-    assert moved.count("NEEDS-OWNER(AMB-136)") != dict(OWNER_MARKER_SITES[136])["report"]
+    moved = _source("client").replace("NEEDS-OWNER(AMB-29)", "NEEDS-OWNER(AMB-999)")
+    assert moved.count("NEEDS-OWNER(AMB-29)") != dict(OWNER_MARKER_SITES[29])["client"]
 
 
 _OWNER_MARKER = re.compile(r"NEEDS-OWNER\(AMB-(\d+)\)")
@@ -1316,13 +1511,13 @@ def test_every_owner_marker_is_listed_and_well_formed() -> None:
     ("line", "problem"),
     [
         ("# NEEDS-OWNER(AMB-77): an unlisted reading", "AMB-77 is not listed"),
-        ("# NEEDS-OWNER(AMB-66) no colon", "a marker is not in the form '# NEEDS-OWNER(AMB-n): <text>'"),
-        ("x = 1  # see NEEDS-OWNER(AMB-66)", "a marker is not in the form '# NEEDS-OWNER(AMB-n): <text>'"),
+        ("# NEEDS-OWNER(AMB-29) no colon", "a marker is not in the form '# NEEDS-OWNER(AMB-n): <text>'"),
+        ("x = 1  # see NEEDS-OWNER(AMB-29)", "a marker is not in the form '# NEEDS-OWNER(AMB-n): <text>'"),
     ],
 )
 def test_the_owner_marker_check_catches_each_problem(line: str, problem: str) -> None:
     assert problem in _owner_marker_problems(f"{line}\n")
-    assert _owner_marker_problems("# NEEDS-OWNER(AMB-66): the probe calls of session 1\n") == []
+    assert _owner_marker_problems("# NEEDS-OWNER(AMB-29): the repair size after a cut-off\n") == []
 
 
 def test_the_report_lists_every_open_ruling_that_has_a_site() -> None:
@@ -1336,6 +1531,7 @@ def test_the_report_lists_every_open_ruling_that_has_a_site() -> None:
         ("gold", ("§3.12", "§5.1", "§5.2", "§5.3")),
         ("extraction", ("§3.8", "§3.10", "PHASE-0 §2.2", "§5.3")),
         ("scoring", ("§5.1", "§5.2", "§5.3", "§6")),
+        ("fidelity", ("§5.1", "§5.2", "§5.3")),
         ("stats", ("§8", "§3.13")),
         ("schemas", ("§3.8", "§3.10", "§4", "PHASE-0 §2.2")),
         ("probe", ("§3.8", "§4", "§6", "PHASE-0 §2.2")),
@@ -1350,6 +1546,9 @@ def test_the_report_lists_every_open_ruling_that_has_a_site() -> None:
         ("report", ("§3.13", "§9", "§10", "Annex A")),
         ("entry", ("§3.2", "§3.12", "§11", "§3.13", "§9")),
         ("machine", ("§3.1", "§3.13", "§6", "§9")),
+        ("frozen", ("§3.10", "§3.11", "§3.12", "§3.13", "§4", "§11")),
+        ("cli", ("§3.2", "§3.12", "§3.13", "§11")),
+        ("wrapper", ("§3.12",)),
     ],
 )
 def test_module_docstrings_cite_their_sections(module: str, citations: tuple[str, ...]) -> None:
@@ -1391,6 +1590,26 @@ def test_scoring_never_reads_unscored_fields(module: str) -> None:
 # The text of a row, a claim, a model answer or an error never reaches the gates, the decision, the report or the
 # evidence: they read ids, counts, hashes and outcomes only (S2 §9; H4 spec section 2, hygiene item 17).
 _TEXT_FIELDS = frozenset({"text", "utterance", "claim_text", "reasoning_content", "error_text"})
+
+
+# AMB-4 (ruled 2026-11-18): `fidelity` alone reads claim text, exactly the gold row's `claim_text` and the model
+# claim's `text`, each at one site; every other G8 field (spans, call date, setting, speakers, timings, ASR
+# confidence) and the utterance stay barred for it.
+def _fidelity_reads(source: str) -> tuple[set[str], tuple[int, int]]:
+    attributes = [n.attr for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Attribute)]
+    return set(attributes) & (_UNREAD | _TEXT_FIELDS), (attributes.count("claim_text"), attributes.count("text"))
+
+
+def test_fidelity_reads_only_the_gold_claim_text_and_the_model_claim_text() -> None:
+    assert _fidelity_reads(_source("fidelity")) == ({"claim_text", "text"}, (1, 1))
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["x = item.span_text", "x = row.utterance", "x = c.call_date", "x = m.start()", "x = entry.text"],
+)
+def test_the_fidelity_read_check_catches_each_extra_read(line: str) -> None:
+    assert _fidelity_reads(_source("fidelity") + f"\n{line}\n") != ({"claim_text", "text"}, (1, 1))
 
 
 def _text_reaches(source: str) -> set[str]:
@@ -1639,3 +1858,516 @@ def test_runtime_strings_cite_no_private_spec_rule_id(module: str) -> None:
 )
 def test_the_runtime_string_check_catches_a_spec_rule_id(snippet: str, found: bool) -> None:
     assert any(_SPEC_RULE_ID.search(text) for _line, text in _runtime_strings(snippet)) is found
+
+
+# H5 hygiene. The import rows: no earlier or H4 module imports an H5 module, and each H5 module imports exactly its row.
+H5_ALLOWED_IMPORTS: dict[str, frozenset[str]] = {
+    "frozen": frozenset({"client", "gates", "gold", "inputs", "records", "schemas"}),
+    "cli": frozenset(
+        {"client", "decision", "entry", "frozen", "gates", "gold", "inputs", "launch", "machine", "records", "schemas"}
+    ),
+    "wrapper": frozenset({"cli", "launch", "records"}),
+}
+
+
+def test_h5_import_direction() -> None:
+    assert set(H5_MODULES) <= H5_PLANNED
+    assert set(H5_ALLOWED_IMPORTS) == set(H5_MODULES)
+    for module in (*EARLIER_MODULES, *H4_MODULES):
+        assert not _own_modules(_source(module)) & H5_PLANNED, module
+    for module, allowed in H5_ALLOWED_IMPORTS.items():
+        assert _own_modules(_source(module)) == allowed, module
+
+
+@pytest.mark.parametrize(
+    ("module", "line"),
+    [
+        ("runner", "from . import frozen"),
+        ("inputs", "from .frozen import load_draft_inputs"),
+        ("entry", f"from {PACKAGE}.frozen import load_frozen"),
+        ("gates", "from . import cli"),
+        ("machine", "from .wrapper import run_wrapped"),
+    ],
+)
+def test_the_h5_direction_check_catches_an_earlier_module_importing_h5(module: str, line: str) -> None:
+    assert _own_modules(_source(module) + f"\n{line}\n") & H5_PLANNED
+    assert not _own_modules(_source(module)) & H5_PLANNED
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "from . import runner",
+        "from .launch import base_url",
+        "from .probe import MAX_SOURCES_PER_CLAIM",
+        "from .extraction import parse_extraction",
+        "from . import entry",
+        "from . import cli",
+    ],
+)
+def test_the_frozen_row_catches_an_import_outside_its_set(line: str) -> None:
+    """frozen imports only from client, gates, gold, inputs, records and schemas."""
+    assert not _own_modules(_source("frozen") + f"\n{line}\n") <= H5_ALLOWED_IMPORTS["frozen"]
+    assert _own_modules(_source("frozen")) <= H5_ALLOWED_IMPORTS["frozen"]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "from . import runner",
+        "from .report import build_report",
+        "from . import wrapper",
+        "from .extraction import parse_extraction",
+        "from .probe import MAX_SOURCES_PER_CLAIM",
+        "from . import scoring",
+    ],
+)
+def test_the_cli_row_catches_an_import_outside_its_set(line: str) -> None:
+    assert not _own_modules(_source("cli") + f"\n{line}\n") <= H5_ALLOWED_IMPORTS["cli"]
+    assert _own_modules(_source("cli")) == H5_ALLOWED_IMPORTS["cli"]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "from . import entry",
+        "from .frozen import load_frozen",
+        f"from {PACKAGE}.gold import load_gold_set",
+        "from . import inputs",
+        "from .client import ModelServerClient",
+        "from . import runner",
+        f"from {PACKAGE} import machine",
+    ],
+)
+def test_the_wrapper_row_catches_an_import_outside_its_set(line: str) -> None:
+    """wrapper imports only cli, launch and records, so it cannot read gold or a frozen input itself."""
+    assert not _own_modules(_source("wrapper") + f"\n{line}\n") <= H5_ALLOWED_IMPORTS["wrapper"]
+    assert _own_modules(_source("wrapper")) == H5_ALLOWED_IMPORTS["wrapper"]
+    assert not _own_modules(_source("wrapper")) & {"entry", "frozen", "gold", "inputs", "client"}
+
+
+# H5a brief section 4.7, item 5: an `if __name__ == "__main__":` block appears only in `cli` and `wrapper`, and each
+# ends with `raise SystemExit(main())`.
+_MAIN_BLOCK_MODULES = frozenset({"cli", "wrapper"})
+
+
+def _main_blocks(source: str) -> list[ast.If]:
+    """Every `if __name__ == "__main__":` block, at any depth."""
+    return [
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Compare)
+        and isinstance(node.test.left, ast.Name)
+        and node.test.left.id == "__name__"
+        and any(isinstance(item, ast.Constant) and item.value == "__main__" for item in node.test.comparators)
+    ]
+
+
+def _ends_with_system_exit_of_main(block: ast.If) -> bool:
+    last = block.body[-1]
+    return (
+        isinstance(last, ast.Raise)
+        and isinstance(last.exc, ast.Call)
+        and isinstance(last.exc.func, ast.Name)
+        and last.exc.func.id == "SystemExit"
+        and len(last.exc.args) == 1
+        and isinstance(last.exc.args[0], ast.Call)
+        and isinstance(last.exc.args[0].func, ast.Name)
+        and last.exc.args[0].func.id == "main"
+        and not last.exc.args[0].args
+    )
+
+
+@pytest.mark.parametrize("module", MODULES)
+def test_only_the_cli_and_the_wrapper_have_a_main_block(module: str) -> None:
+    blocks = _main_blocks(_source(module))
+    if module in _MAIN_BLOCK_MODULES:
+        assert len(blocks) == 1, module
+        assert _ends_with_system_exit_of_main(blocks[0]), module
+    else:
+        assert blocks == [], module
+
+
+def test_the_cli_main_block_is_at_module_level() -> None:
+    tree = ast.parse(_source("cli"))
+    top = [node for node in tree.body if isinstance(node, ast.If)]
+    assert len(top) == 1 and _main_blocks(ast.unparse(top[0])) and tree.body[-1] is top[0]
+
+
+def test_the_wrapper_main_block_is_at_module_level() -> None:
+    tree = ast.parse(_source("wrapper"))
+    top = [node for node in tree.body if isinstance(node, ast.If)]
+    assert len(top) == 1 and _main_blocks(ast.unparse(top[0])) and tree.body[-1] is top[0]
+
+
+@pytest.mark.parametrize(
+    ("snippet", "blocks", "ends"),
+    [
+        ('if __name__ == "__main__":\n    raise SystemExit(main())\n', 1, True),
+        ('if __name__ == "__main__":\n    main()\n', 1, False),
+        ('if __name__ == "__main__":\n    raise SystemExit(main(sys.argv))\n', 1, False),
+        ('def f():\n    if __name__ == "__main__":\n        raise SystemExit(main())\n', 1, True),
+        ('if __name__ == "x":\n    raise SystemExit(main())\n', 0, False),
+    ],
+)
+def test_the_main_block_check_reads_each_form(snippet: str, blocks: int, ends: bool) -> None:
+    found = _main_blocks(snippet)
+    assert len(found) == blocks
+    if found:
+        assert _ends_with_system_exit_of_main(found[0]) is ends
+
+
+# H5a brief section 4.7, item 6: `cli` names no file attribute but `read_bytes` and the injected `fsync`, never calls
+# `fsync`, and opens nothing; every write goes through `records`.
+def _cli_file_problems(source: str) -> list[str]:
+    tree = ast.parse(source)
+    problems = []
+    if _names(tree) & (_FILE_ATTRIBUTES - {"read_bytes", "fsync"}):
+        problems.append("a file name beyond read_bytes and fsync")
+    called = {node.func.id for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
+    if "fsync" in _called_attributes(source) or "fsync" in called:
+        problems.append("fsync called")
+    if _open_modes(source) != set():
+        problems.append("an open call")
+    if "open" in {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}:
+        problems.append("a builtin open")
+    return problems
+
+
+def test_the_cli_reaches_files_only_through_the_tools_and_records() -> None:
+    source = _source("cli")
+    assert _cli_file_problems(source) == []
+    assert {"read_bytes", "fsync"} <= _names(ast.parse(source))
+
+
+@pytest.mark.parametrize(
+    ("snippet", "problem"),
+    [
+        ("Path(x).write_bytes(b'x')\n", "a file name beyond read_bytes and fsync"),
+        ("os.mkdir(d)\n", "a file name beyond read_bytes and fsync"),
+        ("Path(d).glob('*')\n", "a file name beyond read_bytes and fsync"),
+        ("env.fsync(1)\n", "fsync called"),
+        ("os.fsync(handle)\n", "fsync called"),
+        ("fsync(handle)\n", "fsync called"),
+        ("Path(x).open('xb')\n", "an open call"),
+        ("open(x, 'wb')\n", "a builtin open"),
+    ],
+)
+def test_the_cli_file_check_catches_each_reach(snippet: str, problem: str) -> None:
+    assert problem in _cli_file_problems(_source("cli") + "\n" + snippet)
+    assert _cli_file_problems("data = env.tools.read_bytes(p)\nwrite_new_file(p, d, fsync=env.fsync)\n") == []
+
+
+# H5a brief section 4.7, item 8: the CLI reads no text attribute; the per-source requests are built in `frozen`.
+_CLI_TEXT_NAMES = frozenset({"text", "claim", "claim_text", "utterance", "reasoning_content"})
+
+
+def _cli_text_reaches(source: str) -> set[str]:
+    return {node.attr for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Attribute)} & _CLI_TEXT_NAMES
+
+
+def test_the_cli_reads_no_text_attribute() -> None:
+    assert _cli_text_reaches(_source("cli")) == set()
+
+
+@pytest.mark.parametrize(
+    ("snippet", "name"),
+    [
+        ("x = item.claim\n", "claim"),
+        ("x = source.text\n", "text"),
+        ("x = row.claim_text\n", "claim_text"),
+        ("x = row.utterance\n", "utterance"),
+        ("x = attempt.reasoning_content\n", "reasoning_content"),
+    ],
+)
+def test_the_cli_text_check_catches_each_read(snippet: str, name: str) -> None:
+    assert _cli_text_reaches(_source("cli") + "\n" + snippet) == {name}
+
+
+def test_the_wrapper_reads_no_text_attribute() -> None:
+    """H5a brief section 4.7, item 8: the wrapper sees typed fields and captured lines, never a text attribute."""
+    assert _cli_text_reaches(_source("wrapper")) == set()
+
+
+@pytest.mark.parametrize(
+    ("snippet", "name"),
+    [("x = item.claim\n", "claim"), ("x = segment.text\n", "text"), ("x = row.utterance\n", "utterance")],
+)
+def test_the_wrapper_text_check_catches_each_read(snippet: str, name: str) -> None:
+    assert _cli_text_reaches(_source("wrapper") + "\n" + snippet) == {name}
+
+
+# H5a brief section 4.7, item 6: `wrapper` names no file attribute and no tool but `open_log`, and opens nothing
+# itself; its log is created through the launch tools, and its console is a descriptor it already holds.
+_TOOL_NAMES = frozenset({"open_log", "read_chunks", "popen"})
+
+
+def _wrapper_file_problems(source: str) -> list[str]:
+    tree = ast.parse(source)
+    problems = []
+    if _names(tree) & ((_FILE_ATTRIBUTES | _TOOL_NAMES) - {"open_log"}):
+        problems.append("a file or tool name beyond open_log")
+    if _open_modes(source) != set():
+        problems.append("an open call")
+    if "open" in {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}:
+        problems.append("a builtin open")
+    return problems
+
+
+def test_the_wrapper_reaches_files_only_through_open_log() -> None:
+    source = _source("wrapper")
+    assert _wrapper_file_problems(source) == []
+    assert "open_log" in _names(ast.parse(source))
+
+
+@pytest.mark.parametrize(
+    ("snippet", "problem"),
+    [
+        ("data = env.tools.read_bytes(p)\n", "a file or tool name beyond open_log"),
+        ("Path(x).write_text('x')\n", "a file or tool name beyond open_log"),
+        ("os.mkdir(d)\n", "a file or tool name beyond open_log"),
+        ("os.fsync(fd)\n", "a file or tool name beyond open_log"),
+        ("tools.popen(argv)\n", "a file or tool name beyond open_log"),
+        ("Path(x).open('xb')\n", "an open call"),
+        ("io.open(x, 'wb')\n", "an open call"),
+        ("handle = open(x, 'ab')\n", "a builtin open"),
+    ],
+)
+def test_the_wrapper_file_check_catches_each_reach(snippet: str, problem: str) -> None:
+    assert problem in _wrapper_file_problems(_source("wrapper") + "\n" + snippet)
+    assert _wrapper_file_problems("log = env.tools.open_log(path)\nos.write(fd, b'x')\n") == []
+
+
+# frozen reads files only through the injected `read_bytes`, so it imports none of the ways out.
+_FROZEN_NEVER_IMPORTS = frozenset({"os", "io", "pathlib", "subprocess", "time", "logging", "sys", "httpx"})
+
+
+def _frozen_way_out(source: str) -> set[str]:
+    return {name.split(".")[0] for name in _imports(source)} & _FROZEN_NEVER_IMPORTS
+
+
+def test_frozen_imports_no_way_out() -> None:
+    assert _frozen_way_out(_source("frozen")) == set()
+
+
+@pytest.mark.parametrize(
+    ("line", "name"),
+    [
+        ("import os", "os"),
+        ("import os.path", "os"),
+        ("from io import BytesIO", "io"),
+        ("from pathlib import Path", "pathlib"),
+        ("import subprocess", "subprocess"),
+        ("from time import monotonic", "time"),
+        ("import logging", "logging"),
+        ("import sys", "sys"),
+        ("import httpx", "httpx"),
+    ],
+)
+def test_the_frozen_import_ban_catches_each_name(line: str, name: str) -> None:
+    assert _frozen_way_out(_source("frozen") + f"\n{line}\n") == {name}
+
+
+def _frozen_file_problems(source: str) -> list[str]:
+    """frozen names no file attribute but the injected `read_bytes`, and opens nothing."""
+    tree = ast.parse(source)
+    problems = []
+    if _names(tree) & (_FILE_ATTRIBUTES - {"read_bytes"}):
+        problems.append("a file name beyond read_bytes")
+    if _open_modes(source) != set():
+        problems.append("an open call")
+    if "open" in {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}:
+        problems.append("a builtin open")
+    return problems
+
+
+def test_frozen_reaches_files_only_through_the_injected_reader() -> None:
+    source = _source("frozen")
+    assert _frozen_file_problems(source) == []
+    assert "read_bytes" in _names(ast.parse(source))
+
+
+@pytest.mark.parametrize(
+    ("snippet", "problem"),
+    [
+        ("Path(x).read_text()\n", "a file name beyond read_bytes"),
+        ("os.listdir(d)\n", "a file name beyond read_bytes"),
+        ("tools.fsync(1)\n", "a file name beyond read_bytes"),
+        ("Path(x).write_bytes(b'x')\n", "a file name beyond read_bytes"),
+        ("Path(x).open('rb')\n", "an open call"),
+        ("open(x)\n", "a builtin open"),
+    ],
+)
+def test_the_frozen_file_check_catches_each_reach(snippet: str, problem: str) -> None:
+    assert problem in _frozen_file_problems(_source("frozen") + "\n" + snippet)
+    assert _frozen_file_problems("data = read_bytes(path)\n") == []
+
+
+# In frozen only these functions read an attribute named `text` or `claim`, besides the private probe and warm-up
+# parse and check helpers; `cap_session_rows` reads `is_in_scope_checkable` and no text.
+_FROZEN_TEXT_NAMES = frozenset({"text", "claim"})
+_FROZEN_TEXT_READERS = frozenset({"gold_free_hashes", "overlap_counts", "source_delta_requests", "delimiters"})
+_FROZEN_TEXT_HELPER = re.compile(r"_(?:parse|check)_(?:probe|warmup)\w*")
+_CAP_ROWS_NEVER = frozenset({"text", "claim", "claim_text", "utterance", "segments", "speaker"})
+
+
+def _top_level_scopes(tree: ast.Module) -> list[tuple[str, ast.AST]]:
+    """Each top-level function and method, by name, and every other top-level statement as `<module>`."""
+    scopes: list[tuple[str, ast.AST]] = []
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            scopes.append((node.name, node))
+        elif isinstance(node, ast.ClassDef):
+            for member in node.body:
+                name = member.name if isinstance(member, ast.FunctionDef | ast.AsyncFunctionDef) else "<module>"
+                scopes.append((name, member))
+        else:
+            scopes.append(("<module>", node))
+    return scopes
+
+
+def _frozen_text_problems(source: str) -> list[str]:
+    problems = []
+    for name, scope in _top_level_scopes(ast.parse(source)):
+        reads = {node.attr for node in ast.walk(scope) if isinstance(node, ast.Attribute)}
+        allowed = name in _FROZEN_TEXT_READERS or _FROZEN_TEXT_HELPER.fullmatch(name)
+        if reads & _FROZEN_TEXT_NAMES and not allowed:
+            problems.append(f"{name} reads text")
+        if name == "cap_session_rows":
+            if reads & _CAP_ROWS_NEVER:
+                problems.append("cap_session_rows reads text")
+            if "is_in_scope_checkable" not in reads:
+                problems.append("cap_session_rows does not read is_in_scope_checkable")
+    return problems
+
+
+def test_frozen_reads_text_only_where_it_must() -> None:
+    assert _frozen_text_problems(_source("frozen")) == []
+
+
+def test_every_frozen_text_rule_names_a_defined_function() -> None:
+    """The allowlist and the `cap_session_rows` rule are in force: each function they name exists in frozen."""
+    defined = {name for name, _ in _top_level_scopes(ast.parse(_source("frozen"))) if name != "<module>"}
+    assert _FROZEN_TEXT_READERS | {"cap_session_rows"} <= defined
+    assert {"build_cap_sessions", "parse_cap_sessions", "load_frozen", "check_expected"} <= defined
+
+
+@pytest.mark.parametrize(
+    ("snippet", "problem"),
+    [
+        (
+            "def build_cap_sessions(g):\n    return [s.text for c in g.conversations for s in c.segments]\n",
+            "build_cap_sessions reads text",
+        ),
+        ("def load_frozen(d):\n    return d.probe_items[0].claim\n", "load_frozen reads text"),
+        ("def check_expected(i, e):\n    return i.warmup.text\n", "check_expected reads text"),
+        (
+            "def cap_session_rows(g, ids):\n    return sum(len(g.conversation(s).segments) for s in ids if g.x)\n",
+            "cap_session_rows reads text",
+        ),
+    ],
+)
+def test_the_frozen_text_check_catches_a_read_in_the_a4_functions(snippet: str, problem: str) -> None:
+    assert problem in _frozen_text_problems(snippet)
+
+
+@pytest.mark.parametrize(
+    ("snippet", "problem"),
+    [
+        ("def load_draft_inputs(d):\n    return d.prompts.repair.text\n", "load_draft_inputs reads text"),
+        ("def build_cap_sessions(g):\n    return [i.claim for i in g.items]\n", "build_cap_sessions reads text"),
+        ("X = SOMETHING.text\n", "<module> reads text"),
+        (
+            "def cap_session_rows(g, ids):\n    return sum(len(s.text) for s in g.rows if s.is_in_scope_checkable)\n",
+            "cap_session_rows reads text",
+        ),
+        (
+            "def cap_session_rows(g, ids):\n    return sum(1 for i in g.items_for(ids[0]))\n",
+            "cap_session_rows does not read is_in_scope_checkable",
+        ),
+    ],
+)
+def test_the_frozen_text_check_catches_each_read(snippet: str, problem: str) -> None:
+    assert problem in _frozen_text_problems(snippet)
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        "def gold_free_hashes(d):\n    return [i.claim for i in d.probe_items]\n",
+        "def _parse_probe(v):\n    return v.text\n",
+        "def _check_warmup_segment(s):\n    return s.text\n",
+        "def cap_session_rows(g, ids):\n    return sum(i.is_in_scope_checkable for s in ids for i in g.items_for(s))\n",
+    ],
+)
+def test_the_frozen_text_check_passes_the_allowed_reads(snippet: str) -> None:
+    assert _frozen_text_problems(snippet) == []
+
+
+# The committed gold-free inputs verify against their hash file once the freeze has written it; until then the test is
+# skipped. It reads no gold.
+FROZEN_DIR = BAKEOFF.parent / "frozen"
+
+
+@pytest.mark.skipif(not (FROZEN_DIR / "INPUTS.sha256").is_file(), reason="not frozen yet")
+def test_the_committed_frozen_inputs_verify() -> None:
+    # Imported here: the other hygiene checks read sources and must not depend on a module loading.
+    from app.evaluation.bakeoff import frozen
+
+    files = {name: (FROZEN_DIR / name).read_bytes() for name in frozen.INPUT_FILES}
+    checked = frozen.check_inputs_manifest((FROZEN_DIR / frozen.INPUTS_MANIFEST).read_bytes(), files)
+    draft = frozen.parse_draft_inputs(files)
+    assert dict(draft.file_sha256) == dict(checked)
+
+
+# The H5 modules cite no plan decision id (D-n) or standing-go id (SUn) in a runtime string either, beside the spec
+# rule ids: the plan's citation allowance covers comments and docstrings only.
+_PLAN_ID = re.compile(r"\bD-[0-9]+\b|\bSU[0-9]+\b")
+
+
+def _plan_id_strings(source: str) -> list[tuple[int, str]]:
+    return [
+        (line, text) for line, text in _runtime_strings(source) if _PLAN_ID.search(text) or _SPEC_RULE_ID.search(text)
+    ]
+
+
+@pytest.mark.parametrize("module", H5_MODULES)
+def test_h5_runtime_strings_cite_no_plan_id(module: str) -> None:
+    assert _plan_id_strings(_source(module)) == []
+
+
+@pytest.mark.parametrize(
+    ("snippet", "found"),
+    [
+        ('raise ValueError("refused under D-5")\n', True),
+        ('x = f"{y} needs the SU1 go"\n', True),
+        ('X = "a standing go (SU12)"\n', True),
+        ('raise ValueError("bad value (G4-6)")\n', True),
+        ('def f():\n    """A docstring may cite D-5 and SU1."""\n', False),
+        ("# a comment may cite D-5\nx = 1\n", False),
+        ('raise ValueError("synthetic inputs equal gold text (AMB-157)")\n', False),
+        ('X = "ID-5 SUM1 D-x"\n', False),
+    ],
+)
+def test_the_plan_id_check_catches_each_form(snippet: str, found: bool) -> None:
+    assert bool(_plan_id_strings(snippet)) is found
+
+
+def test_the_load_evidence_docstring_keys_on_the_host_problem() -> None:
+    """H5a brief section 4.6: the docstring states the branch the code takes, on host.json's `problem` field."""
+    function = next(
+        node
+        for node in ast.parse(_source("machine")).body
+        if isinstance(node, ast.FunctionDef) and node.name == "load_evidence"
+    )
+    docstring = " ".join((ast.get_docstring(function) or "").split())
+    for sentence in (
+        "When host.json records no problem, a malformed log or a gpu.csv with no sample is a `StoreError`.",
+        "When host.json records a problem (AMB-123), the evidence is given when both logs parse and hold a GPU sample,"
+        " and None otherwise.",
+        "The branch keys on host.json's `problem` field, not on whether the attempt was later counted or voided.",
+    ):
+        assert sentence in docstring
+    assert "(a counted one)" not in docstring
+    assert "For a voided attempt" not in docstring
