@@ -1,4 +1,4 @@
-Last verified: 2026-11-27, 1f6d793
+Last verified: 2026-11-28, bec15ec
 # Changelog
 
 What changed in VoiceIQ, backfilled from git history. Newest first, grouped
@@ -22,11 +22,10 @@ Taken from git at write time.
 
 | Measure | Value | Command |
 |---|---|---|
-| Commits reachable from HEAD (`1f6d793`, on `sprint7/demo`) | 264 | `git rev-list --count HEAD` |
-| Non-merge commits | 249 | `git rev-list --count --no-merges HEAD` |
-| Merge commits | 15 (`032d822`, `49063bb`, `6e92898`, `4025199`, `c021e03`, `3a22ed2`, `a16f72c`, `c86f0fc`, `cbc3e2f`, `6534094`, `b2f32d1`, `0bd99d0`, `b7ec04f`, `efb1f03`, `631e658`) | `git rev-list --count --merges HEAD` |
-| Commits on `origin/main` (`631e658`) | 257 | `git rev-list --count origin/main` |
-| Commits reachable from HEAD and not on `origin/main` (none pushed) | 7 | `git rev-list --count origin/main..HEAD` |
+| Commits reachable from HEAD (`bec15ec`) | 266 | `git rev-list --count HEAD` |
+| Non-merge commits | 250 | `git rev-list --count --no-merges HEAD` |
+| Merge commits | 16 (`032d822`, `49063bb`, `6e92898`, `4025199`, `c021e03`, `3a22ed2`, `a16f72c`, `c86f0fc`, `cbc3e2f`, `6534094`, `b2f32d1`, `0bd99d0`, `b7ec04f`, `efb1f03`, `631e658`, `bec15ec`) | `git rev-list --count --merges HEAD` |
+| Commits on `origin/main` (`bec15ec`) | 266 | `git rev-list --count origin/main` |
 | Commits merged from `sprint7/doc-sync` by pull request #1 | 72 | `git rev-list --count 8fd3972..aa453f0` |
 | Commits merged from `sprint7/phase0-decisions` by pull request #2 | 2 | `git rev-list --count 49063bb..415dd88` |
 | Commits merged from `sprint7/diarization-fix` by pull request #3 | 2 | `git rev-list --count 6e92898..378d748` |
@@ -40,9 +39,10 @@ Taken from git at write time.
 | Commits merged from `sprint7/phase1-harness` by pull request #11 | 1 | `git rev-list --count 0bd99d0..e97e13d` |
 | Commits merged from `sprint7/phase1-harness` by pull request #12 | 2 | `git rev-list --count b7ec04f..8c0fd31` |
 | Commits merged from `sprint7/phase1-harness` by pull request #13 | 1 | `git rev-list --count efb1f03..144fd66` |
+| Commits merged from `sprint7/demo` by pull request #14 | 8 | `git rev-list --count 631e658..913c714` |
 | First commit | `f21300a`, 2026-02-10 | `git log --reverse --format="%h %ad" --date=short` |
 
-Each of the 264 commits reachable from HEAD is listed in exactly one row
+Each of the 266 commits reachable from HEAD is listed in exactly one row
 below; a few hashes also appear elsewhere as cross-references. Small
 commits of the same kind (wave-completion notes, a batch of stage
 extractions) share a row. Sections are ordered by their most recent
@@ -50,7 +50,7 @@ commit. Dates are author dates.
 
 | Section | Dates | Commits |
 |---|---|---|
-| [Fact-check demo on `sprint7/demo`](#fact-check-demo-on-sprint7demo) | 2026-11-27 | 1 |
+| [Fact-check demo on `sprint7/demo`](#fact-check-demo-on-sprint7demo) | 2026-11-27 | 3 |
 | [D6 bake-off harness on `sprint7/phase1-harness`](#d6-bake-off-harness-on-sprint7phase1-harness) | 2026-11-04 to 2026-11-22 | 30 |
 | [Diarization login removal on `sprint7/diarization-no-login`](#diarization-login-removal-on-sprint7diarization-no-login) | 2026-10-24 to 2026-11-09 | 3 |
 | [Bake-off model-weight record on `sprint7/phase1-bakeoff-weights`](#bake-off-model-weight-record-on-sprint7phase1-bakeoff-weights) | 2026-10-30 to 2026-11-09 | 2 |
@@ -74,8 +74,11 @@ commit. Dates are author dates.
 
 ## Fact-check demo on `sprint7/demo`
 
-1 commit, 2026-11-27, on a branch cut from `sprint7/phase1-harness` at
-`ef8b556`; not pushed. Evaluation tooling in `app/evaluation/demo/`, with
+3 commits, 2026-11-27: the demo and the docs that record it, on a branch
+cut from `sprint7/phase1-harness` at `ef8b556`, and the merge commit of
+pull request #14 (`bec15ec`), which merged the branch into `main` on
+2026-11-27 with the 6 harness commits after `631e658` (next section).
+The demo is evaluation tooling in `app/evaluation/demo/`, with
 its tests in `app/evaluation/tests/`, outside CI's pytest and mypy paths
 and linted by CI's ruff, like the harness. It is not the bake-off: its
 model is not pinned and its verdicts are not measured.
@@ -83,6 +86,8 @@ model is not pinned and its verdicts are not measured.
 | Date | Change | Commit |
 |---|---|---|
 | 2026-11-27 | A demo of claims, then verdicts that cite fixture sources, on Qwen/Qwen3-4B, shown as not pinned. `pipeline.py` loads three synthetic transcripts and nine fictional source bundles, and the prompts through the H5a loader, which checks `INPUTS.sha256` before any parse. Each transcript gets one extraction call through the harness client, with at most one repair; a claim on an out-of-scope segment is marked leaked, a claim that no bundle anchors has no evidence fixture, and neither sends anything; every other claim gets one reasoning-probe call with its bundle's sources, and a failed call shows its fault kind, never a verdict. `render.py` builds one self-contained HTML page, with every text escaped, a banner (synthetic data, fictional sources, verdict quality not measured, no D6 standing, not advice) and the label "no bake-off, no pin", and one JSON record of the run. `__main__.py` is the command line (`python -m app.evaluation.demo`): it starts the model server only through `launch.LaunchedServer`, and creates the page, the record and the server log new, outside OneDrive and `/mnt`. The tests use `httpx.MockTransport`, with sockets and process starts refused, and a byte-identical golden page and record: 165 new tests, and the existing check that no test file names a gold path gains one case per new Python file in `app/evaluation/tests` (5); 6183 pass and 4 skip. mypy (`--python-version 3.10`) and ruff are clean on `app/evaluation/demo`. | `1f6d793` |
+| 2026-11-27 | The docs record the demo, the harness work after H4b and the plan's fallback, re-verified at `1f6d793`. The status doc gains the demo and its first live page under Completed, with the harness commits `feee39a` to `ef8b556`; H5a stays under way, as its frozen inputs are not committed; the fallback chosen on 2026-11-27 (by 2026-11-30 the demo alone, not pinned, "no bake-off, no pin") is under Next milestone, and the percentage stays 4.17 %. This file gains rows for the nine commits reachable from HEAD that it did not list, with counts at `1f6d793`. ARCHITECTURE.md describes the demo package and its I/O boundaries; CONTEXT.md, SYSTEM.md and WORKFLOW.md are brought up to date. Docs only. | `913c714` |
+| 2026-11-27 | Pull request #14 merges `sprint7/demo` into `main` (merge commit; the tree equals `913c714`), bringing the 8 commits `e85c273` to `913c714`. | `bec15ec` |
 
 ## D6 bake-off harness on `sprint7/phase1-harness`
 
@@ -96,7 +101,9 @@ the branch plus the merge commits of pull requests #9 (`b2f32d1`) and
 of pull requests #11 (`b7ec04f`) and #12 (`efb1f03`); and 8 more, the
 docs commit `144fd66` and the merge commit of pull request #13
 (`631e658`), which merged it into `main` on 2026-11-14, then 6 commits
-from the branch that are not pushed. Pull request #9
+from the branch, which pull request #14 merged into `main` on 2026-11-27
+by way of `sprint7/demo` (its merge commit `bec15ec` is listed in the
+demo section). Pull request #9
 merged the first of the 4, a docs commit, into `main` on 2026-11-09.
 Pull request #10 merged the other 3 on 2026-11-10: harness milestone
 H4a, a docs commit and a commit that makes the harness messages cite
@@ -104,7 +111,7 @@ the signed D6 note. Of the 3 branch commits in the fourth group, the
 first, a docs commit, was merged
 into `main` by pull request #11 on 2026-11-10. Pull request #12 merged
 the other 2 on 2026-11-14: harness milestone H4b and a docs commit.
-The 6 unpushed commits are a docs commit that records the plan to the
+The last 6 are a docs commit that records the plan to the
 first run, harness milestone H5a's code, the claim-fidelity metrics
 (AMB-4), a commit that closes the markers the project owner ruled on,
 the signed D6 criteria note S3 and a fix to the command line's context

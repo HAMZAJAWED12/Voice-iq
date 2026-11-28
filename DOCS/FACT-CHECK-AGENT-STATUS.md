@@ -1,6 +1,6 @@
 # Fact-Check Agent — Live Status
 
-Owner: engineering · Status: **Phase 0 complete; Phase 1 in progress** · Created: 2026-10-11 · Updated: 2026-11-27
+Owner: engineering · Status: **Phase 0 complete; Phase 1 in progress** · Created: 2026-10-11 · Updated: 2026-11-28
 
 The one place that says where Sprint 7 stands. Update it with every
 milestone. Decision status is **not** kept here — it lives only in the
@@ -14,9 +14,9 @@ Source plan: `VoiceIQ_Fact_Check_Agent_Implementation_Plan.pdf` v1.1
 
 | | |
 |---|---|
-| Date | 2026-11-27 |
-| Branch | `sprint7/demo` @ `1f6d793` (the fact-check demo), cut from `sprint7/phase1-harness` at `ef8b556`; that branch holds the six commits after `631e658` (`e85c273` to `ef8b556`: the docs that record the plan to the first run, H5a's code, claim fidelity (AMB-4), the closed NEEDS-OWNER markers, the signed D6 criteria note S3 and a fix to the command line's context check). None of these seven commits is pushed; the remote `sprint7/phase1-harness` is at `144fd66`. `main` @ `631e658` (as of 2026-11-14; pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix (`9887e0b`) was merged by pull request #3 (`4025199`); the gold set v0.4 (`d7071b2`) by pull request #4 (`c021e03`); the D5 run deadline and the signed D6 criteria note S1 and S2 (`420f659`, `ed6792c`) by pull request #5 (`3a22ed2`); the bake-off model-weight record (`be42d0d`) by pull request #6 (`a16f72c`); the removal of diarization's Hugging Face login (`670b4de`, `551fc85`) by pull request #7 (`c86f0fc`); the D6 bake-off harness H1 to H3 (`fb4a5d8`, `91d8289`, `cf874ee`), with three docs commits (`911ddb1`, `86fd358`, `0ea4ddd`) and three commits that correct stale notes (`3059a59`, `962e0da`, `247d8a1`), by pull request #8 (`6534094`), from `sprint7/phase1-harness`, cut from `main` at `c021e03` with `main` at `c86f0fc` merged in (`cbc3e2f`); the docs commit that records pull request #8 (`8a62a37`) by pull request #9 (`b2f32d1`), from the same branch; harness milestone H4a (`ad6b79e`), the docs commit that records H4a and pull request #9 (`39e51d3`), and the commit that makes the harness messages cite the signed D6 criteria note (`a97679c`), by pull request #10 (`0bd99d0`), from the same branch; the docs commit that records pull request #10 and H4a (`e97e13d`) by pull request #11 (`b7ec04f`), from the same branch; harness milestone H4b (`7f91130`) and the docs commit that records H4b and pull request #11 (`8c0fd31`) by pull request #12 (`efb1f03`), from the same branch; and the docs commit that records pull request #12 and H4b on `main` (`144fd66`) by pull request #13 (`631e658`), from the same branch |
-| Current phase | **Phase 0 — Contract and scope lock: complete** (signed 2026-10-19). **Phase 1 — model bake-off: in progress.** The gold set is at v0.4 (200 items, not yet frozen as v1.0), and the bake-off harness has milestones H1 to H4b on `main` (H4b merged by pull request #12, `efb1f03`), with H5a under way (its code is committed, its frozen inputs are not); no bake-off has run. A demo on synthetic transcripts, on a model that is not pinned, is committed (`1f6d793`). Phases 2–7 not started. No Sprint 7 application code exists: the harness and the demo are evaluation tooling under `app/evaluation/`, not application code (the harness's place is set in [D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9; the demo sits beside it). |
+| Date | 2026-11-28 |
+| Branch | `main` @ `bec15ec` (as of 2026-11-27; pull request #1 merged `sprint7/doc-sync` at `49063bb`: M1 at `c1b35d9` + `cedfe96`; M2 at `9aff207`; M3 at `dc03a44`; M4 at `8e51a94`; M5 at `1dbfac7`; M6 at `dc9caf3`; M7 at `dbae452`; pull-request review fix round at `8563572`, `efdd1a9`, `ee2e15b`); the Phase 0 sign-off is recorded on `sprint7/phase0-decisions`, merged by pull request #2 (`6e92898`); the diarization fix (`9887e0b`) was merged by pull request #3 (`4025199`); the gold set v0.4 (`d7071b2`) by pull request #4 (`c021e03`); the D5 run deadline and the signed D6 criteria note S1 and S2 (`420f659`, `ed6792c`) by pull request #5 (`3a22ed2`); the bake-off model-weight record (`be42d0d`) by pull request #6 (`a16f72c`); the removal of diarization's Hugging Face login (`670b4de`, `551fc85`) by pull request #7 (`c86f0fc`); the D6 bake-off harness H1 to H3 (`fb4a5d8`, `91d8289`, `cf874ee`), with three docs commits (`911ddb1`, `86fd358`, `0ea4ddd`) and three commits that correct stale notes (`3059a59`, `962e0da`, `247d8a1`), by pull request #8 (`6534094`), from `sprint7/phase1-harness`, cut from `main` at `c021e03` with `main` at `c86f0fc` merged in (`cbc3e2f`); the docs commit that records pull request #8 (`8a62a37`) by pull request #9 (`b2f32d1`), from the same branch; harness milestone H4a (`ad6b79e`), the docs commit that records H4a and pull request #9 (`39e51d3`), and the commit that makes the harness messages cite the signed D6 criteria note (`a97679c`), by pull request #10 (`0bd99d0`), from the same branch; the docs commit that records pull request #10 and H4a (`e97e13d`) by pull request #11 (`b7ec04f`), from the same branch; harness milestone H4b (`7f91130`) and the docs commit that records H4b and pull request #11 (`8c0fd31`) by pull request #12 (`efb1f03`), from the same branch; the docs commit that records pull request #12 and H4b on `main` (`144fd66`) by pull request #13 (`631e658`), from the same branch; and the eight commits after `631e658` by pull request #14 (`bec15ec`, 2026-11-27), from `sprint7/demo` (cut from `sprint7/phase1-harness` at `ef8b556`): the six harness-branch commits `e85c273` to `ef8b556` (the docs that record the plan to the first run, H5a's code, claim fidelity (AMB-4), the closed NEEDS-OWNER markers, the signed D6 criteria note S3 and a fix to the command line's context check), the fact-check demo (`1f6d793`) and its docs (`913c714`). Its three CI checks passed (lint, types and secrets; unit tests on 3.10 and 3.11). The remote branches `sprint7/demo` (`913c714`) and `sprint7/phase1-harness` (`144fd66`) still exist; the local `sprint7/phase1-harness` is at `ef8b556`, which is on `main` |
+| Current phase | **Phase 0 — Contract and scope lock: complete** (signed 2026-10-19). **Phase 1 — model bake-off: in progress.** The gold set is at v0.4 (200 items, not yet frozen as v1.0), and the bake-off harness has milestones H1 to H4b on `main` (H4b merged by pull request #12, `efb1f03`), with H5a under way (its code is on `main` since pull request #14, `bec15ec`; its frozen inputs are not committed); no bake-off has run. A demo on synthetic transcripts, on a model that is not pinned (`1f6d793`), is on `main` too, and the project owner accepted it on 2026-11-28. Phases 2–7 not started. No Sprint 7 application code exists: the harness and the demo are evaluation tooling under `app/evaluation/`, not application code (the harness's place is set in [D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md) section 11 item 9; the demo sits beside it). |
 | Overall progress | **4.17 %** |
 
 **How the percentage is computed** — countable plan deliverables only. Each
@@ -48,12 +48,13 @@ model and measures no verdict quality.
 
 ## Completed
 
-Verified against the repository on 2026-11-27 (`1f6d793`).
+Verified against the repository on 2026-11-28 (`bec15ec`).
 
 - **Phase 1 work so far** (no Phase 1 bullet is done yet; see *How the
   percentage is computed*):
   - **Fact-check demo, not pinned** (2026-11-27), on `sprint7/demo`, cut
-    from `sprint7/phase1-harness` at `ef8b556`; not pushed:
+    from `sprint7/phase1-harness` at `ef8b556`; merged with its docs
+    (`913c714`) by pull request #14 (`bec15ec`):
     - `1f6d793` — evaluation tooling in `app/evaluation/demo/`, outside
       CI's pytest and mypy paths like the harness. It shows claims, then
       verdicts that cite synthetic fixture sources, on three synthetic
@@ -90,8 +91,16 @@ Verified against the repository on 2026-11-27 (`1f6d793`).
       informal read found one verdict at odds with its source and some
       checkable statements not extracted. The page is not in the
       repository, so these figures cannot be checked from git.
+    - **Accepted** (2026-11-28): the project owner accepted the demo
+      after reviewing its first live page. Before that, a count the
+      project owner ran on the host found no demo text equal to a gold
+      v0.4 text and none inside or containing one (all three counts 0).
+      With the acceptance, the plan's fallback deliverable for
+      2026-11-30 is met (see *Next milestone*). Neither the count nor the
+      acceptance can be checked from git.
   - **Harness work after H4b** (2026-11-15 to 2026-11-22), on
-    `sprint7/phase1-harness`; not pushed:
+    `sprint7/phase1-harness`; merged by pull request #14 (`bec15ec`),
+    from `sprint7/demo`:
     - `feee39a` — **H5a's code:** the frozen-input loader (`frozen`: the
       file formats and the hash file `INPUTS.sha256`, checked before any
       parse), the run command line (`cli`: `freeze inputs`, `freeze
@@ -448,19 +457,17 @@ Verified against the repository on 2026-11-27 (`1f6d793`).
   `checkability` of at least 0.6, then the freeze as v1.0 with its
   manifest hashes ([D6-CRITERIA-NOTE-S2.md](D6-CRITERIA-NOTE-S2.md)
   section 11 item 1). Data preparation, no code.
-- **Phase 1, bake-off harness** — on `sprint7/phase1-harness`. H1 to H3
+- **Phase 1, bake-off harness** — developed on `sprint7/phase1-harness`;
+  all of it is on `main` since pull request #14 (`bec15ec`). H1 to H3
   are done and merged by pull request #8 (`6534094`); H4a is done
   (`ad6b79e`) and merged by pull request #10 (`0bd99d0`); H4b is done
   (`7f91130`) and merged by pull request #12 (`efb1f03`; see
   *Completed*). H5a's code (`feee39a`), claim fidelity (`b69e580`) and a
-  first part of H5b (`ef8b556`) are committed on the branch, not pushed.
-  H5a stays under way: its frozen inputs and their hash file are not
-  committed (see *Next milestone*). A synthetic end-to-end pass with the
-  real machine hooks, in the loopback-only namespace, is an operator step
-  with its own approval and has not run.
-- **Demo for 2026-11-30** — the plan's fallback deliverable (see *Next
-  milestone*): committed on `sprint7/demo` (`1f6d793`, not pushed), with
-  a first live page rendered on 2026-11-27 (see *Completed*).
+  first part of H5b (`ef8b556`) are on `main`, merged by pull request #14
+  (`bec15ec`). H5a stays under way: its frozen inputs and their hash file
+  are not committed (see *Next milestone*). A synthetic end-to-end pass
+  with the real machine hooks, in the loopback-only namespace, is an
+  operator step with its own approval and has not run.
 - **Prerequisite fixes** — only fixes that need no pending decision, one
   per milestone, smallest first. M1–M7, the old-rows fix, the decision-free
   hardening items, the owner-decided items and the pull-request review fix
@@ -525,8 +532,8 @@ before the phase that uses it:
 **Phase 1 — model bake-off** (plan v1.1, Phase 1). The gold set is at
 v0.4 and the bake-off harness has milestones H1 to H4b on `main`
 (H4b merged by pull request #12, `efb1f03`; see *Completed*); H5a's
-code, claim fidelity and a first part of H5b are on
-`sprint7/phase1-harness`, not pushed.
+code, claim fidelity and a first part of H5b are on `main` too, merged
+by pull request #14 (`bec15ec`).
 D5's run deadline was set and the D6 criteria note
 ([D6-CRITERIA-NOTE-S1.md](D6-CRITERIA-NOTE-S1.md): who may win, the gates,
 the margin and the licence check) was signed on 2026-10-28; its launch line
@@ -544,10 +551,13 @@ calls. Gold v1.0
 was not frozen in time, so on 2026-11-27 the project owner chose the
 plan's fallback: by 2026-11-30 the deliverable is the demo alone, on
 Qwen3-4B, labelled "no bake-off, no pin" (`1f6d793`; see *Completed*).
+The project owner accepted the demo on 2026-11-28, after reviewing its
+first live page, so that deliverable is met; the demo is on `main`
+(pull request #14, `bec15ec`).
 The first bake-off run, its signed report and the pin or no-pin record
 come after 2026-11-30; no date is set. The fallback moves no plan bullet,
 so the percentage stays 4.17 %. Phases 2 to 7 come after. H5 is split in
-three, on `sprint7/phase1-harness`:
+three:
 
 - **H5a** (under way since 2026-11-15, when the project owner approved
   its plan): the frozen inputs that need no gold data, committed with a
@@ -564,7 +574,7 @@ three, on `sprint7/phase1-harness`:
   labels) and sends
   everything else to a log on the host that only the project owner reads.
   The frozen inputs and their hash file are not committed yet (there is
-  no `app/evaluation/frozen/` at `1f6d793`): the freeze waits on the
+  no `app/evaluation/frozen/` at `bec15ec`): the freeze waits on the
   project owner's approval of the reasoning probe.
 - **H5b:** the freeze on gold v1.0, with the cap-session list and the
   expected freeze hashes, and the context check on the real requests:

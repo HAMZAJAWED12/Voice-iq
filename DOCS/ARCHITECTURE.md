@@ -1,15 +1,14 @@
-Last verified: 2026-11-27, 1f6d793
+Last verified: 2026-11-28, bec15ec
 # Architecture
 
-This document describes the code structure of VoiceIQ at commit `1f6d793`
-on `sprint7/demo`, which is not pushed. `origin/main` is at `631e658`
-(after pull request #13) and has milestones H1 to H4b of the D6
-bake-off harness under `app/evaluation/`; the branch adds H5a's code,
-the claim-fidelity metrics, a first part of H5b and the fact-check demo, all under
-`app/evaluation/`. Outside `app/evaluation/`, `app/` is the same as on
-`main`. It shows how the packages fit together, how data moves between
-them, where faults are contained, what is stored, and how to extend the
-system without breaking it.
+This document describes the code structure of VoiceIQ at commit `bec15ec`
+(`main` after pull request #14, which merged H5a's code, the
+claim-fidelity metrics, a first part of H5b and the fact-check demo, all
+under `app/evaluation/`, beside milestones H1 to H4b of the D6 bake-off
+harness). Outside `app/evaluation/`, `app/` is the same as at `631e658`,
+after pull request #13. It shows how the packages fit together, how data
+moves between them, where faults are contained, what is stored, and how
+to extend the system without breaking it.
 
 [02-architecture.md](02-architecture.md) is the historical Sprint 1–4 view.
 It was written before the fact-check engine, the Agent Brain and the
@@ -660,10 +659,10 @@ silent, and missing tables are created.
 ## 9. Sprint 7 fact-check agent — planned, not built
 
 **Everything in this section is planned, not built.** No code of the
-fact-check agent exists at `1f6d793`. A search of `app/` at `efb1f03` found
+fact-check agent exists at `bec15ec`. A search of `app/` at `efb1f03` found
 no `/v2` route, no `fact_check_report` key and no `factcheck_agent_*` table;
 since then only `app/evaluation/` has changed, and its `bakeoff/` and `demo/`
-hold none of them at `1f6d793`.
+hold none of them at `1f6d793`, whose `app/` equals `bec15ec`'s.
 The Phase 1 bake-off harness and the demo (section 2) are evaluation
 tooling, and the Sprint 7 diarization fixes (`9887e0b`, `670b4de`) change
 an existing service; none of them is part of the agent.

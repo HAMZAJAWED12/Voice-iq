@@ -21,8 +21,10 @@ The Insight Service (`app/insights/`) is the current focus of active development
 
 **Currently open:** Sprint 7 Fact-Check Agent. Phase 0 is complete (signed
 2026-10-19) and Phase 1 is in progress: the gold set is at v0.4, not yet frozen
-as v1.0, and the bake-off harness has milestones H1 to H4b on `main` (H4b
-measures the machine and starts a schedule); H5a is under way; no bake-off has run.
+as v1.0, and the bake-off harness has milestones H1 to H4b on `main`, and
+H5a's code too since pull request #14; H5a is under way. The fact-check
+demo, the plan's fallback for 2026-11-30, is also on `main` and was
+accepted by the project owner on 2026-11-28; no bake-off has run.
 A few values are still open (PHASE-0 §8). Live status, progress
 and the next milestone: [`DOCS/FACT-CHECK-AGENT-STATUS.md`](DOCS/FACT-CHECK-AGENT-STATUS.md).
 Decision status lives **only** in the register,
